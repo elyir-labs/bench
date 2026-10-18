@@ -1,0 +1,11 @@
+# Elyir Bench image (docs/os-slots.md, "Releases"): the newest release, by itself, when it's safe. On a card
+# only: a printer whose OS was built by hand (Studio) has no os-version, and update --auto leaves it alone.
+[Unit]
+Description=Elyir Bench: update the OS from releases.elyir.dev, if one is out and the printer is idle
+After=network-online.target moonraker.service
+Wants=network-online.target
+ConditionPathExists=/usr/local/share/elyir-bench/os-version
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/elyir-bench-os update --auto

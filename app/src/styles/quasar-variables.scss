@@ -1,0 +1,29 @@
+// Quasar SASS/SCSS Variables
+// Colors matching the render (blue primary throughout)
+$primary: #1A7BE1;        // Main blue - buttons, active states, primary actions, progress
+$secondary: #0B1020;      // Surface color for secondary buttons
+$accent: #1A7BE1;         // Same as primary - blue throughout
+$dark: #050814;
+$dark-page: #050814;
+$positive: #22C55E;
+$negative: #EF4444;
+$info: #1A7BE1;           // Use primary blue for info
+$warning: #FACC15;
+
+// Card and surface colors (from spec)
+$card-bg: #0B1020;
+$card-elevated: #101628;
+
+// Typography (from spec)
+$typography-font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+$h6-size: 0.875rem; // 14px (md)
+$h6-weight: 600; // semibold
+$body1-size: 0.875rem; // 14px (md)
+
+// Touch-optimized sizes (from spec)
+$button-min-height: 44px;
+$button-padding: 14px 18px;
+
+// Border radius (from spec)
+$generic-border-radius: 16px; // lg
+$button-border-radius: 10px; // md

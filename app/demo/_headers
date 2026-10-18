@@ -1,0 +1,12 @@
+# Cloudflare Pages (and Netlify) read this file. Pyodide and the hashed app assets never change
+# under the same name, so browsers keep them; the pages themselves are checked every visit.
+/pyodide/*
+  Cache-Control: public, max-age=604800
+/app/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+# The bootstrap (install/install.sh), piped to sh by `curl -fsSL https://bench.elyir.com/install | sh`.
+# Plain text so a browser shows it instead of downloading it, and checked every time so a fix reaches
+# the next install at once.
+/install
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache

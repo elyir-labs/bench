@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="b1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6aa5ff"/><stop offset="1" stop-color="#2c63c9"/></linearGradient>
+    <linearGradient id="b2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4d86e6"/><stop offset="1" stop-color="#244f9e"/></linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/></filter>
+  </defs>
+  <g filter="url(#sh)">
+    <!-- hull -->
+    <path d="M60 190 Q70 250 130 252 L300 252 Q345 250 350 200 L360 170 L70 170 Z" fill="url(#b2)"/>
+    <path d="M70 170 L360 170 L340 152 L90 152 Z" fill="#7fb2ff"/>
+    <!-- deck house -->
+    <rect x="150" y="96" width="120" height="60" rx="8" fill="url(#b1)"/>
+    <rect x="150" y="96" width="120" height="14" rx="6" fill="#9cc3ff"/>
+    <!-- windows -->
+    <rect x="165" y="118" width="22" height="22" rx="4" fill="#12213d"/>
+    <rect x="199" y="118" width="22" height="22" rx="4" fill="#12213d"/>
+    <rect x="233" y="118" width="22" height="22" rx="4" fill="#12213d"/>
+    <!-- chimney -->
+    <rect x="195" y="58" width="34" height="44" rx="6" fill="url(#b2)"/>
+    <rect x="191" y="52" width="42" height="12" rx="5" fill="#9cc3ff"/>
+    <!-- bow bumper -->
+    <path d="M60 190 Q52 176 70 170" fill="none" stroke="#9cc3ff" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

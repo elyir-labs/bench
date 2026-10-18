@@ -1,0 +1,21 @@
+{
+  "_comment": "The boot eye's geometry, in the 800x480 design frame (design/boot/, A′: the eye says hi). The single source for the app's boot screen (BootScreen.vue), the first frame inlined into index.html (vite.config.ts), the Plymouth theme's images (kiosk/boot/make-plymouth.py) and the boot cover (kiosk/boot/cover.py). Every screen size scales this by min(width/800, height/480) around its center. now_tab is the Now tab's icon (src/shell/AppShell.vue, a 24 box) that the eye lands in.",
+  "design": [800, 480],
+  "center": [400, 212],
+  "ring": { "r": 56, "stroke": 4 },
+  "pupil": { "r": 15 },
+  "hi": { "size": 96, "weight": 500 },
+  "now_tab": { "r": 8.5, "stroke": 1.8, "pupil": 3 },
+  "handoff": 0.6,
+  "name_y": 322,
+  "line_y": 356,
+  "colors": {
+    "bg": "#0b0e13",
+    "accent": "#4da3ff",
+    "problem": "#f26060",
+    "track": [255, 255, 255, 0.26],
+    "hi": [255, 255, 255, 0.86],
+    "name": [255, 255, 255, 0.72],
+    "line": [255, 255, 255, 0.46]
+  }
+}

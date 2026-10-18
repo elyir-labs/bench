@@ -1,0 +1,15 @@
+{
+  "machine": "Anycubic Kobra 3 0.4 nozzle (Bench)",
+  "process": "0.20mm Standard @Anycubic Kobra 3 0.4 nozzle",
+  "plate": "High Temp Plate",
+  "plate_why": "Anycubic's own bed temperatures for the Kobra 3 (its presets fill in only this plate's)",
+  "tools": 1,
+  "materials": {
+    "PLA": "Anycubic PLA @Anycubic Kobra 3 0.4 nozzle",
+    "PETG": "Anycubic PETG @Anycubic Kobra 3 0.4 nozzle",
+    "ASA": "Anycubic ASA @Anycubic Kobra 3 0.4 nozzle",
+    "ABS": "Generic ABS @Anycubic Kobra 3 0.4 nozzle",
+    "TPU": "Generic TPU @Anycubic Kobra 3 0.4 nozzle"
+  },
+  "bench": true
+}

@@ -1,0 +1,201 @@
+<title>Put Elyir Bench on your printer</title>
+<meta name="description" content="One command for a Raspberry Pi printer that already runs Klipper and Moonraker. What it adds, what it leaves alone, which boards it works on, and how to take it off again.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* bench.elyir.com/install for a browser; curl gets the script itself (functions/install.js).
+     design/getting-started, boards c-site and c-site-compat. The demo's colors, and its dark or light pick. */
+  :root {
+    --ground: #0b0e13;
+    --surface: #131821;
+    --raised: #1a202b;
+    --line: #262e3b;
+    --ink: #eef1f6;
+    --quiet: #8d97a8;
+    --accent: #4da3ff;
+    --elyir-dot: #4da3ff;
+    --green: #4cc38a;
+    --term: #05070a;
+    --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ground: #eceef2;
+    --surface: #ffffff;
+    --raised: #f3f5f8;
+    --line: #d5dae2;
+    --ink: #13171d;
+    --quiet: #5b6473;
+    --accent: #1f6fe0;
+    --elyir-dot: #1f7ae0;
+    --green: #17804f;
+    --term: #0b0e13;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box }
+  html, body { background: var(--ground); color: var(--ink) }
+  body { margin: 0; font: 16px/1.5 var(--font); padding-inline: 16px; padding-block: 0 64px }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 64px }
+  a { color: var(--accent) }
+  code { font-family: var(--mono); font-size: .92em }
+
+  nav { display: flex; align-items: center; gap: 28px; padding-block: 18px; border-bottom: 1px solid var(--line) }
+  nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
+  nav .links a, nav .end a { color: var(--quiet); text-decoration: none }
+  nav .links a:hover, nav .end a:hover, nav .links a[aria-current] { color: var(--ink) }
+  nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
+  .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none; flex: none }
+  .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
+  .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 56px; align-items: start; padding-top: 8px }
+  .steps { display: grid; gap: 16px; min-width: 0 }
+  h1 { margin: 0; font-size: clamp(36px, 5vw, 56px); line-height: 1.04; font-weight: 800; letter-spacing: -.025em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 20px; line-height: 1.45; max-width: 36ch }
+  .lbl { margin: 18px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet) }
+  .step p { margin: 0 }
+  .muted { color: var(--quiet) }
+
+  .cmd { display: flex; align-items: center; gap: 12px; background: var(--term); color: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 18px; min-height: 60px }
+  .cmd .p { color: rgba(255,255,255,.4); user-select: none }
+  .cmd code { flex: 1; min-width: 0; font-size: 16px; overflow-x: auto; white-space: nowrap; scrollbar-width: none }
+  .cmd code::-webkit-scrollbar { display: none }
+  .copy { all: unset; box-sizing: border-box; cursor: pointer; flex: none; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 10px; background: #fff; color: #0b0e13; font-weight: 650; font-size: 15px }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .copy svg { width: 16px; height: 16px }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 26px 28px; display: grid; gap: 6px; min-width: 0 }
+  .card h2 { margin: 14px 0 0; font-size: 18px; font-weight: 700 }
+  .card h2:first-child { margin-top: 0 }
+  .card p { margin: 0; color: var(--quiet); line-height: 1.45 }
+  .card .foot { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px }
+
+  section > h2 { margin: 0; font-size: clamp(28px, 3.4vw, 40px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em }
+  section > .sub { margin: 10px 0 0; color: var(--quiet); font-size: 18px; max-width: 70ch }
+  .after { margin: 14px 0 0; color: var(--quiet); font-size: 15px; max-width: 80ch }
+
+  .table { margin-top: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; overflow: hidden }
+  .row { display: grid; grid-template-columns: 1.25fr 1.1fr 1.15fr 1.4fr; gap: 0 24px; padding: 15px 26px; border-top: 1px solid var(--line); align-items: start }
+  .row.head { border-top: 0; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet) }
+  .row small { display: block; color: var(--quiet); font-size: 14px }
+  .row .k { display: none }
+  .row .get.everything { color: var(--green); font-weight: 650 }
+  .row .get.not_yet { color: var(--quiet) }
+  .row .get small { font-weight: 400 }
+
+  .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 22px }
+  .two h3 { margin: 0 0 6px; font-size: 18px }
+  .two p { margin: 0 0 8px; color: var(--quiet) }
+
+  footer { color: var(--quiet); font-size: 14px; border-top: 1px solid var(--line); padding-top: 20px }
+
+  @media (max-width: 880px) {
+    .hero { grid-template-columns: minmax(0, 1fr); gap: 32px }
+    .two { grid-template-columns: minmax(0, 1fr) }
+    .row.head { display: none }
+    .row { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 16px 20px }
+    .row .k { display: inline; color: var(--quiet) }
+    .row .blank { display: none }
+  }
+  @media (max-width: 640px) {
+    nav { gap: 16px }
+    nav .links a:not([href="try"]) { display: none }
+  }
+  @media (max-width: 520px) {
+    .cmd { flex-wrap: wrap; padding: 14px }
+    .cmd .p { display: none }
+    .cmd code { flex-basis: calc(100% - 24px); white-space: normal; overflow-wrap: anywhere; font-size: 15px }
+    .copy { width: 100%; justify-content: center }
+  }
+  footer .elyir { color: var(--ink) }
+  footer .elyir svg { height: 1.3em; width: auto; vertical-align: -.29em }
+  .elyir-dot { fill: var(--elyir-dot) }
+</style>
+
+<div class="wrap">
+  <nav>
+    <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
+    <span class="links"><a href="try">Try it</a><a href="install" aria-current="page">Install</a><a href="./#plans">Plans</a><a href="testers">Testers</a></span>
+    <span class="end"><a href="https://printers.elyir.app/you">Sign in</a></span>
+  </nav>
+
+  <div class="hero">
+    <div class="steps">
+      <h1>Put it on your printer.</h1>
+      <p class="lede">For a Raspberry Pi printer that already runs Klipper and Moonraker. Mainsail or Fluidd stays where it is.</p>
+
+      <p class="lbl">1 · On the printer, over SSH</p>
+      <div class="cmd"><span class="p" aria-hidden="true">$</span><code id="cmd">curl -fsSL https://bench.elyir.com/install | sh</code>
+        <button class="copy" type="button" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Copy</span></button></div>
+      <p class="muted">It checks the printer first and asks once before it changes anything. About a minute.</p>
+
+      <p class="lbl">2 · Scan the code it shows</p>
+      <p>Your phone opens the printer, ready to go. A computer can use the link shown beside the QR code instead.</p>
+    </div>
+
+    <aside class="card">
+      <h2>What it adds</h2>
+      <p>Elyir Bench at <code>your-printer.local:8088</code>, and on the printer's screen if you say so.</p>
+      <p>Away from home, with a plan: an address of its own on Elyir's relay, like <code>p-k7qx2mna.elyir.app</code>, opens it from anywhere. It never carries your printer's name. Testers have it free.</p>
+      <h2>What it leaves alone</h2>
+      <p>printer.cfg and your macros, Mainsail or Fluidd, your files and print history. KlipperScreen stays installed.</p>
+      <h2>Changed your mind?</h2>
+      <p>On the printer, <code>elyir-bench remove</code> takes it off and puts KlipperScreen back.</p>
+      <p class="foot muted">Needs a Raspberry Pi 4 or 5, a BTT Pi or a CB1, on a 64-bit system. Not during a print: it checks, and waits.</p>
+    </aside>
+  </div>
+
+  <section id="boards">
+    <h2>Will it work on my printer?</h2>
+    <p class="sub">On every board below, Elyir Bench works on your phone and computer the same way. The differences are the screen and slicing.</p>
+    <div class="table" role="table" aria-label="What Elyir Bench does on each board">
+      <div class="row head" role="row"><span role="columnheader">Board</span><span role="columnheader">The screen</span><span role="columnheader">Slicing on the printer</span><span role="columnheader">What you get</span></div>
+<!-- boards: filled from install/boards.json when the demo is built (vite.demo.config.ts), the same list the command checks with -->
+    </div>
+    <p class="after">Not sure which you have? Run the command: it names your board and says what it will do before it changes anything.
+      A printer that can't slice by itself prints files from your own slicer as always, and another printer running Elyir Bench on your Wi-Fi can slice for it.</p>
+  </section>
+
+  <section id="later">
+    <h2>Later on</h2>
+    <div class="two">
+      <div>
+        <h3>Updating</h3>
+        <p>Run the same command again. It sees Elyir Bench is already there, says the next step is an update, and asks before it changes anything.</p>
+        <p>A release that doesn't start properly is undone on the spot, back to the one before.</p>
+      </div>
+      <div>
+        <h3>Taking it off</h3>
+        <p>On the printer: <code>elyir-bench remove</code>. The screen goes back to KlipperScreen, and Elyir Bench's own files go.</p>
+        <p>printer.cfg, Mainsail, your files and history were never changed. <code>elyir-bench.conf</code> stays, in case you come back.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>Elyir Bench is made by <a class="elyir" href="https://elyir.com"><svg viewBox="0 0 1884 958" role="img" aria-label="Elyir"><path fill="currentColor" d="M283 758Q209 758 152.0 724.5Q95 691 62.5 632.0Q30 573 30 496Q30 419 63.5 360.0Q97 301 155.5 267.5Q214 234 290 234Q356 234 411.5 268.5Q467 303 500.5 369.5Q534 436 534 531H168Q173 581 211.0 610.5Q249 640 297 640Q338 640 364.0 622.5Q390 605 404 577L522 623Q501 665 467.5 695.5Q434 726 388.0 742.0Q342 758 283 758ZM175 433H391Q388 402 371.0 383.0Q354 364 331.0 355.0Q308 346 286 346Q265 346 240.5 354.5Q216 363 197.5 382.0Q179 401 175 433ZM581.000732421875 746.0V46.0H712.997802734375V746.0ZM897.1976318359375 958.0Q869.798095703125 958.0 837.5985107421875 947.5001831054688Q805.39892578125 937.0003662109375 779.998779296875 923.200439453125L828.9976806640625 815.802734375Q845.998046875 825.2027587890625 860.6981811523438 830.5027465820312Q875.3983154296875 835.802734375 885.998291015625 835.802734375Q907.1986083984375 835.802734375 923.2987060546875 824.6025390625Q939.3988037109375 813.40234375 948.9989013671875 790.8021240234375L969.7996826171875 740.000244140625L744.4002685546875 246.0H889.1968994140625L1030.7984619140625 590.6033935546875L1166.80029296875 246.0H1311.9969482421875L1084.9962158203125 788.801513671875Q1063.996337890625 839.201171875 1041.1964721679688 877.4008178710938Q1018.3966064453125 915.6004638671875 984.8968505859375 936.8002319335938Q951.3970947265625 958.0 897.1976318359375 958.0ZM1350.6005859375 746.0V246.0H1482.59765625V746.0ZM1575.000732421875 746.0V246.0H1706.997802734375V337.599853515625Q1737.7977294921875 290.599853515625 1785.4977416992188 267.2999267578125Q1833.19775390625 244.0 1883.997802734375 244.0V371.5970458984375Q1838.1978759765625 371.5970458984375 1797.6978759765625 382.897216796875Q1757.1978759765625 394.1973876953125 1732.0978393554688 418.99786376953125Q1706.997802734375 443.79833984375 1706.997802734375 483.3992919921875V746.0Z"/><circle class="elyir-dot" cx="1416.6" cy="84" r="84"/></svg></a>. Every release is signed, and the command checks the signature before it unpacks anything.</footer>
+</div>
+
+<script>
+(() => {
+  // the demo's dark or light pick, remembered under the same key
+  let saved = null
+  try { saved = localStorage.getItem('demo.theme') } catch {}
+  document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved
+    : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+
+  document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const text = document.getElementById(b.dataset.copy).textContent
+    const label = b.querySelector('span')
+    try {
+      await navigator.clipboard.writeText(text)
+      label.textContent = 'Copied'
+    } catch {
+      getSelection().selectAllChildren(document.getElementById(b.dataset.copy))
+      label.textContent = 'Press ⌘C'
+    }
+    setTimeout(() => { label.textContent = 'Copy' }, 2000)
+  }))
+})()
+</script>

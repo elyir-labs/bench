@@ -1,0 +1,294 @@
+# Elyir Bench Configuration
+# This file allows you to customize your Elyir Bench installation
+
+# Moonraker connection settings
+moonraker:
+  host: ''
+  port: 7125
+  ssl: false
+  # For multiple printers, add them here:
+  # instances:
+  #   - name: "Printer 1"
+  #     host: "192.168.1.100"
+  #     port: 7125
+  #   - name: "Printer 2"
+  #     host: "192.168.1.101"
+  #     port: 7125
+
+# Display settings
+display:
+  # Theme: material-dark, material-light
+  theme: material-dark
+
+  # Language: en, es, fr, de, etc.
+  language: en
+
+  # Time format
+  use24HourTime: true
+
+  # Confirm dangerous actions
+  confirmEstop: true
+  confirmPowerOff: true
+
+  # Screen saver (minutes, 0 to disable)
+  screenSaverTimeout: 10
+
+  # Font scaling (0.8 - 1.5)
+  fontScale: 1.0
+
+# Temperature presets (°C)
+preheat:
+  PLA:
+    bed: 60
+    extruder: 200
+    chamber: 0
+
+  PETG:
+    bed: 80
+    extruder: 230
+    chamber: 0
+
+  ABS:
+    bed: 90
+    extruder: 245
+    chamber: 40
+
+  FLEX:
+    bed: 50
+    extruder: 210
+    chamber: 0
+
+  # Add custom presets:
+  # Custom:
+  #   bed: 70
+  #   extruder: 220
+  #   chamber: 0
+
+# Movement settings
+movement:
+  # Available move distances (mm)
+  distances: [0.1, 0.5, 1, 5, 10, 25, 50]
+
+  # Default move speed (mm/s)
+  defaultSpeed: 100
+
+  # Z hop distance for toolhead moves (mm, 0 to disable)
+  zHop: 0
+
+  # Invert movement directions (useful for different kinematics)
+  invertX: false
+  invertY: false
+  invertZ: false
+
+# Extrusion settings
+extrusion:
+  # Available extrude/retract distances (mm)
+  distances: [5, 10, 25, 50, 100]
+
+  # Default extrusion speed (mm/s)
+  defaultSpeed: 5
+
+  # Minimum hotend temperature for extrusion (°C)
+  minExtrudeTemp: 170
+
+# Print settings
+print:
+  # Automatically start print after upload
+  autoStartAfterUpload: false
+
+  # Show thumbnail preview before starting
+  showThumbnailPreview: true
+
+  # Confirm before starting print
+  confirmBeforeStart: true
+
+  # Default sort order: name, date, size
+  fileSortOrder: date
+
+  # Show file size in list
+  showFileSize: true
+
+# Webcam settings
+webcam:
+  enabled: false
+  url: 'http://127.0.0.1:8080/?action=stream'
+  rotation: 0 # 0, 90, 180, 270
+  flipHorizontal: false
+  flipVertical: false
+
+# Macros and shortcuts
+macros:
+  # Quick access macros shown on home screen
+  favorites:
+    - LOAD_FILAMENT
+    - UNLOAD_FILAMENT
+    - PURGE_LINE
+    - CLEAN_NOZZLE
+
+  # Hide these macros from the macros screen
+  hidden:
+    - _TOOLHEAD_PARK_PAUSE_CANCEL
+    - _CLIENT_VARIABLE
+
+  # Custom macro categories
+  categories:
+    Filament:
+      - LOAD_FILAMENT
+      - UNLOAD_FILAMENT
+    Calibration:
+      - BED_MESH_CALIBRATE
+      - Z_TILT_ADJUST
+      - PID_CALIBRATE_BED
+      - PID_CALIBRATE_HOTEND
+    Maintenance:
+      - CLEAN_NOZZLE
+      - PURGE_LINE
+
+# Graph settings
+graphs:
+  temperature:
+    # Update interval (seconds)
+    updateInterval: 1
+
+    # Time window (minutes)
+    timeWindow: 10
+
+    # Show power percentage
+    showPower: true
+
+    # Auto-scale Y axis
+    autoScale: false
+
+    # Manual Y axis range (if autoScale is false)
+    minTemp: 0
+    maxTemp: 300
+
+# Bed mesh visualization
+bedMesh:
+  # Show mesh on home screen
+  showOnHome: true
+
+  # Visualization type: heatmap, 3d, wireframe
+  visualizationType: heatmap
+
+  # Color scheme: viridis, plasma, inferno, magma, jet
+  colorScheme: viridis
+
+  # Show probe points
+  showProbePoints: true
+
+# Advanced settings
+advanced:
+  # Query interval for printer state (ms)
+  printerQueryInterval: 500
+
+  # Temperature update interval (ms)
+  temperatureQueryInterval: 1000
+
+  # File list cache time (seconds)
+  fileListCacheTime: 30
+
+  # Enable developer mode
+  developerMode: false
+
+  # Enable verbose logging
+  verboseLogging: false
+
+  # Cross-tab synchronization
+  enableTabSync: true
+
+  # Retry failed requests
+  retryFailedRequests: true
+  maxRetries: 3
+
+# UI customization
+ui:
+  # Home screen layout: compact, spacious, custom
+  homeLayout: spacious
+
+  # Show connection status in header
+  showConnectionStatus: true
+
+  # Show current time in header
+  showClock: true
+
+  # Footer button layout (max 6 buttons)
+  footerButtons:
+    - home
+    - temperature
+    - movement
+    - print
+    - macros
+    - settings
+
+  # Custom colors (override theme)
+  # colors:
+  #   primary: "#d46900"
+  #   secondary: "#ed3c63"
+  #   accent: "#007db4"
+  #   positive: "#849900"
+  #   negative: "#B71C1C"
+
+# Notifications
+notifications:
+  # Show notifications for these events
+  printComplete: true
+  printFailed: true
+  filamentRunout: true
+
+  # Play sound for notifications
+  enableSound: false
+
+  # Browser notifications (requires permission)
+  browserNotifications: true
+
+# Power management
+power:
+  # Available power devices (matches Moonraker power plugin)
+  devices:
+    - name: 'Printer'
+      device: 'printer'
+    - name: 'LED Lights'
+      device: 'leds'
+
+  # Auto-off after print complete (minutes, 0 to disable)
+  autoOffAfterPrint: 0
+
+  # Auto-off if idle (minutes, 0 to disable)
+  autoOffIfIdle: 0
+
+# System commands
+system:
+  # Available system commands
+  allowRestart: true
+  allowShutdown: true
+  allowReboot: true
+
+  # Confirm before system commands
+  confirmSystemCommands: true
+
+# Z-offset adjustment
+zOffset:
+  # Available adjustment increments (mm)
+  increments: [0.01, 0.05, 0.1]
+
+  # Save automatically after adjustment
+  autoSave: true
+
+# Custom panels
+# Uncomment to add custom panels
+# customPanels:
+#   - name: "Custom Panel"
+#     icon: "extension"
+#     url: "http://localhost:8080/custom-panel"
+
+# Hidden features (experimental)
+experimental:
+  # Enable experimental features
+  enabled: false
+
+  # Features to enable
+  features:
+    # - bedLevelingWizard
+    # - advancedMacroEditor
+    # - customThemes

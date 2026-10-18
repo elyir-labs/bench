@@ -1,0 +1,54 @@
+{
+  "name": "Printers",
+  "short_name": "Printers",
+  "description": "Every printer you're paired with: what each is doing, what it needs, and its notifications.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0e13",
+  "theme_color": "#0b0e13",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/look/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "model",
+          "accept": [
+            ".stl",
+            ".3mf",
+            ".step",
+            ".stp",
+            ".obj",
+            "model/stl",
+            "model/3mf",
+            "model/step",
+            "application/sla",
+            "application/vnd.ms-pki.stl",
+            "application/step",
+            "application/octet-stream"
+          ]
+        }
+      ]
+    }
+  }
+}

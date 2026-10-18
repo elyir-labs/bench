@@ -1,0 +1,18 @@
+# Elyir Bench image (docs/image.md): as KIAUH writes it, which is what our printers run.
+[Unit]
+Description=API Server for Klipper SV1
+Documentation=https://moonraker.readthedocs.io/
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+RemainAfterExit=yes
+WorkingDirectory=/home/pi/moonraker
+EnvironmentFile=/home/pi/printer_data/systemd/moonraker.env
+ExecStart=/home/pi/moonraker-env/bin/python $MOONRAKER_ARGS
+Restart=always
+RestartSec=10

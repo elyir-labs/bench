@@ -1,0 +1,15 @@
+#!/bin/bash
+# genimage's configuration for this card (image-elyir-bench-ab.yaml). $1 is the filesystem, $2 the output.
+set -eu
+genimg_in=$2
+D="$LAYER_DIR/image-elyir-bench-ab.d"
+sed -e "s|<IMAGE_NAME>|$IGconf_image_name|g" \
+    -e "s|<IMAGE_SUFFIX>|$IGconf_image_suffix|g" \
+    -e "s|<FW_SIZE>|$IGconf_image_boot_part_size|g" \
+    -e "s|<ROOT_SIZE>|$IGconf_image_root_part_size|g" \
+    -e "s|<SETUP>|'$(readlink -ef "$D/setup.sh")'|g" \
+    -e "s|<MKE2FS_CONF>|'$(readlink -ef "$D/mke2fs.conf")'|g" \
+    -e "s|<MKE2FS_EXTRAARGS>|-U $(uuidgen) ${IGconf_fs_ext4_mkfs_args:--F -b 4096}|g" \
+    -e "s|<VFAT_EXTRAARGS>|-S $IGconf_device_sector_size -i $(uuidgen | cut -c1-8) ${IGconf_fs_vfat_mkfs_args:-}|g" \
+    -e "s|<DISK_SIGNATURE>|$IGconf_image_disksig|g" \
+    "$D/genimage.cfg.in" > "$genimg_in/genimage.cfg"

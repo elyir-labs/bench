@@ -1,0 +1,122 @@
+<title>Write to Elyir</title>
+<meta name="description" content="An idea, a request or anything else for the people who make Elyir Bench.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* bench.elyir.com/write (design/report/, B): the form a printer's code opens on a phone, the printer named in the
+     address (#kind=idea&printer=Workshop&release=…&board=…). It posts to Bench Cloud's /v1/reports itself, so a phone
+     that isn't paired with the printer can write too. */
+  :root {
+    --ground: #0b0e13; --surface: #131821; --raised: #1a202b; --line: #262e3b; --ink: #eef1f6; --quiet: #8d97a8;
+    --accent: #4da3ff; --on-accent: #04101f; --green: #4cc38a; --amber: #f5a524;
+    --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ground: #eceef2; --surface: #ffffff; --raised: #f3f5f8; --line: #d5dae2; --ink: #13171d; --quiet: #5b6473;
+    --accent: #1f6fe0; --on-accent: #ffffff; --green: #17804f; --amber: #a35f00; color-scheme: light;
+  }
+  * { box-sizing: border-box }
+  html, body { background: var(--ground); color: var(--ink) }
+  body { margin: 0; font: 16px/1.5 var(--font); padding: 0 16px 48px }
+  a { color: var(--accent) }
+  .wrap { max-width: 620px; margin: 0 auto; display: grid; gap: 22px }
+  nav { display: flex; align-items: center; padding-block: 18px; border-bottom: 1px solid var(--line) }
+  .mark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none }
+  .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
+  .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+  h1 { margin: 8px 0 0; font-size: clamp(30px, 6vw, 40px); line-height: 1.08; font-weight: 800; letter-spacing: -.02em }
+  .lede { margin: 0; color: var(--quiet); font-size: 17px }
+  form { display: grid; gap: 14px }
+  .kinds { display: flex; gap: 8px; flex-wrap: wrap }
+  .kinds label { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-weight: 650; cursor: pointer }
+  .kinds input { position: absolute; opacity: 0; pointer-events: none }
+  .kinds label:has(input:checked) { border-color: var(--accent); color: var(--accent) }
+  .field { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--quiet) }
+  textarea, input[type=email] { font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px }
+  textarea { min-height: 150px; resize: vertical }
+  textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .about { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line) }
+  .about b { display: block }
+  .about span { color: var(--quiet); font-size: 14px }
+  .about input { width: 22px; height: 22px; flex: none }
+  .btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; height: 52px; padding: 0 26px; border-radius: 12px; font-weight: 700; background: var(--accent); color: var(--on-accent) }
+  .btn[disabled] { opacity: .6; cursor: default }
+  .fine { margin: 0; color: var(--quiet); font-size: 14px }
+  .said { margin: 0; padding: 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); font-size: 17px }
+  .said.bad { border-color: var(--amber) }
+  .said b.code { display: block; font-size: 34px; letter-spacing: .06em; margin-top: 6px }
+  .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden }
+</style>
+
+<div class="wrap">
+  <nav><a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a></nav>
+  <div>
+    <h1>Write to Elyir</h1>
+    <p class="lede">An idea, a request, or anything else. It goes to the people who make Elyir Bench.</p>
+  </div>
+  <form id="form" novalidate>
+    <div class="kinds" role="radiogroup" aria-label="What it is">
+      <label><input type="radio" name="kind" value="idea" checked>An idea or a request</label>
+      <label><input type="radio" name="kind" value="other">Something else</label>
+    </div>
+    <label class="field">Your words<textarea name="note" maxlength="4000" required></textarea></label>
+    <label class="about" id="about" hidden><span><b id="about-name"></b><span id="about-line"></span></span>
+      <input type="checkbox" name="details" aria-label="Add the printer's release and board"></label>
+    <label class="field">Where we can answer<input type="email" name="email" autocomplete="email" placeholder="you@example.net"></label>
+    <div class="trap" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+    <button class="btn" type="submit">Send to Elyir</button>
+    <p class="fine">Something wrong with a printer? Send it from the printer instead: Care, Tell Elyir something, so its logs go too.
+      Or email <a href="mailto:testers@elyir.dev">testers@elyir.dev</a>.</p>
+  </form>
+  <p class="said" id="said" hidden role="status"></p>
+</div>
+
+<script>
+(() => {
+  let saved = null
+  try { saved = localStorage.getItem('demo.theme') } catch {}
+  document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved
+    : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+
+  const form = document.getElementById('form')
+  const said = document.getElementById('said')
+  const from = new URLSearchParams(location.hash.slice(1))
+  const printer = { name: from.get('printer') || '', release: from.get('release') || '', board: from.get('board') || '' }
+  if (from.get('kind') === 'other') form.kind.value = 'other'
+  if (printer.name) {
+    document.getElementById('about').hidden = false
+    document.getElementById('about-name').textContent = `About ${printer.name}`
+    document.getElementById('about-line').textContent = `Add its release and board${printer.release ? ` (${printer.release}${printer.board ? ', ' + printer.board : ''})` : ''}. Off unless you want them.`
+  }
+  const say = (html, bad) => { said.innerHTML = html; said.hidden = false; said.classList.toggle('bad', !!bad) }
+  const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault()
+    const note = form.note.value.trim()
+    if (!note) return say('Write a few words first.', true)
+    const email = form.email.value.trim()
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return say("That doesn't look like an email address.", true)
+    const meta = { kind: form.kind.value, note, ...(email ? { email } : {}), ...(form.website.value ? { website: form.website.value } : {}),
+      printer: printer.name ? { name: printer.name, ...(form.details.checked ? { release: printer.release, board: printer.board } : {}) } : {} }
+    const body = new FormData()
+    body.append('meta', JSON.stringify(meta))
+    const button = form.querySelector('button')
+    button.disabled = true
+    try {
+      const r = await fetch('https://cloud.elyir.app/v1/reports', { method: 'POST', body })
+      const got = await r.json().catch(() => ({}))
+      if (r.status === 429) throw new Error("That's been sent a lot from here. Try again in an hour.")
+      if (!r.ok || !got.code) throw new Error(got.error || 'It wasn\'t sent. Try again in a minute.')
+      form.hidden = true
+      say(`Sent to Elyir. If you write to us, give this number:<b class="code">${esc(got.code)}</b>`)
+    } catch (e) {
+      say(esc(e.message === 'Failed to fetch' ? "Couldn't reach us just now. Try again in a minute." : e.message), true)
+    } finally {
+      button.disabled = false
+    }
+  })
+})()
+</script>

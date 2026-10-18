@@ -1,0 +1,9370 @@
+[
+{
+"t": 0.0,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 0.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 0.0,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 15.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 15.0,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 30.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 30.0,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 503.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 518.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 518.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 518.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 533.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 533.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 548.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 548.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 563.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 563.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 578.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 578.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 593.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 593.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 608.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 608.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 623.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 623.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 638.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 638.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 653.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 653.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 668.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 668.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 683.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 683.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 698.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 698.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 713.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 713.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 729.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 729.0,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 743.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 743.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 758.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 758.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 773.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 773.8,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 790.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 790.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 805.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 805.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 820.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 820.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": null,
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 26,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 828.4,
+"topic": "print/report",
+"state": "preheating",
+"action": "start",
+"data": {
+"curr_layer": 0,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 0,
+"progress": 0,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 833.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 28,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 835.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 28,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 835.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 26,
+"curr_nozzle_temp": 29,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 835.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 25,
+"curr_nozzle_temp": 28,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 835.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 26,
+"curr_nozzle_temp": 30,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 836.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 26,
+"curr_nozzle_temp": 32,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 838.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 27,
+"curr_nozzle_temp": 34,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 839.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 27,
+"curr_nozzle_temp": 36,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 839.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 27,
+"curr_nozzle_temp": 38,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 840.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 28,
+"curr_nozzle_temp": 40,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 841.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 28,
+"curr_nozzle_temp": 42,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 842.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 28,
+"curr_nozzle_temp": 44,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 843.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 28,
+"curr_nozzle_temp": 46,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 844.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 29,
+"curr_nozzle_temp": 48,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 845.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 29,
+"curr_nozzle_temp": 50,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 845.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 29,
+"curr_nozzle_temp": 52,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 846.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 30,
+"curr_nozzle_temp": 54,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 847.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 30,
+"curr_nozzle_temp": 56,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 848.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 30,
+"curr_nozzle_temp": 58,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 848.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 30,
+"curr_nozzle_temp": 60,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 849.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 62,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 850.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 62,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 850.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 63,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 850.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 62,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 850.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 64,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 851.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 66,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 852.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 31,
+"curr_nozzle_temp": 68,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 852.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 32,
+"curr_nozzle_temp": 70,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 853.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 32,
+"curr_nozzle_temp": 72,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 854.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 32,
+"curr_nozzle_temp": 74,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 855.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 33,
+"curr_nozzle_temp": 76,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 856.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 33,
+"curr_nozzle_temp": 78,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 857.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 33,
+"curr_nozzle_temp": 80,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 858.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 33,
+"curr_nozzle_temp": 82,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 859.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 34,
+"curr_nozzle_temp": 84,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 859.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 34,
+"curr_nozzle_temp": 86,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 860.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 34,
+"curr_nozzle_temp": 88,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 861.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 34,
+"curr_nozzle_temp": 90,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 862.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 35,
+"curr_nozzle_temp": 92,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 863.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 35,
+"curr_nozzle_temp": 94,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 864.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 35,
+"curr_nozzle_temp": 96,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 865.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 98,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 865.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 98,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 865.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 98,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 865.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 100,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 866.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 102,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 867.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 36,
+"curr_nozzle_temp": 104,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 868.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 37,
+"curr_nozzle_temp": 106,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 869.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 37,
+"curr_nozzle_temp": 108,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 870.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 37,
+"curr_nozzle_temp": 110,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 871.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 38,
+"curr_nozzle_temp": 112,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 872.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 38,
+"curr_nozzle_temp": 114,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 873.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 38,
+"curr_nozzle_temp": 116,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 874.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 39,
+"curr_nozzle_temp": 118,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 875.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 39,
+"curr_nozzle_temp": 120,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 876.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 39,
+"curr_nozzle_temp": 122,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 877.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 39,
+"curr_nozzle_temp": 124,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 878.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 126,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 879.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 128,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 880.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 130,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 880.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 130,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 880.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 130,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 880.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 130,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 880.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 40,
+"curr_nozzle_temp": 132,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 882.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 41,
+"curr_nozzle_temp": 134,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 882.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 41,
+"curr_nozzle_temp": 136,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 884.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 41,
+"curr_nozzle_temp": 138,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 885.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 42,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 885.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 42,
+"curr_nozzle_temp": 142,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 887.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 42,
+"curr_nozzle_temp": 144,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 888.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 43,
+"curr_nozzle_temp": 146,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 888.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 43,
+"curr_nozzle_temp": 148,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 890.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 43,
+"curr_nozzle_temp": 150,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 891.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 43,
+"curr_nozzle_temp": 152,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 892.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 154,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 893.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 156,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 894.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 158,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 895.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 158,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 895.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 159,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 895.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 158,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 895.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 160,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 896.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 162,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 897.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 164,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 898.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 166,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 900.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 168,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 901.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 902.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 172,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 905.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 910.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 910.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 910.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 925.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 173,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 925.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 930.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 172,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 940.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 940.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 940.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+},
+{
+"t": 940.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 955.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 955.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 170
+}
+}
+},
+{
+"t": 959.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 168,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 963.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 166,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 965.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 164,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 967.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 162,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 970.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 162,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 970.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 161,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 970.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 162,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 970.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 160,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 972.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 158,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 974.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 156,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 975.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 154,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 977.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 152,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 979.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 150,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 981.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 148,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 983.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 146,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 985.2,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 146,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 985.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 145,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 985.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 146,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 985.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 144,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 987.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 142,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 990.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 1016.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 1016.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 139,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 1016.3,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 1025.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+},
+{
+"t": 1025.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 1040.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1040.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 140,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 140
+}
+}
+},
+{
+"t": 1045.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 142,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1047.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 144,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1048.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 146,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1050.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 148,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1051.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 150,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1052.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 152,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1053.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 154,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1054.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 156,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1055.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 156,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1055.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 157,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1055.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 156,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1055.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 158,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1056.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 160,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1057.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 162,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1059.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 164,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1060.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 166,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1061.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 168,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1062.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 170,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1063.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 172,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1064.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 174,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1065.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 176,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1066.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 178,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1067.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 180,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1068.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 182,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1069.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 184,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1070.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 184,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1070.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 185,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1070.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 184,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1070.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 186,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1071.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 188,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1072.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 190,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1074.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 192,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1075.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 194,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1076.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 196,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1077.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 198,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1078.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 200,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1079.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 202,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1080.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 204,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1081.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 206,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1083.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 208,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1084.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 210,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1085.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 212,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1085.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 212,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1085.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 212,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1085.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 212,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1086.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 214,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1087.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 216,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1089.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 218,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1090.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 220,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1091.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 222,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1093.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 224,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1095.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 226,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1097.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 228,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1099.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1100.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1100.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1100.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1104.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1115.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1115.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1115.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1115.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 0,
+"total_layers": 62,
+"supplies_usage": 0,
+"print_time": 0,
+"progress": 0,
+"state": "preheating",
+"print_status": 6,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1115.5,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 0,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 0,
+"progress": 2,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 1123.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1125.2,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 1,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 0,
+"progress": 3,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 1130.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 54,
+"print_time": 0,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1130.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1130.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 54,
+"print_time": 0,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1137.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1145.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 54,
+"print_time": 0,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1145.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1145.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 54,
+"print_time": 0,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1160.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1160.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 54,
+"print_time": 0,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1175.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 1,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 1,
+"progress": 3,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 1175.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 128,
+"print_time": 1,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1175.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1175.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 128,
+"print_time": 1,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1190.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1190.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 128,
+"print_time": 1,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1205.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1205.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 128,
+"print_time": 1,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1220.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1220.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 128,
+"print_time": 1,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1235.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 1,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 2,
+"progress": 3,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 1235.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 218,
+"print_time": 2,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1235.4,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1235.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 218,
+"print_time": 2,
+"progress": 3,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1248.3,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 1,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 2,
+"progress": 4,
+"remain_time": 20,
+"total_layers": 62
+}
+},
+{
+"t": 1250.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 237,
+"print_time": 2,
+"progress": 4,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1250.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+},
+{
+"t": 1250.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 20,
+"curr_layer": 1,
+"total_layers": 62,
+"supplies_usage": 237,
+"print_time": 2,
+"progress": 4,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 230,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 230
+}
+}
+},
+{
+"t": 1257.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 232,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1259.6,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 2,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 2,
+"progress": 5,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1260.9,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 234,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1264.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1265.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 252,
+"print_time": 2,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1265.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1265.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 252,
+"print_time": 2,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1280.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1280.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 252,
+"print_time": 2,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1295.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 2,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 3,
+"progress": 5,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1295.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 358,
+"print_time": 3,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1295.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1295.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 358,
+"print_time": 3,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1310.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1310.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 358,
+"print_time": 3,
+"progress": 5,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1310.5,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 2,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 3,
+"progress": 6,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1325.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 408,
+"print_time": 3,
+"progress": 6,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1325.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1325.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 2,
+"total_layers": 62,
+"supplies_usage": 408,
+"print_time": 3,
+"progress": 6,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1329.3,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 3,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 3,
+"progress": 7,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1340.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 456,
+"print_time": 3,
+"progress": 7,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1340.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1340.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 456,
+"print_time": 3,
+"progress": 7,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1355.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 3,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 4,
+"progress": 7,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1355.4,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 536,
+"print_time": 4,
+"progress": 7,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1355.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1355.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 536,
+"print_time": 4,
+"progress": 7,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1370.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1370.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 536,
+"print_time": 4,
+"progress": 7,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1379.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 3,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 4,
+"progress": 8,
+"remain_time": 19,
+"total_layers": 62
+}
+},
+{
+"t": 1385.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 613,
+"print_time": 4,
+"progress": 8,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1385.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1385.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 19,
+"curr_layer": 3,
+"total_layers": 62,
+"supplies_usage": 613,
+"print_time": 4,
+"progress": 8,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1397.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 4,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 4,
+"progress": 9,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1400.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 660,
+"print_time": 4,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1400.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1400.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 660,
+"print_time": 4,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1415.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 4,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 5,
+"progress": 9,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1415.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 718,
+"print_time": 5,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1415.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1415.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 718,
+"print_time": 5,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1430.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1430.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 718,
+"print_time": 5,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1445.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1445.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 718,
+"print_time": 5,
+"progress": 9,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1446.7,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 4,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 5,
+"progress": 10,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1460.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 818,
+"print_time": 5,
+"progress": 10,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1460.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1460.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 4,
+"total_layers": 62,
+"supplies_usage": 818,
+"print_time": 5,
+"progress": 10,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1461.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 5,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 5,
+"progress": 11,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1466.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 5,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 5,
+"progress": 12,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1475.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 5,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 6,
+"progress": 13,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1475.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 5,
+"total_layers": 62,
+"supplies_usage": 889,
+"print_time": 6,
+"progress": 13,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1475.5,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 5,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 6,
+"progress": 13,
+"remain_time": 18,
+"total_layers": 62
+}
+},
+{
+"t": 1475.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1475.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 5,
+"total_layers": 62,
+"supplies_usage": 890,
+"print_time": 6,
+"progress": 13,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1490.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1490.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 5,
+"total_layers": 62,
+"supplies_usage": 890,
+"print_time": 6,
+"progress": 13,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1505.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1505.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 5,
+"total_layers": 62,
+"supplies_usage": 890,
+"print_time": 6,
+"progress": 13,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1520.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1520.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 18,
+"curr_layer": 5,
+"total_layers": 62,
+"supplies_usage": 890,
+"print_time": 6,
+"progress": 13,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1526.7,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 6,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 6,
+"progress": 14,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1535.2,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 6,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 7,
+"progress": 14,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1535.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1070,
+"print_time": 7,
+"progress": 14,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1535.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1535.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1070,
+"print_time": 7,
+"progress": 14,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1550.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1550.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1070,
+"print_time": 7,
+"progress": 14,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1563.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 6,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 7,
+"progress": 15,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1565.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1160,
+"print_time": 7,
+"progress": 15,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1565.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1565.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1160,
+"print_time": 7,
+"progress": 15,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1580.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1580.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 6,
+"total_layers": 62,
+"supplies_usage": 1160,
+"print_time": 7,
+"progress": 15,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1595.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 7,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 8,
+"progress": 16,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1595.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1253,
+"print_time": 8,
+"progress": 16,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1595.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1595.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1253,
+"print_time": 8,
+"progress": 16,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1610.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1610.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1253,
+"print_time": 8,
+"progress": 16,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1617.7,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 7,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 8,
+"progress": 17,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1625.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1318,
+"print_time": 8,
+"progress": 17,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1625.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1625.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1318,
+"print_time": 8,
+"progress": 17,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1640.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1640.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1318,
+"print_time": 8,
+"progress": 17,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1655.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 7,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 9,
+"progress": 17,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1655.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1436,
+"print_time": 9,
+"progress": 17,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1655.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1655.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 7,
+"total_layers": 62,
+"supplies_usage": 1436,
+"print_time": 9,
+"progress": 17,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1662.3,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 9,
+"progress": 18,
+"remain_time": 17,
+"total_layers": 62
+}
+},
+{
+"t": 1670.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1455,
+"print_time": 9,
+"progress": 18,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1670.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1670.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 17,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1455,
+"print_time": 9,
+"progress": 18,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1675.9,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 9,
+"progress": 19,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1682.4,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 9,
+"progress": 20,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1685.5,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1499,
+"print_time": 9,
+"progress": 20,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1685.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1685.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1499,
+"print_time": 9,
+"progress": 20,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1698.2,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 9,
+"progress": 21,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1700.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1541,
+"print_time": 9,
+"progress": 21,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1700.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1700.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1541,
+"print_time": 9,
+"progress": 21,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1715.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 21,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1715.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1588,
+"print_time": 10,
+"progress": 21,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1715.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1715.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1588,
+"print_time": 10,
+"progress": 21,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1719.7,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 22,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1730.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 16,
+"curr_layer": 8,
+"total_layers": 62,
+"supplies_usage": 1602,
+"print_time": 10,
+"progress": 22,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1730.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 235,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1735.3,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 23,
+"remain_time": 16,
+"total_layers": 62
+}
+},
+{
+"t": 1739.3,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 8,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 24,
+"remain_time": 15,
+"total_layers": 62
+}
+},
+{
+"t": 1745.1,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 9,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 25,
+"remain_time": 15,
+"total_layers": 62
+}
+},
+{
+"t": 1745.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 15,
+"curr_layer": 9,
+"total_layers": 62,
+"supplies_usage": 1654,
+"print_time": 10,
+"progress": 25,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1745.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1745.7,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 15,
+"curr_layer": 9,
+"total_layers": 62,
+"supplies_usage": 1654,
+"print_time": 10,
+"progress": 25,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 236,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1757.4,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 9,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 26,
+"remain_time": 15,
+"total_layers": 62
+}
+},
+{
+"t": 1757.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 234,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1760.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 15,
+"curr_layer": 9,
+"total_layers": 62,
+"supplies_usage": 1683,
+"print_time": 10,
+"progress": 26,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 234,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1760.6,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 234,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+},
+{
+"t": 1760.6,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": {
+"remain_time": 15,
+"curr_layer": 9,
+"total_layers": 62,
+"supplies_usage": 1683,
+"print_time": 10,
+"progress": 26,
+"state": "printing",
+"print_status": 1,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "busy",
+"temp": {
+"curr_hotbed_temp": 45,
+"curr_nozzle_temp": 234,
+"target_hotbed_temp": 45,
+"target_nozzle_temp": 235
+}
+}
+},
+{
+"t": 1764.2,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 10,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 27,
+"remain_time": 15,
+"total_layers": 62
+}
+},
+{
+"t": 1773.0,
+"topic": "print/report",
+"state": "printing",
+"action": "start",
+"data": {
+"curr_layer": 10,
+"filename": "base_PETG_20m50s.gcode",
+"print_time": 10,
+"progress": 28,
+"remain_time": 15,
+"total_layers": 62
+}
+},
+{
+"t": 2371.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 214,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2373.2,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 212,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2375.3,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 210,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2377.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 208,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2378.7,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 206,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2380.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 204,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2382.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 202,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2384.1,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 202,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 2384.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "query",
+"data": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 201,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2384.1,
+"topic": "info/report",
+"state": "done",
+"action": "report",
+"data": {
+"project": null,
+"last_project": {
+"remain_time": 0,
+"curr_layer": 62,
+"total_layers": 62,
+"supplies_usage": 2498,
+"print_time": 20,
+"progress": 100,
+"state": "finished",
+"print_status": 2,
+"filename": "base_PETG_20m50s.gcode",
+"pause": 0,
+"project_type": 2,
+"task_settings": {
+"camera_timelapse": 0
+},
+"print_speed_mode": null
+},
+"model": "Anycubic Kobra 3",
+"version": "2.4.6.7",
+"state": "free",
+"temp": {
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 202,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+},
+{
+"t": 2384.5,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 200,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2386.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 198,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2388.0,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 196,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2389.8,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 194,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+},
+{
+"t": 2392.1,
+"topic": "tempature/report",
+"state": "done",
+"action": "auto",
+"data": {
+"taskid": "408932",
+"curr_hotbed_temp": 44,
+"curr_nozzle_temp": 192,
+"target_hotbed_temp": 0,
+"target_nozzle_temp": 0
+}
+}
+]

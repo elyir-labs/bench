@@ -1,0 +1,289 @@
+<title>Try Elyir Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* Layout: the printer's own dark room. Two real screens on one stage, the moments you can cause
+     beside them; on a phone, the app itself with the moments under it. Dark or light, page and screens
+     together: the visitor's own setting first, then the switch above the moments. */
+  :root {
+    --ground: #0b0e13;
+    --surface: #131821;
+    --raised: #1a202b;
+    --line: #262e3b;
+    --ink: #eef1f6;
+    --quiet: #8d97a8;
+    --accent: #4da3ff;
+    --warn: #f5a524;
+    --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ground: #eceef2;
+    --surface: #ffffff;
+    --raised: #f3f5f8;
+    --line: #d5dae2;
+    --ink: #13171d;
+    --quiet: #5b6473;
+    --accent: #1f6fe0;
+    --warn: #a35f00;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box }
+  html, body { background: var(--ground); color: var(--ink) }
+  body { font: 16px/1.5 var(--font); padding-inline: 16px; padding-block: 0 48px }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px }
+
+  nav { display: flex; align-items: center; gap: 28px; padding-block: 18px; border-bottom: 1px solid var(--line) }
+  nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
+  nav .links a, nav .end a.quiet { color: var(--quiet); text-decoration: none }
+  nav .links a:hover, nav .end a.quiet:hover, nav .links a[aria-current] { color: var(--ink) }
+  nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
+  nav .go { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: var(--ground); text-decoration: none; font-weight: 700 }
+  header { padding-block: 8px 0; display: grid; gap: 10px; max-width: 760px }
+  .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none; flex: none }
+  .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
+  .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+  h1 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1.05; font-weight: 800; letter-spacing: -.02em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 18px; max-width: 62ch }
+  .lede b { color: var(--ink); font-weight: 600 }
+  .lede a { color: var(--accent); font-weight: 600 }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start }
+  .screens { display: flex; gap: 24px; align-items: flex-end; min-width: 0 }
+  figure { margin: 0; display: grid; gap: 10px; min-width: 0 }
+  figcaption { color: var(--quiet); font-size: 13px; font-weight: 500; letter-spacing: .02em }
+  .panel { flex: 1 1 0 }
+  .phone { flex: 0 0 min(25%, 240px) }
+  .device { position: relative; background: #05070a; border: 1px solid var(--line); overflow: hidden }
+  .panel .device { border-radius: 18px; padding: 14px; aspect-ratio: 828 / 508 }
+  .phone .device { border-radius: 34px; padding: 10px; aspect-ratio: 410 / 864 }
+  .viewport { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 6px; background: var(--ground) }
+  .phone .viewport { border-radius: 26px }
+  .viewport iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: var(--ground) }
+
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--quiet); font-size: 14px; background: var(--ground); transition: opacity .4s }
+  .loading.done { opacity: 0; pointer-events: none }
+  .loading.error { color: var(--warn) }
+
+  aside { display: grid; gap: 14px; min-width: 0 }
+  aside h2 { margin: 0; font-size: 15px; font-weight: 700 }
+  .theme { justify-self: start; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line) }
+  .theme button { all: unset; cursor: pointer; padding: 5px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--quiet) }
+  .theme button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
+  .theme button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  aside p { margin: 0; color: var(--quiet); font-size: 14px }
+  .moments { display: grid; gap: 6px }
+  .moment { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); transition: border-color .15s, background .15s }
+  .moment b { font-weight: 600; font-size: 15px }
+  .moment span { color: var(--quiet); font-size: 13px; line-height: 1.35 }
+  .moment:hover { background: var(--raised) }
+  .moment:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .moment[aria-pressed="true"] { border-color: var(--accent) }
+  .moment:disabled { opacity: .45; cursor: default }
+  details { color: var(--quiet); font-size: 14px }
+  details summary { cursor: pointer; padding-block: 4px }
+  details .moments { margin-top: 8px }
+
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; border-top: 1px solid var(--line); padding-top: 24px }
+  .facts h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700 }
+  .facts p { margin: 0; color: var(--quiet); font-size: 14px; max-width: 46ch }
+
+  /* inside the front page (?embed=1): the stage alone, its height told to the page around it */
+  .embed body { padding: 0 }
+  .embed nav, .embed header, .embed .facts { display: none }
+
+  @media (max-width: 960px) {
+    .stage { grid-template-columns: minmax(0, 1fr) }
+    .facts { grid-template-columns: minmax(0, 1fr) }
+  }
+  /* a phone: the app itself, no picture of a phone inside a phone */
+  @media (max-width: 640px) {
+    nav { gap: 16px }
+    nav .links, nav .go { display: none }
+    header { padding-block: 0 }
+    .lede { font-size: 16px }
+    .panel { display: none }
+    .phone { flex: 1 1 auto }
+    .phone .device { padding: 0; border-radius: 20px; aspect-ratio: auto; height: 78vh }
+    .phone .viewport { border-radius: 20px }
+    .phone figcaption { display: none }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <nav>
+    <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
+    <span class="links"><a href="try" aria-current="page">Try it</a><a href="install">Install</a><a href="./#plans">Plans</a></span>
+    <span class="end"><a class="quiet" href="https://printers.elyir.app/you">Sign in</a><a class="go" href="install">Put it on your printer</a></span>
+  </nav>
+  <header>
+    <h1>A Klipper printer that tells you what it needs, in one sentence.</h1>
+    <p class="lede">These are the real screens, connected to a pretend printer running inside this page.
+      <b>Pick a moment and watch both screens react.</b> Tap the screens too: everything works except the actual plastic.</p>
+    <p class="lede"><a href="install">Put it on your printer</a>: one command, for a Raspberry Pi printer that already runs Klipper.</p>
+  </header>
+
+  <section class="stage">
+    <div class="screens">
+      <figure class="panel">
+        <div class="device"><div class="viewport" data-w="800" data-h="480">
+          <iframe id="panel" title="The 7-inch touchscreen on the printer" data-src="app/index.html?host=parent&amp;screen=panel&amp;theme=dark"></iframe>
+          <div class="loading" id="load-panel">Starting the pretend printer…</div>
+        </div></div>
+        <figcaption>The 7-inch touchscreen on the printer</figcaption>
+      </figure>
+      <figure class="phone">
+        <div class="device"><div class="viewport" data-w="390" data-h="844">
+          <iframe id="phone" title="Your phone" data-src="app/index.html?host=parent&amp;screen=phone&amp;theme=dark"></iframe>
+          <div class="loading" id="load-phone">Starting…</div>
+        </div></div>
+        <figcaption>Your phone, same printer</figcaption>
+      </figure>
+    </div>
+
+    <aside>
+      <div class="theme" role="group" aria-label="Screen theme">
+        <button type="button" data-theme-pick="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+      </div>
+      <h2>Make something happen</h2>
+      <p>Each one resets the printer and plays out at four times real speed.</p>
+      <div class="moments" id="moments">
+        <button class="moment" data-s="print" disabled><b>Start a print</b><span>Warm-up, leveling, first layer, then printing</span></button>
+        <button class="moment" data-s="runout" disabled><b>Filament runs out</b><span>Mid-print, at 40%, with nobody watching</span></button>
+        <button class="moment" data-s="carried_on" disabled><b>Runs out, carries on</b><span>Another spool of the same white takes over by itself</span></button>
+        <button class="moment" data-s="multi_color" disabled><b>Multi-color print</b><span>The filament unit swaps red and white by itself, layer after layer</span></button>
+        <button class="moment" data-s="color_change" disabled><b>Color change by hand</b><span>The file pauses for a spool you load yourself</span></button>
+        <button class="moment" data-s="first_layer" disabled><b>First layer going down</b><span>Squish more or less, kept for next time</span></button>
+        <button class="moment" data-s="finished" disabled><b>Print finished</b><span>Bed still warm, ready for the next plate</span></button>
+        <button class="moment" data-s="new_spool" disabled><b>A new spool goes in</b><span>Someone pushes filament into an empty slot</span></button>
+        <button class="moment" data-s="problem" disabled><b>Heater fault</b><span>Klipper shuts down mid-print</span></button>
+        <button class="moment" data-s="day" disabled><b>A whole day</b><span>Ready, a print, a runout, finished, ready again</span></button>
+      </div>
+      <details>
+        <summary>Every scenario in the simulator</summary>
+        <div class="moments" id="all"></div>
+      </details>
+    </aside>
+  </section>
+
+  <section class="facts">
+    <div><h3>The real engine</h3><p>The printer logic here is the same Python that runs inside Moonraker on a printer, running in your browser as WebAssembly. Only the hardware is pretend.</p></div>
+    <div><h3>One printer, every screen</h3><p>The touchscreen and the phone show the same printer. Press a button on one and the other follows, just as they do at home.</p></div>
+    <div><h3>Mainsail is still there</h3><p>Everything Klipper can do stays one tap away behind Advanced. Everyday printing never needs it.</p></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const embedded = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window
+  if (embedded) {
+    document.documentElement.classList.add('embed')
+    new ResizeObserver(() => window.parent.postMessage({ t: 'try-height', h: document.documentElement.scrollHeight }, '*')).observe(document.body)
+  }
+  const worker = new Worker('sim-worker.js', { type: 'module' })
+  const frames = [...document.querySelectorAll('iframe')]
+
+  // Dark or light, the page and both screens together. A first visit follows the visitor's own setting;
+  // a pick is remembered in this browser. Switching reloads only the screens: the printer lives in this
+  // page, so whatever it's doing carries on.
+  const THEME = 'demo.theme'
+  const setTheme = (t, picked) => {
+    document.documentElement.dataset.theme = t
+    document.querySelectorAll('[data-theme-pick]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themePick === t)))
+    frames.forEach((f) => {
+      f.dataset.src = f.dataset.src.replace(/theme=(dark|light)/, `theme=${t}`)
+      if (picked && f.getAttribute('src')) f.src = f.dataset.src
+    })
+    if (picked) try { localStorage.setItem(THEME, t) } catch {}
+    if (picked && embedded) window.parent.postMessage({ t: 'try-theme', theme: t }, '*')
+  }
+  let saved = null
+  try { saved = localStorage.getItem(THEME) } catch {}
+  setTheme(saved === 'light' || saved === 'dark' ? saved : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark', false)
+  document.querySelector('.theme').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-theme-pick]')
+    if (b && b.getAttribute('aria-pressed') !== 'true') setTheme(b.dataset.themePick, true)
+  })
+
+  // the screens connect through this page, so both talk to one printer
+  window.addEventListener('message', (ev) => {
+    if (ev.data?.t !== 'connect' || !ev.ports[0]) return
+    if (!frames.some((f) => f.contentWindow === ev.source)) return
+    worker.postMessage({ t: 'connect' }, [ev.ports[0]])
+  })
+
+  // this page's own line to the printer: the scenario buttons
+  const ch = new MessageChannel()
+  worker.postMessage({ t: 'connect' }, [ch.port2])
+  const port = ch.port1
+  let nextId = 1
+  const waiting = new Map()
+  const ctl = (op, arg) => new Promise((resolve, reject) => {
+    const id = nextId++
+    waiting.set(id, { resolve, reject })
+    port.postMessage({ t: 'ctl', id, op, arg })
+  })
+
+  const buttons = () => [...document.querySelectorAll('.moment')]
+  const mark = (name) => buttons().forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === name)))
+  const loaders = [document.getElementById('load-panel'), document.getElementById('load-phone')]
+
+  port.onmessage = async (ev) => {
+    const m = ev.data
+    if (m.t === 'ctl') {
+      const w = waiting.get(m.id)
+      waiting.delete(m.id)
+      if (w) m.error ? w.reject(new Error(m.error)) : w.resolve(m.result)
+    } else if (m.t === 'status') {
+      if (m.phase === 'loading') loaders[0].textContent = `${m.detail}…`
+      if (m.phase === 'error') loaders.forEach((l) => {
+        l.classList.add('error')
+        l.textContent = `The pretend printer could not start in this browser (${m.detail}). Try a current Chrome, Safari or Firefox.`
+      })
+      if (m.phase === 'ready') {
+        const r = await ctl('scenarios')
+        const all = document.getElementById('all')
+        for (const [name, doc] of Object.entries(r.scenarios)) {
+          const b = document.createElement('button')
+          b.className = 'moment'
+          b.dataset.s = name
+          b.innerHTML = '<b></b><span></span>'
+          b.querySelector('b').textContent = name.replace(/_/g, ' ')
+          b.querySelector('span').textContent = doc.split('\n')[0]
+          all.appendChild(b)
+        }
+        buttons().forEach((b) => { b.disabled = false })
+        mark(r.running)
+        // screens start once the printer is up; the boot picture covers the wait on the panel
+        frames.forEach((f) => { f.src = f.dataset.src })
+        frames.forEach((f, i) => f.addEventListener('load', () => setTimeout(() => loaders[i].classList.add('done'), 600), { once: true }))
+      }
+    }
+  }
+
+  document.querySelector('.stage aside').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('.moment')
+    if (!b || b.disabled) return
+    mark(b.dataset.s)
+    try { await ctl('run', b.dataset.s) } catch (e) { console.error(e) }
+  })
+
+  // each screen is drawn at its real size and scaled to fit its frame
+  const fit = () => document.querySelectorAll('.viewport').forEach((v) => {
+    const f = v.querySelector('iframe')
+    const narrow = v.closest('.phone') && matchMedia('(max-width: 640px)').matches
+    // on a phone the frame is the screen's own height, drawn at a 390-wide phone's size and scaled
+    const w = +v.dataset.w
+    const s = v.clientWidth / w
+    const h = narrow ? v.clientHeight / s : +v.dataset.h
+    f.style.width = `${w}px`
+    f.style.height = `${h}px`
+    f.style.transform = `scale(${s})`
+  })
+  new ResizeObserver(fit).observe(document.body)
+  fit()
+})()
+</script>

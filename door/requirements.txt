@@ -1,0 +1,9 @@
+# The door's own libraries, pinned: what was tested is what runs. docs/door.md.
+# Python 3.9 (Debian 11, e.g. a BTT CB1 that cannot move to a newer OS yet) gets the last versions that
+# still support it; everything newer gets the current ones. Both sets pass door/tests.
+aiohttp==3.14.3; python_version >= "3.10"
+aiohttp==3.12.15; python_version < "3.10"
+pywebpush==2.5.0; python_version >= "3.10"
+pywebpush==2.1.2; python_version < "3.10"
+# A Bench Box speaking to an Anycubic printer over its LAN mode (bench/kobra_lan.py): MQTT over TLS.
+paho-mqtt==2.1.0

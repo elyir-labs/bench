@@ -1,0 +1,97 @@
+# METABEGIN
+# X-Env-Layer-Name: elyir-bench-printer
+# X-Env-Layer-Desc: An Elyir Bench printer: Klipper, Moonraker and Mainsail as our printers run them,
+#  the packages the installer would fetch (so first boot works with no network), and the release,
+#  installed by the installer itself on first boot (elyir-bench-firstboot), and elyir-bench-os with
+#  its boot units for the two OS slots (elyir-bench-layout makes them). docs/image.md, docs/os-slots.md.
+# X-Env-Layer-Category: app
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Requires: elyir-bench-base,device-user-admin
+#
+# X-Env-VarPrefix: bench
+#
+# X-Env-Var-release:
+# X-Env-Var-release-Desc: The Elyir Bench release tarball (scripts/build-release.sh) to put on the card.
+# X-Env-Var-release-Required: y
+# X-Env-Var-release-Valid: string
+# X-Env-Var-release-Set: y
+#
+# X-Env-Var-release_key:
+# X-Env-Var-release_key-Desc: The public half of the release key (install/release-key.pem): what a printer
+#  checks a release's OS against before writing it into the idle slot.
+# X-Env-Var-release_key-Required: y
+# X-Env-Var-release_key-Valid: string
+# X-Env-Var-release_key-Set: y
+#
+# X-Env-Var-os_version:
+# X-Env-Var-os_version-Desc: This card's release (build.sh passes it): what elyir-bench-os update compares
+#  the feed with on a slot as flashed.
+# X-Env-Var-os_version-Required: y
+# X-Env-Var-os_version-Valid: string
+# X-Env-Var-os_version-Set: y
+#
+# X-Env-Var-klipper: f52a6f9491e6bbb6c04f3634012ae23f41e8b857
+# X-Env-Var-klipper-Desc: Klipper's commit (what Workshop runs, 10 December 2025).
+# X-Env-Var-klipper-Required: n
+# X-Env-Var-klipper-Valid: string
+# X-Env-Var-klipper-Set: y
+#
+# X-Env-Var-moonraker: 058517b5b443f1c8454ca58810568b93e39ef867
+# X-Env-Var-moonraker-Desc: Moonraker's commit (what Workshop runs, 4 December 2025).
+# X-Env-Var-moonraker-Required: n
+# X-Env-Var-moonraker-Valid: string
+# X-Env-Var-moonraker-Set: y
+#
+# X-Env-Var-mainsail: v2.15.0
+# X-Env-Var-mainsail-Desc: Mainsail's release, behind the Advanced door.
+# X-Env-Var-mainsail-Required: n
+# X-Env-Var-mainsail-Valid: string
+# X-Env-Var-mainsail-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    # Klipper and Moonraker (their install scripts' lists, without the board-firmware toolchains)
+    - git
+    - python3-venv
+    - python3-dev
+    - gcc
+    - libc6-dev
+    - libffi-dev
+    - libopenjp2-7
+    - libsodium-dev
+    - zlib1g-dev
+    - libjpeg-dev
+    - curl
+    - unzip
+    - ca-certificates
+    # the web pages and the printer's name on the network
+    - nginx
+    - polkitd             # Moonraker restarts services, reboots and shuts down through it (its rules below)
+    - avahi-daemon
+    - libnss-mdns
+    # what the installer would otherwise fetch: the kiosk (cage), the boot screen, the first Wi-Fi
+    - cage
+    - chromium
+    - wlr-randr
+    - grim
+    - seatd
+    - plymouth
+    - dnsmasq-base
+    # what Orca links (elyir_bench.py ORCA_PACKAGES): slicing works without an apt download, and a new slot's
+    # first boot doesn't spend its trial deadline fetching them
+    - libwebkit2gtk-4.1-0
+    - libjavascriptcoregtk-4.1-0
+    - libsoup-3.0-0
+    - libsecret-1-0
+    - libgstreamer-plugins-base1.0-0
+    - libopengl0
+    - libglu1-mesa
+    # the card's layout on first boot (elyir-bench-layout) and the OS slots (elyir-bench-os)
+    - cloud-guest-utils
+    - e2fsprogs
+    - fdisk
+    - rsync
+    # a release's OS, checked and written into the idle slot (elyir-bench-os stage <bundle>)
+    - zstd
+    - openssl

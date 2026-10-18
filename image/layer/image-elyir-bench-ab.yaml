@@ -1,0 +1,50 @@
+# METABEGIN
+# X-Env-Layer-Name: image-elyir-bench-ab
+# X-Env-Layer-Category: image
+# X-Env-Layer-Desc: The card for two OS slots (docs/os-slots.md): MBR, bootfs (FAT) and rootfs (slot A),
+#  both named by PARTUUID as elyir-bench-os reads them. The image stops there, so it stays small; the
+#  first boot adds rootfs-b (slot B) and astro-data (/data) in the space after it (elyir-bench-layout).
+#  Based on rpi-image-gen's image-rpios (simple_dual).
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Requires: image-base
+# X-Env-Layer-Provides: image
+#
+# X-Env-VarPrefix: image
+#
+# X-Env-Var-boot_part_size: 512M
+# X-Env-Var-boot_part_size-Desc: bootfs: firmware, and later each slot's own boot files (slotb/)
+# X-Env-Var-boot_part_size-Required: n
+# X-Env-Var-boot_part_size-Valid: size
+# X-Env-Var-boot_part_size-Set: y
+#
+# X-Env-Var-root_part_size: 6G
+# X-Env-Var-root_part_size-Desc: rootfs as built; the first boot grows it to the slot size for the card
+# X-Env-Var-root_part_size-Required: n
+# X-Env-Var-root_part_size-Valid: size
+# X-Env-Var-root_part_size-Set: y
+#
+# X-Env-Var-disksig:
+# X-Env-Var-disksig-Desc: The MBR disk signature (0x and 8 hex digits). PARTUUIDs are <signature>-<part>,
+#  so cmdline.txt and fstab need it before the image exists; build.sh picks one per build.
+# X-Env-Var-disksig-Required: y
+# X-Env-Var-disksig-Valid: regex:^0x[0-9a-f]{8}$
+# X-Env-Var-disksig-Set: y
+#
+# X-Env-Var-rootfs_type: ext4
+# X-Env-Var-rootfs_type-Desc: Root filesystem type (ext4 only here)
+# X-Env-Var-rootfs_type-Required: n
+# X-Env-Var-rootfs_type-Valid: keywords:ext4
+# X-Env-Var-rootfs_type-Set: y
+#
+# X-Env-Var-assetdir: ${DIRECTORY}
+# X-Env-Var-assetdir-Desc: Image specific asset directory
+# X-Env-Var-assetdir-Required: n
+# X-Env-Var-assetdir-Valid: dir
+# X-Env-Var-assetdir-Set: y
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - initramfs-tools
+    - dosfstools
+    - e2fsprogs

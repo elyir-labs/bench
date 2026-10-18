@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Set up the printer's Wi-Fi</title>
+<!-- The phone page of a new printer's first Wi-Fi (setup/wifi_setup.py, design/setup/ direction C: c-network,
+     c-password, c-handoff). It opens in the phone's "sign in to this network" sheet, a small browser with no
+     internet, so everything is here; the font comes from the printer. Tokens: app/src/styles/elyir-bench.css. -->
+<style>
+@font-face { font-family: 'Figtree'; font-weight: 300 900; font-display: swap; src: url('/wifi/font/figtree-latin.woff2') format('woff2'); }
+:root {
+  color-scheme: light;
+  --a-bg: #eceef2; --a-surface: #ffffff; --a-surface-2: #dde1e8;
+  --a-ink: rgba(8,12,20,.92); --a-ink-2: rgba(8,12,20,.68); --a-ink-3: rgba(8,12,20,.52); --a-line: rgba(8,12,20,.11);
+  --a-accent: #1f6fe0; --a-accent-ink: #fff; --a-accent-text: #1659c4; --a-red-text: #c0262c;
+  --a-tint-blue: rgba(31,111,224,.20); --a-track: rgba(8,12,20,.1);
+  --a-shadow: 0 6px 18px rgba(16,24,40,.10), 0 1px 2px rgba(16,24,40,.06);
+  --a-font: 'Figtree', -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --a-bg: #0b0e13; --a-surface: #161a23; --a-surface-2: #1f2430;
+    --a-ink: rgba(255,255,255,.94); --a-ink-2: rgba(255,255,255,.66); --a-ink-3: rgba(255,255,255,.42); --a-line: rgba(255,255,255,.08);
+    --a-accent: #4da3ff; --a-accent-ink: #06111f; --a-accent-text: #4da3ff; --a-red-text: #f26060;
+    --a-tint-blue: rgba(77,163,255,.18); --a-track: rgba(255,255,255,.1);
+    --a-shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--a-bg); color: var(--a-ink); font: 17px/1.4 var(--a-font); -webkit-font-smoothing: antialiased; }
+main { max-width: 440px; margin: 0 auto; padding: 22px 20px calc(28px + env(safe-area-inset-bottom)); display: grid; gap: 14px; }
+h1 { font-size: 30px; font-weight: 750; letter-spacing: -.025em; line-height: 1.08; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.muted { color: var(--a-ink-3); font-size: 16px; }
+.sub { color: var(--a-ink-2); }
+.eye { width: 40px; height: 40px; display: block; }
+.list { background: var(--a-surface); border-radius: 22px; box-shadow: var(--a-shadow); overflow: hidden; }
+.list button { all: unset; box-sizing: border-box; width: 100%; min-height: 58px; padding: 10px 20px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--a-line); cursor: pointer; }
+.list button:first-child { border-top: 0; }
+.list button:focus-visible { outline: 2px solid var(--a-accent); outline-offset: -2px; }
+.list button[disabled] { cursor: default; }
+.list b { flex: 1; font-weight: 650; min-width: 0; overflow-wrap: anywhere; }
+.list small { display: block; font-weight: 500; color: var(--a-ink-3); font-size: 14px; }
+.sig { display: inline-flex; align-items: center; gap: 6px; color: var(--a-ink-2); flex: none; }
+.back { all: unset; cursor: pointer; color: var(--a-accent-text); font-weight: 650; display: inline-flex; align-items: center; gap: 2px; justify-self: start; }
+label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--a-ink-3); margin-top: 6px; }
+.field { display: flex; align-items: center; background: var(--a-surface); border: 1px solid var(--a-line); border-radius: 14px; padding: 0 6px 0 16px; }
+.field:focus-within { border-color: var(--a-accent); box-shadow: 0 0 0 3px var(--a-tint-blue); }
+.field input { all: unset; flex: 1; height: 52px; font: 500 19px var(--a-font); color: var(--a-ink); letter-spacing: normal; text-transform: none; min-width: 0; }
+.field button { all: unset; cursor: pointer; padding: 10px; color: var(--a-accent-text); font: 650 15px var(--a-font); letter-spacing: normal; text-transform: none; }
+.go { all: unset; box-sizing: border-box; cursor: pointer; height: 54px; border-radius: 999px; background: var(--a-accent); color: var(--a-accent-ink); font: 650 19px var(--a-font); display: grid; place-items: center; margin-top: 8px; }
+.go[disabled] { opacity: .5; cursor: default; }
+.go:focus-visible { outline: 3px solid var(--a-tint-blue); outline-offset: 2px; }
+.err { color: var(--a-red-text); font-size: 16px; }
+.center { justify-items: center; text-align: center; padding-top: 56px; }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: spin 1.6s linear infinite; transform-origin: 50% 50%; } @keyframes spin { to { transform: rotate(360deg); } } }
+</style>
+</head>
+<body>
+<main id="app"><p class="muted">Asking the printer…</p></main>
+<script>
+const $app = document.getElementById('app')
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+const eye = (px, frac = 1, spin = false) => {
+  const c = px / 2, s = px / 126, r = 56 * s, L = 2 * Math.PI * r
+  return `<svg class="eye" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" aria-hidden="true" style="width:${px}px;height:${px}px">
+    <circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--a-track)" stroke-width="${13 * s}"/>
+    <g class="${spin ? 'spin' : ''}"><circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--a-accent)" stroke-width="${13 * s}" stroke-linecap="round" stroke-dasharray="${L * frac} ${L}" transform="rotate(-90 ${c} ${c})"/></g>
+    <circle cx="${c}" cy="${c}" r="${22 * s}" fill="var(--a-accent)"/></svg>`
+}
+const bars = (signal) => { const n = signal >= 67 ? 3 : signal >= 34 ? 2 : 1, a = (i, d) => `<path d="${d}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="${n >= i ? 1 : .25}"/>`
+  return `<svg viewBox="0 0 24 24" width="22" height="22" aria-label="signal ${n} of 3"><circle cx="12" cy="18.5" r="1.8" fill="currentColor"/>${a(1, 'M8.4 14.6a5.2 5.2 0 0 1 7.2 0')}${a(2, 'M5.3 11.4a9.6 9.6 0 0 1 13.4 0')}${a(3, 'M2.3 8.2a14 14 0 0 1 19.4 0')}</svg>` }
+const lock = '<svg viewBox="0 0 24 24" width="14" height="14" aria-label="password"><rect x="5" y="10" width="14" height="10" rx="2.5" fill="currentColor" opacity=".55"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" stroke-width="2.2" opacity=".55"/></svg>'
+const back = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>'
+
+let state = null
+async function load() {
+  try {
+    const r = await fetch('/wifi/state', { cache: 'no-store' })
+    state = await r.json()
+  } catch { state = null }
+  if (!state) return draw(`<h1>The printer isn't answering.</h1><p class="sub">Check you're on its setup Wi-Fi, then open this page again.</p>`)
+  if (state.mode === 'looking') { draw(`${eye(40, .3, true)}<h1>The printer is looking for networks.</h1><p class="muted">A moment…</p>`); return setTimeout(load, 1500) }
+  if (state.mode !== 'open' && state.mode !== 'failed') return away()
+  list()
+}
+function draw(html) { $app.innerHTML = html; $app.className = '' }
+
+function away() {
+  draw(`${eye(40)}<h1>The printer isn't setting up its Wi-Fi right now.</h1><p class="sub">Look at its screen: it says what's next.</p>`)
+}
+
+function list() {
+  const nets = state.networks || []
+  draw(`${eye(40)}<h1>Which Wi-Fi should the printer use?</h1><p class="muted">The networks it can hear from where it sits.</p>
+    ${nets.length ? `<div class="list">${nets.map((n, i) => `<button data-i="${i}" ${n.security === 'enterprise' ? 'disabled' : ''}>
+      <b>${esc(n.ssid)}${n.security === 'enterprise' ? '<small>Needs a username too: not supported yet</small>' : ''}</b><span class="sig">${n.security === 'open' ? '' : lock}${bars(n.signal)}</span></button>`).join('')}</div>`
+      : '<p class="sub">It didn\'t hear any. Type yours below, or use "Look again" on the printer\'s screen.</p>'}
+    <div class="list"><button data-other><b>Other network…</b></button></div>`)
+  $app.querySelectorAll('[data-i]').forEach((b) => b.onclick = () => ask(nets[+b.dataset.i]))
+  $app.querySelector('[data-other]').onclick = () => ask(null)
+}
+
+function ask(net) {
+  const other = !net
+  draw(`<button class="back" id="back">${back}Networks</button>
+    <h1>${other ? 'Another network' : esc(net.ssid)}</h1>
+    <form id="f" style="display:grid;gap:12px">
+      ${other ? `<label>Network name<span class="field"><input id="ssid" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32" required></span></label>` : ''}
+      ${net && net.security === 'open' ? '<p class="sub">This network has no password.</p>' : `<label>Password${other ? ' (empty if it has none)' : ''}<span class="field"><input id="pw" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" ${other ? '' : 'required'}><button type="button" id="show">Show</button></span></label>`}
+      <p class="err" id="err" hidden></p>
+      <button class="go" id="go" type="submit">Connect</button>
+      <p class="muted">The printer asks for its name on its own screen while it joins.</p>
+    </form>`)
+  document.getElementById('back').onclick = list
+  const pw = document.getElementById('pw'), show = document.getElementById('show')
+  if (show) show.onclick = () => { pw.type = pw.type === 'password' ? 'text' : 'password'; show.textContent = pw.type === 'password' ? 'Show' : 'Hide' }
+  ;(document.getElementById('ssid') || pw)?.focus()
+  document.getElementById('f').onsubmit = async (e) => {
+    e.preventDefault()
+    const go = document.getElementById('go'), err = document.getElementById('err')
+    const ssid = other ? document.getElementById('ssid').value.trim() : net.ssid
+    go.disabled = true; err.hidden = true
+    try {
+      const r = await fetch('/wifi/join', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, password: pw ? pw.value : '', hidden: other }) })
+      const d = await r.json().catch(() => ({}))
+      if (r.status === 409) return away()
+      if (!r.ok) { err.textContent = d.message || "That didn't work. Try again."; err.hidden = false; go.disabled = false; return }
+      handoff(ssid)
+    } catch {
+      handoff(ssid)   // the setup Wi-Fi may already be closing: the printer has it
+    }
+  }
+}
+
+function handoff(ssid) {
+  draw(`<div style="display:grid;gap:18px" class="center">${eye(110, .35, true)}
+    <h1 style="margin-top:10px">The printer is joining ${esc(ssid)}.</h1>
+    <p class="sub">Your phone goes back to its own Wi-Fi. The rest is on the printer's screen: a name for it, then putting it on this phone.</p>
+    <p class="muted">You can close this page.</p></div>`)
+}
+
+load()
+</script>
+</body>
+</html>

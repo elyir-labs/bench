@@ -1,0 +1,69 @@
+#!/bin/bash
+# First boot (docs/image.md, docs/os-slots.md): the card as every Elyir Bench printer has it.
+#
+#   p1 bootfs      the firmware, and later each slot's own boot files
+#   p2 rootfs      slot A: this OS, grown to the slot size for the card
+#   p3 rootfs-b    slot B: empty until an update is written into it
+#   p4 astro-data  /data: printer_data (bind-mounted at ~/printer_data) and elyir-bench-os's state
+#
+# The image holds only p1 and p2, so it downloads and flashes quickly. Everything here happens after p2,
+# on the card's free space, while the running root stays where it is (the kernel learns p2's new size
+# through BLKPG, the same way growpart does it). Runs before Klipper and Moonraker, once.
+set -eu
+U=pi
+GiB=$((1024 * 1024 * 1024 / 512))               # in 512-byte sectors
+ALIGN=16384                                     # 8 MiB, as the image is aligned
+MIN_SLOT=$((6 * GiB)); MAX_SLOT=$((12 * GiB)); MIN_DATA=$((2 * GiB))
+
+# ELYIR_BENCH_LAYOUT_ROOT: tests point it at slot A on a loop device (image/test-layout.sh)
+root=$(readlink -f "${ELYIR_BENCH_LAYOUT_ROOT:-$(findmnt -no SOURCE /)}")
+disk=/dev/$(lsblk -no PKNAME "$root")
+part() { case $disk in *[0-9]) echo "${disk}p$1" ;; *) echo "$disk$1" ;; esac; }
+[ "$(cat "/sys/class/block/$(basename "$root")/partition")" = 2 ] || { echo "root isn't partition 2: leaving the card alone"; exit 0; }
+[ -e "$(part 3)" ] && { echo "slot B is already there"; touch /var/lib/elyir-bench/laid-out; exit 0; }
+
+total=$(blockdev --getsz "$disk")
+start2=$(cat "/sys/class/block/$(basename "$root")/start")
+usable=$((total - start2))
+slot=$(( (usable - 4 * GiB) / 3 ))               # two slots, and the data partition gets a share too
+[ $slot -gt $MAX_SLOT ] && slot=$MAX_SLOT
+[ $slot -lt $MIN_SLOT ] && slot=$MIN_SLOT          # a small card still gets two slots while /data has room
+slot=$(( slot / ALIGN * ALIGN ))
+mkdir -p /var/lib/elyir-bench
+
+if [ $(( usable - 2 * slot )) -lt $MIN_DATA ]; then
+  echo "the card is too small for two slots ($((total / GiB)) GB): one OS on all of it"
+  growpart "$disk" 2 || [ $? -eq 1 ]
+  resize2fs "$root"
+  touch /var/lib/elyir-bench/laid-out
+  exit 0
+fi
+
+echo "slots of $((slot / GiB)) GB, data $(( (usable - 2 * slot) / GiB )) GB, on a $((total / GiB)) GB card"
+# slot A: to its size (the table, then the kernel, then the filesystem)
+echo ",$slot" | sfdisk --no-reread --no-tell-kernel -q -N 2 "$disk"
+partx -u -n 2 "$disk"                          # the kernel learns the new size (BLKPG), as growpart does it
+resize2fs "$root"
+# slot B and the data partition
+start3=$((start2 + slot)); start4=$((start3 + slot))
+printf '%s,%s,L\n%s,,L\n' "$start3" "$slot" "$start4" | sfdisk --no-reread --no-tell-kernel -q --append "$disk"
+partx -a -n 3:4 "$disk" 2>/dev/null || partx -u "$disk"
+udevadm settle
+mkfs.ext4 -F -q -L rootfs-b "$(part 3)"
+mkfs.ext4 -F -q -L astro-data "$(part 4)"
+
+# /data, shared by both slots: printer_data moves there, and comes back at ~/printer_data as a bind mount
+mkdir -p /data
+mount "$(part 4)" /data
+mkdir -p /data/elyir-bench-os
+cp -a "/home/$U/printer_data" /data/printer_data
+find "/home/$U/printer_data" -mindepth 1 -delete
+cat >> /etc/fstab <<EOF2
+
+# Elyir Bench: data partition, shared by both OS slots
+LABEL=astro-data  /data  ext4  defaults,noatime,nofail  0  2
+/data/printer_data  /home/$U/printer_data  none  bind,nofail,x-systemd.requires-mounts-for=/data  0  0
+EOF2
+systemctl daemon-reload
+mount "/home/$U/printer_data"
+touch /var/lib/elyir-bench/laid-out

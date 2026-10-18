@@ -1,0 +1,20 @@
+# Elyir Bench image (docs/image.md): the first apply, on the printer's own hardware, once.
+[Unit]
+Description=Elyir Bench: first boot
+After=moonraker.service nginx.service elyir-bench-layout.service NetworkManager.service
+Wants=moonraker.service
+ConditionPathExists=!/var/lib/elyir-bench/firstboot-done
+
+[Service]
+Type=oneshot
+User=pi
+Environment=HOME=/home/pi
+ExecStart=/usr/local/sbin/elyir-bench-firstboot
+# once, for good: the marker sits outside ~/elyir-bench (which `elyir-bench remove` takes away), and the unit
+# turns itself off
+ExecStartPost=+/bin/sh -c 'mkdir -p /var/lib/elyir-bench && touch /var/lib/elyir-bench/firstboot-done && systemctl disable elyir-bench-firstboot.service'
+TimeoutStartSec=20min
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+{
+  "name": "0.20mm Standard @Anycubic Kobra 3 Max 0.4 nozzle (Bench)",
+  "inherits": "0.20mm Standard @Anycubic Kobra 3 Max 0.4 nozzle",
+  "from": "User",
+  "type": "process",
+  "print_settings_id": "0.20mm Standard @Anycubic Kobra 3 Max 0.4 nozzle (Bench)",
+  "top_solid_infill_flow_ratio": "0.97"
+}

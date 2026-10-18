@@ -1,0 +1,10 @@
+# Elyir Bench image: overnight, with an hour's spread so printers don't all ask at once.
+[Unit]
+Description=Elyir Bench: look for an OS update overnight
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

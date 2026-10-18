@@ -1,0 +1,17 @@
+Elyir Bench
+Copyright the Elyir Bench contributors.
+Licensed under the GNU Affero General Public License, version 3 only (AGPL-3.0-only). See LICENSE.
+
+Except printer/printer_intent.py and printer/orca_profile.py, which run inside Moonraker and are
+licensed under the GNU General Public License, version 3 (GPL-3.0-only), as their headers say.
+
+This repository includes:
+
+- Figtree (app/public/fonts/), a typeface by The Figtree Project Authors, under the SIL Open
+  Font License 1.1. See app/public/fonts/LICENSE-Figtree.txt.
+
+The built app bundles the npm packages listed in app/package.json (Vue, Quasar and others),
+each under its own license; they are downloaded by `npm ci`, not kept in this repository.
+
+Not included, downloaded by the installer on the printer at install time, each under its own
+license: Klipper, Moonraker, Mainsail and mainsail-config, OrcaSlicer, Caddy, lego and frp.

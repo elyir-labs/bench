@@ -1,0 +1,50 @@
+{
+  "moonraker": {
+    "host": "",
+    "port": 7125,
+    "ssl": false
+  },
+  "display": {
+    "width": 800,
+    "height": 480,
+    "theme": "material-dark",
+    "language": "en",
+    "use24HourTime": true,
+    "confirmEstop": true,
+    "showHeaterPower": false,
+    "screenTimeout": 600
+  },
+  "preheat": {
+    "PLA": {
+      "bed": 60,
+      "extruder": 200
+    },
+    "ABS": {
+      "bed": 90,
+      "extruder": 245
+    },
+    "PETG": {
+      "bed": 80,
+      "extruder": 240
+    },
+    "FLEX": {
+      "bed": 0,
+      "extruder": 210
+    }
+  },
+  "moveDistances": [
+    0.1,
+    0.5,
+    1,
+    5,
+    10,
+    25,
+    50
+  ],
+  "extrudeDistances": [
+    5,
+    10,
+    15,
+    25
+  ]
+}

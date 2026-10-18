@@ -1,0 +1,47 @@
+{
+  "name": "elyir-bench",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:demo": "vite build --config vite.demo.config.ts",
+    "deploy:demo": "npm run build:demo && npx --yes wrangler@4 pages deploy dist-demo --project-name ${PAGES_PROJECT:-elyir} --branch main",
+    "preview": "vite preview",
+    "dev:sim": "VITE_MOONRAKER_URL=http://localhost:7126 vite",
+    "test": "node --experimental-strip-types --no-warnings --test 'tests/*.test.ts'",
+    "sim": "python3 ../simulator/sim.py",
+    "typecheck": "vue-tsc -b",
+    "dev:shell": "vite --config vite.shell.config.ts",
+    "build:shell": "vite build --config vite.shell.config.ts",
+    "dev:bench": "vite --config vite.bench.config.ts",
+    "build:bench": "vite build --config vite.bench.config.ts"
+  },
+  "dependencies": {
+    "@quasar/extras": "^1.17.0",
+    "@tanstack/vue-query": "^5.92.0",
+    "axios": "^1.13.2",
+    "js-yaml": "^4.1.1",
+    "jsqr": "^1.4.0",
+    "occt-import-js": "0.0.23",
+    "pinia": "^3.0.4",
+    "quasar": "^2.18.6",
+    "uqr": "^0.1.3",
+    "vue": "^3.5.24",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@quasar/vite-plugin": "^1.10.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "pyodide": "^314.0.7",
+    "sass": "^1.94.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vue-tsc": "^3.1.4"
+  }
+}

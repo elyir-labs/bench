@@ -1,0 +1,29 @@
+{
+  "orca": "/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer",
+  "orca_env": {},
+  "nice": 10,
+  "profiles": [
+    "~/Library/Application Support/OrcaSlicer/user/<your Orca user id>",
+    "~/Library/Application Support/OrcaSlicer/user/default",
+    "~/Library/Application Support/OrcaSlicer/system",
+    "/Applications/OrcaSlicer.app/Contents/Resources/profiles"
+  ],
+  "origins": ["http://localhost:3000", "http://localhost:5173", "http://workshop.local:8088"],
+  "printers": {
+    "workshop": {
+      "name": "Workshop",
+      "moonraker": "http://workshop.local:7125",
+      "machine": "Workshop",
+      "process": "0.20mm Standard @Voron",
+      "plate": "High Temp Plate",
+      "tools": 8,
+      "materials": {
+        "PLA": "PLA @Voron v2 350mm3 0.4 nozzle",
+        "PETG": "Anycubic PETG basic @Voron 2.4 350 0.4 nozzle",
+        "ASA": "Anycubic ASA basic @Voron 2.4 350 0.4 nozzle",
+        "ABS": "Voron Generic ABS @Voron v2 350mm3 0.4 nozzle",
+        "TPU": "TPU @Voron v2 350mm3 0.4 nozzle"
+      }
+    }
+  }
+}

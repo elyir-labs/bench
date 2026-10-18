@@ -1,0 +1,8 @@
+{
+  "name": "Anycubic Kobra 3 0.4 nozzle (Bench)",
+  "inherits": "Anycubic Kobra 3 0.4 nozzle",
+  "from": "User",
+  "type": "machine",
+  "printer_settings_id": "Anycubic Kobra 3 0.4 nozzle (Bench)",
+  "bed_exclude_area": ["0x0"]
+}

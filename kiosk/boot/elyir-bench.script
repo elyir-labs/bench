@@ -1,0 +1,129 @@
+# The Elyir Bench eye, drawn while the Pi boots, reboots or shuts down (design/boot/, A′: the eye says hi).
+# Template: make-plymouth.py fills in the placeholders from app/src/boot/mark.json and draws the images.
+#
+# Booting: a big "hi" fades in and out, the pupil grows from a point, a thin track draws itself round
+# from twelve o'clock, and then the ring fills with Plymouth's own boot progress (timed against the previous
+# boot) up to @HANDOFF@ of a turn. The kiosk quits Plymouth keeping this last frame on screen
+# (plymouth quit --retain-splash), and the app's boot screen, drawn from the same geometry, carries the
+# ring the rest of the way.
+# Shutting down or rebooting, the ring empties and the pupil dims. The panel goes dark when the Pi halts, and that is
+# the sign it's safe to switch off (design/power/: the app says so; a sentence here showed before the halt, too early).
+
+Window.SetBackgroundTopColor(@BG_R@, @BG_G@, @BG_B@);
+Window.SetBackgroundBottomColor(@BG_R@, @BG_G@, @BG_B@);
+
+# The same fit as the app's 800x480 viewBox: scale to the smaller side, centered.
+W = Window.GetWidth();
+H = Window.GetHeight();
+s = Math.Min(W / @DW@, H / @DH@);
+k = s / @IMG_SCALE@;
+cx = Window.GetX() + W / 2 + (@CX@ - @DW@ / 2) * s;
+cy = Window.GetY() + H / 2 + (@CY@ - @DH@ / 2) * s;
+
+fun scaled(name) {
+  img = Image(name);
+  return img.Scale(Math.Int(img.GetWidth() * global.k + 0.5), Math.Int(img.GetHeight() * global.k + 0.5));
+}
+fun center_on(sprite, img, z) {
+  sprite.SetPosition(global.cx - img.GetWidth() / 2, global.cy - img.GetHeight() / 2, z);
+}
+fun ease(x) {
+  if (x < 0.5) return 4 * x * x * x;
+  y = 2 - 2 * x;
+  return 1 - y * y * y / 2;
+}
+fun ease_out(x) {
+  y = 1 - x;
+  return 1 - y * y * y;
+}
+
+pupil_image = scaled("pupil.png");
+pupil = Sprite(pupil_image);
+center_on(pupil, pupil_image, 2);
+pupil.SetOpacity(0);
+pupil_size = 1;
+
+# Ring frames are loaded the first time they are needed: a boot only ever shows a few dozen.
+frames[0] = scaled("ring-0.png");
+ring = Sprite(frames[0]);
+center_on(ring, frames[0], 1);
+ring.SetOpacity(0);
+shown = -1;
+
+fun show(f) {
+  f = Math.Clamp(Math.Int(f + 0.5), 0, @FRAMES@);
+  if (f != global.shown) {
+    if (!global.frames[f]) global.frames[f] = scaled("ring-" + f + ".png");
+    global.ring.SetImage(global.frames[f]);
+    center_on(global.ring, global.frames[f], 1);
+    global.shown = f;
+  }
+}
+
+outlined = -1;
+fun outline(f) {
+  f = Math.Clamp(Math.Int(f + 0.5), 0, @OUTLINE@);
+  if (f != global.outlined) {
+    img = scaled("outline-" + f + ".png");
+    global.ring.SetImage(img);
+    center_on(global.ring, img, 1);
+    global.outlined = f;
+  }
+}
+
+mode = Plymouth.GetMode();
+ticks = 0;
+target = 0;     # boot progress, in ring frames
+arc = 0;        # what the ring shows, easing toward it
+
+if (mode == "boot") {
+  hi_image = scaled("hi.png");
+  hi = Sprite(hi_image);
+  center_on(hi, hi_image, 3);
+  hi.SetOpacity(0);
+}
+
+# Called about 50 times a second: these times are in ticks of 20 ms.
+fun refresh() {
+  t = global.ticks;
+  global.ticks = t + 1;
+  if (global.mode == "boot") {
+    # hi: in over 0.6 s, held, out by 1.7 s
+    global.hi.SetOpacity(Math.Clamp((t - 5) / 30, 0, 1) * (1 - Math.Clamp((t - 60) / 25, 0, 1)));
+    # the pupil grows from a point
+    if (t >= 75 && t <= 116) {
+      g = ease_out(Math.Clamp((t - 75) / 40, 0, 1));
+      size = Math.Max(1, Math.Int(global.pupil_image.GetWidth() * g + 0.5));
+      if (size != global.pupil_size) {
+        img = global.pupil_image.Scale(size, size);
+        global.pupil.SetImage(img);
+        center_on(global.pupil, img, 2);
+        global.pupil_size = size;
+      }
+      global.pupil.SetOpacity(Math.Clamp((t - 75) / 10, 0, 1));
+    }
+    # the track draws itself round, then the ring fills toward the boot's progress
+    if (t >= 100 && t < 155) {
+      global.ring.SetOpacity(1);
+      outline(ease(Math.Clamp((t - 100) / 55, 0, 1)) * @OUTLINE@);
+    } else if (t >= 155) {
+      global.arc = global.arc + (global.target - global.arc) * 0.1;
+      show(global.arc);
+    }
+  } else {
+    global.pupil.SetOpacity(Math.Max(0.45, 1 - t / 150));
+    global.ring.SetOpacity(1);
+    show(@FRAMES@ - t * @FRAMES@ / 75);
+  }
+}
+
+fun progress(duration, p) {
+  if (global.mode == "boot") global.target = p * @HANDOFF@ * @FRAMES@;
+}
+
+if (mode != "boot") {
+  pupil.SetOpacity(1);
+  show(@FRAMES@);
+}
+Plymouth.SetRefreshFunction(refresh);
+Plymouth.SetBootProgressFunction(progress);

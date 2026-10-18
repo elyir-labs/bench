@@ -1,0 +1,24 @@
+# METABEGIN
+# X-Env-Layer-Name: elyir-bench-base
+# X-Env-Layer-Desc: Debian Trixie for an Elyir Bench printer: trixie-minbase's parts, with
+#  NetworkManager (which the first Wi-Fi drives, setup/wifi_setup.py) in place of
+#  systemd-networkd and iwd.
+# X-Env-Layer-Category: suite
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Requires: debian-trixie-arm64-multi,
+#  rpi-debian-trixie,
+#  rpi-misc-utils,
+#  rpi-essential-base,
+#  rpi-misc-skel,
+#  systemd-min,
+#  network-manager,
+#  openssh-server,
+#  systemd-timesyncd,
+#  wireless-regulatory
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - wpasupplicant          # NetworkManager's Wi-Fi backend, and the one that makes the setup Wi-Fi (AP mode)
+    - rfkill
+    - iw

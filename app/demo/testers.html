@@ -1,0 +1,300 @@
+<title>Help test Elyir Bench</title>
+<meta name="description" content="Elyir Bench is looking for its first testers: Klipper printers on a Raspberry Pi. Who we're looking for, what testing asks, what you get, and the three steps once you're invited.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* bench.elyir.com/testers: design/testers, B. The top asks to test; #start is where an invite email points. */
+  :root {
+    --ground: #0b0e13;
+    --surface: #131821;
+    --raised: #1a202b;
+    --line: #262e3b;
+    --ink: #eef1f6;
+    --quiet: #8d97a8;
+    --accent: #4da3ff;
+    --elyir-dot: #4da3ff;
+    --on-accent: #04101f;
+    --green: #4cc38a;
+    --amber: #f5a524;
+    --term: #05070a;
+    --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ground: #eceef2;
+    --surface: #ffffff;
+    --raised: #f3f5f8;
+    --line: #d5dae2;
+    --ink: #13171d;
+    --quiet: #5b6473;
+    --accent: #1f6fe0;
+    --elyir-dot: #1f7ae0;
+    --on-accent: #ffffff;
+    --green: #17804f;
+    --amber: #b06a00;
+    --term: #0b0e13;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box }
+  html, body { background: var(--ground); color: var(--ink) }
+  html { scroll-behavior: smooth }
+  body { margin: 0; font: 16px/1.5 var(--font); padding-inline: 16px; padding-block: 0 64px }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 72px }
+  a { color: var(--accent) }
+  code { font-family: var(--mono); font-size: .92em }
+  .inline { background: var(--raised); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; white-space: nowrap }
+
+  nav { display: flex; align-items: center; gap: 28px; padding-block: 18px; border-bottom: 1px solid var(--line) }
+  nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
+  nav .links a, nav .end a { color: var(--quiet); text-decoration: none }
+  nav .links a:hover, nav .end a:hover, nav .links a[aria-current] { color: var(--ink) }
+  nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
+  .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none; flex: none }
+  .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
+  .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+
+  .btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 22px; border-radius: 12px; font-weight: 700; font-size: 16px; white-space: nowrap; border: 1px solid var(--line); color: var(--ink); background: var(--surface) }
+  .btn.pri { background: var(--accent); border-color: transparent; color: var(--on-accent) }
+  .btn.pri:hover { filter: brightness(1.08) }
+  .btn:disabled { opacity: .6; cursor: default }
+  .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+  h1 { margin: 0; font-size: clamp(36px, 5vw, 56px); line-height: 1.04; font-weight: 800; letter-spacing: -.025em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 20px; line-height: 1.45; max-width: 46ch }
+  .lede b { color: var(--ink); font-weight: 600 }
+  .lbl { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--quiet) }
+  .muted { color: var(--quiet) }
+
+  .ask { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 56px; align-items: start; padding-top: 8px }
+  .say { display: grid; gap: 16px; min-width: 0 }
+  .three { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px }
+  .three ul { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 12px }
+  .three li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; color: var(--quiet); font-size: 15px; line-height: 1.45 }
+  .three li::before { content: '✓'; color: var(--green); font-weight: 800 }
+  .three li b { display: block; color: var(--ink); font-weight: 600 }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 24px 26px; display: grid; gap: 14px; min-width: 0; align-content: start }
+  .card h2 { margin: 0; font-size: 20px; font-weight: 700 }
+  .card p { margin: 0; color: var(--quiet); line-height: 1.45 }
+  form { display: grid; gap: 14px }
+  form[hidden] { display: none }
+  label, fieldset legend { font-size: 14px; font-weight: 600; color: var(--ink) }
+  label { display: grid; gap: 6px }
+  input[type=email], input[type=text] { font: inherit; font-size: 16px; color: var(--ink); background: var(--ground); border: 1px solid var(--line); border-radius: 12px; height: 50px; padding: 0 16px; width: 100% }
+  input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 8px }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px }
+  .chips label { display: inline-flex; position: relative; cursor: pointer }
+  .chips input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer }
+  .chips span { display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); font-weight: 600; color: var(--quiet) }
+  .chips input:checked + span { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, transparent) }
+  .chips input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px }
+  .fine { margin: 0; color: var(--quiet); font-size: 14px }
+  .said { margin: 0; font-size: 16px; color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px }
+  .said.bad { border-color: var(--amber) }
+  .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden }
+  .door { display: none }
+
+  #start { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 56px; align-items: start; border-top: 1px solid var(--line); padding-top: 48px; scroll-margin-top: 16px }
+  #start .steps h2 { margin: 6px 0 0; font-size: clamp(28px, 3.4vw, 40px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em }
+  .steps { display: grid; gap: 24px; min-width: 0 }
+  .steps ol { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 24px; counter-reset: step }
+  .steps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 14px; counter-increment: step }
+  .steps li::before { content: counter(step); width: 32px; height: 32px; border-radius: 50%; background: var(--raised); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; font-size: 14px }
+  .steps li h3 { margin: 4px 0 4px; font-size: 18px; font-weight: 700 }
+  .steps li p { margin: 0; color: var(--quiet) }
+  .steps li p b { color: var(--ink); font-weight: 600 }
+  .side { display: grid; gap: 18px; min-width: 0 }
+  .side ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px }
+  .tell li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; color: var(--quiet); font-size: 15px; line-height: 1.45 }
+  .tell li::before { content: '✓'; color: var(--green); font-weight: 800 }
+  .tell li b { color: var(--ink); font-weight: 600 }
+  .known li { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 15px }
+  .known li span:last-child { color: var(--quiet); text-align: right }
+
+  .cmd { display: flex; align-items: center; gap: 12px; background: var(--term); color: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 18px; min-height: 60px; margin-top: 10px; max-width: 720px }
+  .cmd .p { color: rgba(255,255,255,.4); user-select: none }
+  .cmd code { flex: 1; min-width: 0; font-size: 16px; overflow-x: auto; white-space: nowrap; scrollbar-width: none }
+  .cmd code::-webkit-scrollbar { display: none }
+  .copy { all: unset; box-sizing: border-box; cursor: pointer; flex: none; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 10px; background: #fff; color: #0b0e13; font-weight: 650; font-size: 15px }
+  .copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .copy svg { width: 16px; height: 16px }
+  .computer { display: none }
+
+  footer { color: var(--quiet); font-size: 14px; border-top: 1px solid var(--line); padding-top: 20px }
+  footer .elyir { color: var(--ink) }
+  footer .elyir svg { height: 1.3em; width: auto; vertical-align: -.29em }
+  .elyir-dot { fill: var(--elyir-dot) }
+
+  @media (max-width: 960px) {
+    .ask, #start { grid-template-columns: minmax(0, 1fr); gap: 36px }
+    .three { grid-template-columns: minmax(0, 1fr); gap: 20px }
+  }
+  /* a phone: someone from the invite email is looking for the steps, so their door comes before the form */
+  @media (max-width: 640px) {
+    nav { gap: 16px }
+    nav .links a:not([aria-current]) { display: none }
+    .lede { font-size: 17px }
+    .door { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; text-decoration: none; color: var(--ink); font-weight: 700 }
+    .door span { color: var(--accent); font-weight: 650 }
+    .ask .three { order: 3 }
+    .computer { display: inline }
+  }
+  @media (max-width: 520px) {
+    .cmd { flex-wrap: wrap; padding: 14px }
+    .cmd .p { display: none }
+    .cmd code { flex-basis: calc(100% - 24px); white-space: normal; overflow-wrap: anywhere; font-size: 15px }
+    .copy { width: 100%; justify-content: center }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+</style>
+
+<div class="wrap">
+  <nav>
+    <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
+    <span class="links"><a href="try">Try it</a><a href="install">Install</a><a href="./#plans">Plans</a><a href="testers" aria-current="page">Testers</a></span>
+    <span class="end"><a href="https://printers.elyir.app/you">Sign in</a></span>
+  </nav>
+
+  <div class="ask">
+    <div class="say">
+      <p class="lbl">Testers</p>
+      <h1>Help test Elyir Bench.</h1>
+      <p class="lede">It's ready for real printers, and it needs people who print every week to find what we can't. <b>A few
+        weeks, your own printer, your own prints.</b></p>
+      <a class="door" href="#start">Got your invite? <span>Start here</span></a>
+      <div class="three">
+        <div><p class="lbl">Who we're looking for</p><ul>
+          <li><span><b>Klipper on a Raspberry Pi</b>A Pi 4 or 5, a BTT Pi or a CB1, 64-bit, with Moonraker</span></li>
+          <li><span><b>Vorons and other CoreXY printers</b>With or without a touchscreen</span></li>
+          <li><span><b>Printers with a filament unit</b>The Anycubic ACE Pro today; others as they come</span></li></ul></div>
+        <div><p class="lbl">What it asks</p><ul>
+          <li><span><b>Your everyday prints</b>For the next few weeks, on Elyir Bench instead of KlipperScreen</span></li>
+          <li><span><b>Tell us what's wrong or confusing</b>Small things count. Two taps from the printer's Care screen</span></li>
+          <li><span><b>Stay near the first prints</b>As with any new software on a printer</span></li></ul></div>
+        <div><p class="lbl">What you get</p><ul>
+          <li><span><b>Bench Cloud, free while testing</b>Your printer from anywhere, and a backup every night</span></li>
+          <li><span><b>A direct line</b>The people building it read every report and answer</span></li>
+          <li><span><b>A first look at what's next</b>New features reach testers first</span></li></ul></div>
+      </div>
+    </div>
+
+    <div class="card" id="ask">
+      <h2>Ask to test</h2>
+      <form id="ask-form" novalidate>
+        <label>Your email<input type="email" name="email" required autocomplete="email" inputmode="email" placeholder="you@example.net"></label>
+        <label>Your printer<input type="text" name="printer" maxlength="80" autocomplete="off" placeholder="Voron 2.4, Trident with an ACE…"></label>
+        <fieldset>
+          <legend>Its board, if you know</legend>
+          <div class="chips">
+            <label><input type="radio" name="board" value="Pi 5"><span>Pi 5</span></label>
+            <label><input type="radio" name="board" value="Pi 4"><span>Pi 4</span></label>
+            <label><input type="radio" name="board" value="BTT Pi"><span>BTT Pi</span></label>
+            <label><input type="radio" name="board" value="CB1"><span>CB1</span></label>
+            <label><input type="radio" name="board" value="Not sure"><span>Not sure</span></label>
+          </div>
+        </fieldset>
+        <div class="trap" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button class="btn pri" type="submit">Ask to test</button>
+        <p class="fine">One email to confirm. We invite a few at a time, so every report gets read.</p>
+      </form>
+      <p class="said" id="ask-said" hidden role="status"></p>
+    </div>
+  </div>
+
+  <section id="start">
+    <div class="steps">
+      <div>
+        <p class="lbl">Got your invite?</p>
+        <h2>Three steps, about ten minutes.</h2>
+      </div>
+      <ol>
+        <li><div><h3>On the printer, over SSH, while it isn't printing</h3>
+          <p><span class="computer">From a computer. The command is in your email too. </span>It checks the printer first and asks once before it changes anything.</p>
+          <div class="cmd"><span class="p" aria-hidden="true">$</span><code id="cmd">curl -fsSL https://bench.elyir.com/install | sh</code>
+            <button class="copy" type="button" data-copy="cmd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Copy</span></button></div></div></li>
+        <li><div><h3>Scan the code it shows</h3>
+          <p>With your phone. Your printer opens, ready to go.</p></div></li>
+        <li><div><h3>Turn on Bench Cloud with your code</h3>
+          <p>On that phone, open <a href="https://printers.elyir.app/you"><b>printers.elyir.app/you</b></a>, sign in with your email and type
+            the code from your invite. Then, on your home Wi-Fi, add your printer there.</p></div></li>
+      </ol>
+      <p class="muted">Will it work on yours? <a href="install#boards">The board table is on the install page.</a> Changed your mind?
+        <code class="inline">elyir-bench remove</code> takes it off and puts KlipperScreen back.</p>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>Tell us something</h2>
+        <ul class="tell">
+          <li><span><b>On the printer:</b> Care, then "Tell Elyir something". For a problem it adds the printer's logs and settings, with passwords and keys taken out, and shows you what goes first.</span></li>
+          <li><span><b>From any browser:</b> <a href="write">bench.elyir.com/write</a></span></li>
+          <li><span><b>Or reply</b> to your invite email.</span></li>
+        </ul>
+        <p class="fine">If the install itself fails, it offers to send us what went wrong.</p>
+      </div>
+      <div class="card">
+        <h2>Known, so no need to tell us</h2>
+        <ul class="known">
+          <li><span>A Pi 3, or a 32-bit system</span><span>Not yet</span></li>
+          <li><span>Slicing on a board with 1 GB</span><span>Another printer in the house can slice for it</span></li>
+          <li><span>A card to flash for a fresh Pi</span><span>Coming; use the command for now</span></li>
+          <li><span>Printers without Klipper</span><span>Later, with a Bench Box</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>Elyir Bench is made by <a class="elyir" href="https://elyir.com"><svg viewBox="0 0 1884 958" role="img" aria-label="Elyir"><path fill="currentColor" d="M283 758Q209 758 152.0 724.5Q95 691 62.5 632.0Q30 573 30 496Q30 419 63.5 360.0Q97 301 155.5 267.5Q214 234 290 234Q356 234 411.5 268.5Q467 303 500.5 369.5Q534 436 534 531H168Q173 581 211.0 610.5Q249 640 297 640Q338 640 364.0 622.5Q390 605 404 577L522 623Q501 665 467.5 695.5Q434 726 388.0 742.0Q342 758 283 758ZM175 433H391Q388 402 371.0 383.0Q354 364 331.0 355.0Q308 346 286 346Q265 346 240.5 354.5Q216 363 197.5 382.0Q179 401 175 433ZM581.000732421875 746.0V46.0H712.997802734375V746.0ZM897.1976318359375 958.0Q869.798095703125 958.0 837.5985107421875 947.5001831054688Q805.39892578125 937.0003662109375 779.998779296875 923.200439453125L828.9976806640625 815.802734375Q845.998046875 825.2027587890625 860.6981811523438 830.5027465820312Q875.3983154296875 835.802734375 885.998291015625 835.802734375Q907.1986083984375 835.802734375 923.2987060546875 824.6025390625Q939.3988037109375 813.40234375 948.9989013671875 790.8021240234375L969.7996826171875 740.000244140625L744.4002685546875 246.0H889.1968994140625L1030.7984619140625 590.6033935546875L1166.80029296875 246.0H1311.9969482421875L1084.9962158203125 788.801513671875Q1063.996337890625 839.201171875 1041.1964721679688 877.4008178710938Q1018.3966064453125 915.6004638671875 984.8968505859375 936.8002319335938Q951.3970947265625 958.0 897.1976318359375 958.0ZM1350.6005859375 746.0V246.0H1482.59765625V746.0ZM1575.000732421875 746.0V246.0H1706.997802734375V337.599853515625Q1737.7977294921875 290.599853515625 1785.4977416992188 267.2999267578125Q1833.19775390625 244.0 1883.997802734375 244.0V371.5970458984375Q1838.1978759765625 371.5970458984375 1797.6978759765625 382.897216796875Q1757.1978759765625 394.1973876953125 1732.0978393554688 418.99786376953125Q1706.997802734375 443.79833984375 1706.997802734375 483.3992919921875V746.0Z"/><circle class="elyir-dot" cx="1416.6" cy="84" r="84"/></svg></a>. Questions before you sign up? <a href="write">Write to us</a>.</footer>
+</div>
+
+<script>
+(() => {
+  let saved = null
+  try { saved = localStorage.getItem('demo.theme') } catch {}
+  document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved
+    : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+
+  document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const text = document.getElementById(b.dataset.copy).textContent
+    const label = b.querySelector('span')
+    try {
+      await navigator.clipboard.writeText(text)
+      label.textContent = 'Copied'
+    } catch {
+      getSelection().selectAllChildren(document.getElementById(b.dataset.copy))
+      label.textContent = 'Press ⌘C'
+    }
+    setTimeout(() => { label.textContent = 'Copy' }, 2000)
+  }))
+
+  // the same waitlist as the front page (Bench Cloud): nobody is on it until they confirm from the mail
+  const form = document.getElementById('ask-form')
+  const said = document.getElementById('ask-said')
+  const say = (words, bad) => { said.textContent = words; said.hidden = false; said.classList.toggle('bad', !!bad) }
+  const back = new URLSearchParams(location.search)
+  if (back.get('joined') === '1') { form.hidden = true; say("You're on the list. We'll write when there's a place for your printer.") }
+  if (back.get('joined') === '0') say("That link didn't work. Ask again and use the newest email.", true)
+  if (back.get('left') === '1') { form.hidden = true; say("You're off the list. Nothing more will come.") }
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault()
+    const data = Object.fromEntries(new FormData(form))
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email || '')) return say("That doesn't look like an email address.", true)
+    const button = form.querySelector('button')
+    button.disabled = true
+    try {
+      const r = await fetch('https://cloud.elyir.app/v1/waitlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      if (r.status === 429) throw new Error("That's been tried a lot from here. Try again in an hour.")
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong. Try again in a minute.')
+      form.hidden = true
+      say(`Check ${data.email} and tap the link to confirm. Then we'll write when there's a place for your printer.`)
+    } catch (e) {
+      say(e.message === 'Failed to fetch' ? "Couldn't reach us just now. Try again in a minute." : e.message, true)
+    } finally {
+      button.disabled = false
+    }
+  })
+})()
+</script>

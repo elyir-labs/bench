@@ -1,0 +1,13 @@
+/* The Printers app borrows the panel's building blocks (elyir-bench.css: tokens, .a-btn, .a-display).
+   Those size themselves with --u, which grows with the window for the 800x480 panel. The shell is a
+   phone-width column on any screen, so pin --u to its design size here: a big desktop window must
+   not blow its buttons up. The printers' own screens are in frames and keep their own --u. */
+:root { --u: 1px; }
+
+/* Buttons in the shell: phone-sized, whatever the panel's are, and their own size in any column
+   (the panel's .a-btn grows to share a row; links styled as buttons must centre their label). */
+.a-btn {
+  font-size: 18px; line-height: 1.2; padding: 14px 20px; min-height: 52px; border-radius: 16px;
+  flex: none; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+  box-sizing: border-box;   /* links too: a <button> already is, an <a> would add the padding to 52px */
+}

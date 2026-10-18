@@ -1,0 +1,13 @@
+{
+  "machine": "Anycubic Kobra 3 Max 0.4 nozzle",
+  "process": "0.20mm Standard @Anycubic Kobra 3 Max 0.4 nozzle (Bench)",
+  "plate": "Textured PEI Plate",
+  "tools": 1,
+  "materials": {
+    "PLA": "Anycubic PLA @Anycubic Kobra 3 Max 0.4 nozzle",
+    "PETG": "Anycubic PETG @Anycubic Kobra 3 Max 0.4 nozzle",
+    "ABS": "Anycubic ABS @Anycubic Kobra 3 Max 0.4 nozzle",
+    "TPU": "Anycubic TPU @Anycubic Kobra 3 Max 0.4 nozzle"
+  },
+  "bench": true
+}

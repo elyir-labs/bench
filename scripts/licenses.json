@@ -1,0 +1,15 @@
+{
+  "why": "Every library Elyir Bench ships must allow Elyir LLC to offer the code under any license later (open source or commercial). Copyleft licenses (GPL, AGPL) would block that, so they fail the check. docs/licensing.md.",
+  "npm": ["app/package-lock.json"],
+  "python": ["door/requirements.txt"],
+  "allowed": [
+    "0BSD", "Apache-2.0", "BlueOak-1.0.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "MIT-0",
+    "MPL-2.0", "PSF-2.0", "Python-2.0", "Unlicense", "Zlib"
+  ],
+  "exceptions": {
+    "occt-import-js": {
+      "license": "LGPL-2.1",
+      "why": "STEP import (OpenCascade in WebAssembly). It loads in its own worker with its own .wasm file, so it stays replaceable as the LGPL asks. app/src/look/occt-patch.ts changes its glue code, and that change ships under LGPL-2.1 too: keep its source available with any build."
+    }
+  }
+}

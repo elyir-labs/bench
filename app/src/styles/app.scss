@@ -1,0 +1,368 @@
+// Global styles for Elyir Bench - Based on klipper-ui-spec.yaml
+@use 'quasar-variables' as *;
+
+// CSS Variables - Matching the render exactly
+:root {
+  // Background colors
+  --bg-page: #030712;
+  --bg-surface: #0A0F1E;
+  --bg-elevated: #0D1320;
+
+  // Border colors
+  --border-subtle: #0F1419;
+  --border-strong: #1A1F28;
+
+  // Text colors
+  --text-primary: #F8FAFC;
+  --text-secondary: #9CA3AF;
+  --text-muted: #6B7280;
+  --text-inverted: #020617;
+
+  // Accent colors (blue primary throughout - matching design.png)
+  --accent-primary: #1A7BE1;
+
+  // Semantic colors
+  --color-primary: #1A7BE1;
+  --color-primary-soft: rgba(26, 123, 225, 0.10);
+  --color-primary-soft-strong: rgba(26, 123, 225, 0.12);
+  --color-success: #22C55E;
+  --color-warning: #FACC15;
+  --color-error: #EF4444;
+  --color-info: #38BDF8;
+
+  // State overlays
+  --overlay-hover: rgba(255,255,255,0.04);
+  --overlay-pressed: rgba(255,255,255,0.08);
+  --overlay-disabled: rgba(148,163,184,0.35);
+
+  // Spacing
+  --s0: 0;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 40px;
+
+  // Radius
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+}
+
+// Card styles (from spec)
+.q-card {
+  background-color: var(--bg-surface) !important;
+  border-radius: var(--radius-lg) !important;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
+  overflow: hidden;
+}
+
+.q-card--elevated {
+  background-color: var(--bg-elevated) !important;
+}
+
+// Touch-optimized classes (from spec)
+.touch-target {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.touch-target-large {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+// Smooth transitions (removed to prevent flicker)
+
+// Button styles (from spec)
+.q-btn {
+  border-radius: var(--radius-md) !important;
+  font-weight: 500;
+  text-transform: none !important;
+
+  &.btn-sm {
+    min-height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  &.btn-md {
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  &.btn-lg {
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: 14px;
+  }
+}
+
+// Badge status variants
+.q-badge {
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  font-size: 10px;
+  height: 22px;
+  padding: 0 8px;
+
+  &.badge-idle {
+    background: rgba(34,197,94,0.14) !important;
+    color: #22C55E !important;
+  }
+
+  &.badge-printing {
+    background: var(--color-primary-soft) !important;
+    color: var(--color-primary) !important;
+  }
+
+  &.badge-paused {
+    background: rgba(250,204,21,0.16) !important;
+    color: #FACC15 !important;
+  }
+
+  &.badge-error {
+    background: rgba(239,68,68,0.16) !important;
+    color: #EF4444 !important;
+  }
+}
+
+// Chip variants
+.q-chip {
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+
+  &.chip-default {
+    background: var(--bg-elevated) !important;
+    color: var(--text-secondary) !important;
+  }
+
+  &.chip-primary {
+    background: var(--color-primary-soft) !important;
+    color: var(--color-primary) !important;
+  }
+
+  &.chip-active {
+    background: var(--color-primary-soft) !important;
+    border: 1px solid var(--color-primary) !important;
+    color: var(--color-primary) !important;
+  }
+
+  &.chip-selected {
+    background: var(--color-primary) !important;
+    color: var(--text-inverted) !important;
+  }
+}
+
+// Page background
+.q-page {
+  background-color: var(--bg-page);
+}
+
+// Header styling - darker than cards
+.q-header {
+  background-color: var(--bg-page) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.3) !important;
+  height: 64px;
+}
+
+.q-footer {
+  background-color: var(--bg-elevated) !important;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+// Drawer/Sidebar styling - match page background
+.q-drawer {
+  background-color: var(--bg-page) !important;
+  border-right: none !important;
+}
+
+// Typography (from spec)
+.text-xs {
+  font-size: 10px !important;
+  line-height: 1.3;
+}
+
+.text-sm {
+  font-size: 12px !important;
+  line-height: 1.35;
+}
+
+.text-md {
+  font-size: 14px !important;
+  line-height: 1.4;
+}
+
+.text-lg {
+  font-size: 16px !important;
+  line-height: 1.45;
+}
+
+.text-xl {
+  font-size: 20px !important;
+  line-height: 1.4;
+}
+
+.text-display {
+  font-size: 24px !important;
+  line-height: 1.25;
+}
+
+.text-h6 {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.text-h5 {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+.text-h4 {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+}
+
+.text-h3 {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+}
+
+.text-caption {
+  font-size: 12px !important;
+  color: var(--text-secondary);
+}
+
+.text-body1 {
+  font-size: 14px !important;
+}
+
+.text-body2 {
+  font-size: 14px !important;
+}
+
+// Weight utilities
+.text-regular { font-weight: 400 !important; }
+.text-medium { font-weight: 500 !important; }
+.text-semibold { font-weight: 600 !important; }
+.text-bold { font-weight: 700 !important; }
+
+// Utility classes for cards (matching render)
+.card-elevated {
+  background: var(--bg-surface);
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  padding: 20px;
+}
+
+.card-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+// Camera placeholder gradient (from render)
+.camera-placeholder {
+  border-radius: 16px;
+  background: radial-gradient(circle at 0% 0%, #1A2332 0%, #010409 70%);
+}
+
+// Metric labels (uppercase, spaced)
+.metric-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.metric-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+// Temperature pill styling
+.temp-pill {
+  background: rgba(5, 12, 28, 0.6);
+  border-radius: 16px;
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.temp-pill .value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.temp-pill .target {
+  font-size: 12px;
+  color: var(--color-primary);  // Use primary blue, not accent
+  margin-top: 4px;
+}
+
+.temp-pill .label {
+  font-size: 12px;
+  margin-top: 8px;
+  color: var(--text-primary);
+}
+
+// Preset chip styling (blue when active)
+.preset-chip {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+
+  &:hover {
+    background: var(--overlay-hover);
+  }
+}
+
+.preset-chip--active {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+// Button variants matching render
+.btn-pause {
+  background: var(--color-primary) !important;
+  color: var(--text-inverted) !important;
+  border-radius: var(--radius-pill) !important;
+}
+
+.btn-stop {
+  background: transparent !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid rgba(239, 68, 68, 0.7) !important;
+  color: #f97373 !important;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
+  }
+}

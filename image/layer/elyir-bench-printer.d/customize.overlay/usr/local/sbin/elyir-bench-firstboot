@@ -1,0 +1,10 @@
+#!/bin/bash
+# First boot (docs/image.md): the installer makes Elyir Bench true on this hardware, with no network.
+# It finds the screen and touch, writes the kiosk, the boot screen and the first Wi-Fi, and starts
+# them; the panel then shows the Wi-Fi setup. Runs as the printer's user, like every apply.
+set -eu
+cd "$HOME/elyir-bench/incoming"
+t=$(ls -t elyir-bench-*.tar.gz | head -1)
+rm -rf .installer && mkdir .installer
+tar -xzf "$t" -C .installer installer/elyir_bench.py
+python3 .installer/installer/elyir_bench.py apply "$t"

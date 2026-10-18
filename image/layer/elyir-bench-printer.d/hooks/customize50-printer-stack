@@ -1,0 +1,68 @@
+#!/bin/bash
+# Klipper, Moonraker and Mainsail as our printers run them (KIAUH's layout), and the Elyir Bench release
+# waiting for the installer (docs/image.md). $1 is the image's root; LAYER_DIR is this layer's directory.
+set -eu
+ROOT="$1"
+U="$IGconf_device_user1"
+H="/home/$U"
+FILES="$LAYER_DIR/elyir-bench-printer.d/files"
+as_user() { chroot "$ROOT" runuser -u "$U" -- env HOME="$H" PIP_DISABLE_PIP_VERSION_CHECK=1 bash -euc "$1"; }
+# downloads get three tries: one dropped connection to GitHub shouldn't fail a release build
+retry() { local n; for n in 1 2 3; do "$@" && return 0; echo "retrying ($n): $*" >&2; sleep $((n * 5)); done; return 1; }
+
+# Klipper: its host helper (c_helper.so) is compiled now, not on the printer's first start
+retry as_user "rm -rf $H/klipper && git clone -q https://github.com/Klipper3d/klipper.git $H/klipper"
+as_user "git -C $H/klipper checkout -q $IGconf_bench_klipper"
+as_user "python3 -m venv $H/klippy-env"
+retry as_user "$H/klippy-env/bin/pip install -q -r $H/klipper/scripts/klippy-requirements.txt"
+as_user "cd $H/klipper/klippy && $H/klippy-env/bin/python -c 'import chelper; chelper.get_ffi()'"
+
+# Moonraker
+retry as_user "rm -rf $H/moonraker && git clone -q https://github.com/Arksine/moonraker.git $H/moonraker"
+as_user "git -C $H/moonraker checkout -q $IGconf_bench_moonraker"
+as_user "python3 -m venv $H/moonraker-env"
+retry as_user "$H/moonraker-env/bin/pip install -q -r $H/moonraker/scripts/moonraker-requirements.txt"
+# its PolicyKit rules, by its own script as KIAUH runs it (the moonraker-admin group, the rule, the unit's
+# SupplementaryGroups): without them machine/reboot and machine/shutdown answer "Permission denied"
+as_user "bash $H/moonraker/scripts/set-policykit-rules.sh --disable-systemctl"
+
+# Mainsail, behind the Advanced door
+retry curl -fsSL "https://github.com/mainsail-crew/mainsail/releases/download/$IGconf_bench_mainsail/mainsail.zip" -o /tmp/mainsail.zip
+mkdir -p "$ROOT$H/mainsail"
+unzip -q -o /tmp/mainsail.zip -d "$ROOT$H/mainsail"
+rm -f /tmp/mainsail.zip
+
+# printer_data: no printer.cfg yet (a printer profile, or the person's own, comes later)
+for d in config logs gcodes systemd comms database; do mkdir -p "$ROOT$H/printer_data/$d"; done
+install -m 644 "$FILES/moonraker.conf" "$ROOT$H/printer_data/config/moonraker.conf"
+printf 'KLIPPER_ARGS="%s/klipper/klippy/klippy.py %s/printer_data/config/printer.cfg -I %s/printer_data/comms/klippy.serial -l %s/printer_data/logs/klippy.log -a %s/printer_data/comms/klippy.sock"\n' "$H" "$H" "$H" "$H" "$H" > "$ROOT$H/printer_data/systemd/klipper.env"
+printf 'MOONRAKER_ARGS="%s/moonraker/moonraker/moonraker.py -d %s/printer_data"\n' "$H" "$H" > "$ROOT$H/printer_data/systemd/moonraker.env"
+printf 'klipper_mcu\nwebcamd\nKlipperScreen\ncrowsnest\n' > "$ROOT$H/printer_data/moonraker.asvc"
+
+# the release: the installer unpacks and installs it on first boot, on the real hardware
+mkdir -p "$ROOT$H/elyir-bench/incoming"
+cp "$IGconf_bench_release" "$ROOT$H/elyir-bench/incoming/"
+# the door's and slicing service's Python, from this release's requirements, marked current the way the
+# installer checks it (DoorRuntime), so no first boot waits on pip
+tar -xzf "$IGconf_bench_release" -C "$ROOT/tmp" door/requirements.txt
+install -m 644 "$ROOT/tmp/door/requirements.txt" "$ROOT$H/elyir-bench/door-requirements.txt"
+chroot "$ROOT" chown -R "$U:$U" "$H/elyir-bench"
+as_user "python3 -m venv $H/elyir-bench/venv && $H/elyir-bench/venv/bin/pip install -q -r $H/elyir-bench/door-requirements.txt && mv $H/elyir-bench/door-requirements.txt $H/elyir-bench/venv/.requirements"
+rm -rf "$ROOT/tmp/door"
+
+chroot "$ROOT" chown -R "$U:$U" "$H/printer_data" "$H/mainsail" "$H/elyir-bench"
+
+# nginx: Mainsail on port 80, as on our printers (the installer adds Elyir Bench's own site)
+ln -sf /etc/nginx/sites-available/mainsail "$ROOT/etc/nginx/sites-enabled/mainsail"
+rm -f "$ROOT/etc/nginx/sites-enabled/default"
+chmod 755 "$ROOT$H"    # nginx reads ~/mainsail as www-data
+
+# the OS slots' tool, its two boot units and the watchdog setting, from the same release (docs/os-slots.md),
+# and the key a release's OS must be signed with before it's written into the idle slot
+install -D -m 644 "$IGconf_bench_release_key" "$ROOT/usr/local/share/elyir-bench/release-key.pem"
+echo "$IGconf_bench_os_version" > "$ROOT/usr/local/share/elyir-bench/os-version"
+tar -xzf "$IGconf_bench_release" -C "$ROOT/tmp" installer/elyir_bench_os.py
+chroot "$ROOT" python3 -c 'import sys; sys.path.insert(0, "/tmp/installer"); from pathlib import Path; import elyir_bench_os; elyir_bench_os.install_kit(Path("/"))'
+rm -rf "$ROOT/tmp/installer"
+
+chroot "$ROOT" systemctl enable klipper moonraker nginx avahi-daemon elyir-bench-layout elyir-bench-firstboot elyir-bench-os-update.timer

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <defs>
+    <linearGradient id="p1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c25e00"/><stop offset="0.45" stop-color="#ff9a2e"/><stop offset="1" stop-color="#b85700"/></linearGradient>
+    <linearGradient id="p2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb35c"/><stop offset="1" stop-color="#e07a10"/></linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/></filter>
+  </defs>
+  <g filter="url(#sh)">
+    <!-- tapered planter body with ridges -->
+    <path d="M118 92 L282 92 L262 238 Q200 252 138 238 Z" fill="url(#p1)"/>
+    <g stroke="#9a4a00" stroke-opacity="0.35" stroke-width="3">
+      <line x1="146" y1="98" x2="156" y2="236"/><line x1="176" y1="98" x2="181" y2="242"/>
+      <line x1="224" y1="98" x2="219" y2="242"/><line x1="254" y1="98" x2="244" y2="236"/>
+    </g>
+    <!-- rim -->
+    <ellipse cx="200" cy="92" rx="88" ry="18" fill="url(#p2)"/>
+    <ellipse cx="200" cy="92" rx="72" ry="12" fill="#6b3200"/>
+  </g>
+</svg>

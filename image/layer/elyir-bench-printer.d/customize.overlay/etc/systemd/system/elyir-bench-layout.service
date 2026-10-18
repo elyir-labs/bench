@@ -1,0 +1,14 @@
+# Elyir Bench image (docs/image.md): the card's two OS slots and data partition, on the first boot.
+[Unit]
+Description=Elyir Bench: two OS slots and the data partition
+After=local-fs.target
+Before=klipper.service moonraker.service nginx.service elyir-bench-firstboot.service
+ConditionPathExists=!/var/lib/elyir-bench/laid-out
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/elyir-bench-layout
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target
