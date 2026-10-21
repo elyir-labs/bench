@@ -47,7 +47,7 @@ docker run --rm --privileged \
   elyir-imagegen bash -euc '
     mkdir -p "/work/elyir-$BOARD"
     cd /opt/rpi-image-gen
-    ./rpi-image-gen build -S /src -c "elyir-bench-$BOARD.yaml" -B "/work/elyir-$BOARD" --"IGconf_bench_release=$ELYIR_RELEASE" "IGconf_bench_release_key=/release-key.pem" "IGconf_bench_os_version=$VERSION" "IGconf_image_disksig=$DISKSIG" "IGconf_ssh_pubkey_user1=$ELYIR_KEY" > /work/elyir.log 2>&1 || { tail -60 /work/elyir.log; exit 1; }
+    ./rpi-image-gen build -S /src -c "elyir-bench-$BOARD.yaml" -B "/work/elyir-$BOARD" -- "IGconf_bench_release=$ELYIR_RELEASE" "IGconf_bench_release_key=/release-key.pem" "IGconf_bench_os_version=$VERSION" "IGconf_image_disksig=$DISKSIG" "IGconf_ssh_pubkey_user1=$ELYIR_KEY" > /work/elyir.log 2>&1 || { tail -60 /work/elyir.log; exit 1; }
     cp /work/elyir.log /out/elyir-image.log
     img=$(ls "/work/elyir-$BOARD"/image-*/*.img | head -1)
     xz -T0 -6 -c "$img" > /out/elyir-image.img.xz
