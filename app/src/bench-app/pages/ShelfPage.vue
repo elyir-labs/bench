@@ -63,9 +63,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { bench, loadQueue } from '../live'
+import { bench, loadQueue, onBenchChange } from '../live'
 import { foldShelf, queueSentence, queueTitle, shelfCard, shelfSentence, type QueueItem } from '../shelf'
 import { footBar, pickLine, picksFromQuery, picksOf, picksToQuery, toggle } from '../several'
 import { addModel, getShelf, removeQueued, reorderQueue, type ShelfItem } from '../shelf-api'
@@ -190,6 +190,7 @@ async function load() {
   }
 }
 onMounted(load)
+onUnmounted(onBenchChange(load))
 
 async function add(ev: Event) {
   const input = ev.target as HTMLInputElement

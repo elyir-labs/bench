@@ -203,6 +203,26 @@ class Bench:
         self.asks: Dict[str, dict] = {}          # id → {state, words, handle, home, at}
         self.cameras: Dict[str, tuple] = {}       # id → (when, the first enabled webcam or None)
         self.session: Optional[ClientSession] = None
+        # Every screen on the bench (the box's own, phones at home and away) looks at this every few seconds and reads
+        # again when it moves: a change made on one shows on the others. A restart starts a new one.
+        self.revs = (int(time.time() * 1000), 0)
+
+    @property
+    def rev(self) -> str:
+        return "%d-%d" % self.revs
+
+    def changed(self) -> None:
+        self.revs = (self.revs[0], self.revs[1] + 1)
+
+    @web.middleware
+    async def count_changes(self, request: web.Request, handler):
+        resp = await handler(request)
+        if request.method in ("POST", "PUT", "DELETE") and request.path.startswith("/bench/") and resp.status < 400:
+            self.changed()
+        return resp
+
+    async def get_rev(self, request: web.Request) -> web.Response:
+        return web.json_response({"rev": self.rev})
 
     @property
     def origins(self) -> List[str]:
@@ -226,11 +246,13 @@ class Bench:
         tmp.write_text(json.dumps(self.printers, indent=1))
         os.chmod(tmp, 0o600)                      # the doors' tokens
         os.replace(tmp, self.state / "printers.json")
+        self.changed()
 
     # ── http ──
 
     def app(self) -> web.Application:
-        app = web.Application(client_max_size=256 * 1024 * 1024)       # a model, added to the shelf
+        app = web.Application(middlewares=[self.count_changes], client_max_size=256 * 1024 * 1024)   # a model, added to the shelf
+        app.router.add_get("/bench/rev", self.get_rev)
         app.router.add_get("/bench/printers", self.get_printers)
         app.router.add_get("/bench/intents", self.get_intents)
         app.router.add_get("/bench/found", self.get_found)

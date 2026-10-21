@@ -395,7 +395,7 @@ def test_a_machine_without_a_printer_is_a_controller_that_only_slices(tmp_path, 
     names = [st.name for st in a.steps_for(a.Ctx(facts, s))]
     # door binaries: the doors it opens for the printers it speaks for (bench/doors.py); a box powers off from its button too
     assert names == ["preflight", "release", "web app", "panel", "door runtime", "door binaries", "slicer engine", "slicer service",
-                     "bench service", "power button", "network wait"]
+                     "bench service", "boot screen", "power button", "network wait"]
     assert a.role({"moonraker": {"service": True}}, s) == "printer"
     assert a.role(facts, {**s, "role": "printer"}) == "printer"
 

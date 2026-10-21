@@ -88,6 +88,25 @@ async def test_the_box_finds_a_printer_asks_it_and_joins_it_once_it_says_yes(rig
     assert set(ORIGINS) <= rig.door.origins()
 
 
+async def test_the_rev_moves_when_a_printer_joins_or_something_is_written_so_other_screens_read_again(rig):
+    rev = lambda: rig.client.get("/bench/rev")
+    first = (await (await rev()).json())["rev"]
+    await rig.client.get("/bench/printers")
+    assert (await (await rev()).json())["rev"] == first                  # reading changes nothing
+    # asked from the phone, allowed on the printer: the box's own screen sees the rev move and reads the list again
+    await rig.client.post("/bench/ask/workshop")
+    asked = (await (await rev()).json())["rev"]
+    assert asked != first
+    ask = (await (await rig.panel.get("/door/asks")).json())["asks"][0]
+    await rig.panel.post(f"/door/asks/{ask['id']}/allow")
+    assert await until(lambda: asyncio.sleep(0, "workshop" in rig.bench.printers))
+    assert (await (await rev()).json())["rev"] != asked
+    # a refused write is no change
+    joined = (await (await rev()).json())["rev"]
+    assert (await rig.client.post("/bench/add/nobody")).status >= 400
+    assert (await (await rev()).json())["rev"] == joined
+
+
 async def test_a_printer_that_says_no_or_has_no_door_is_left_out_and_said_so(rig):
     await rig.client.post("/bench/ask/workshop")
     ask = (await (await rig.panel.get("/door/asks")).json())["asks"][0]

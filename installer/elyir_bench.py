@@ -3689,6 +3689,9 @@ class BootScreen(Step):
     rainbow and no tty1 login prompt, and Plymouth's last frame kept until the kiosk draws. Only
     with the Elyir Bench panel; boot_screen: off puts the Pi's own boot text back."""
     name = "boot screen"
+    # a Bench Box too: its panel's kiosk is on tty1 and conflicts with the login prompt this step turns off,
+    # so without it the box's screen can come up blank after a restart (render_kiosk_unit)
+    roles = ("printer", "controller")
     @staticmethod
     def _pi(c):
         # cmdline.txt, config.txt and the initramfs hook are Raspberry Pi OS's; other boards boot otherwise
@@ -5638,7 +5641,7 @@ def report(lines: list[tuple[str, str, str]], as_json: bool) -> None:
 
 
 def steps_for(c: Ctx) -> list[Step]:
-    """A controller has no printer, screen or door of its own: only what it serves printers with."""
+    """A controller has no printer or door of its own: only its screen and what it serves printers with."""
     r = role(c.facts, c.s)
     return [st for st in STEPS if r in st.roles]
 

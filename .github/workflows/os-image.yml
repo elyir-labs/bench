@@ -120,7 +120,15 @@ jobs:
           }
           JSON
           cat "built-$BOARD.json"
-          s3() { aws --endpoint-url "${{ secrets.R2_ENDPOINT }}" s3 cp --only-show-errors "$@"; }
+          # R2 sometimes times out waiting for a part's answer (AWS_ERROR_HTTP_RESPONSE_FIRST_BYTE_TIMEOUT), and a
+          # failed upload leaves nothing behind, so each file gets three tries
+          s3() {
+            for try in 1 2 3; do
+              aws --endpoint-url "${{ secrets.R2_ENDPOINT }}" s3 cp --only-show-errors "$@" && return 0
+              echo "::warning::upload try $try of 3 failed: $1"; sleep 15
+            done
+            return 1
+          }
           forever="public, max-age=31536000, immutable"
           s3 "$card" "s3://$BUCKET/$PREFIX/$card" --content-type application/x-xz --cache-control "$forever"
           s3 "$card.sha256" "s3://$BUCKET/$PREFIX/$card.sha256" --content-type text/plain --cache-control "$forever"

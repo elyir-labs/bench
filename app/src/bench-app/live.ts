@@ -51,6 +51,29 @@ export async function loadQueue(): Promise<void> {
   }
 }
 
+const listeners = new Set<() => void>()
+/** Read something again when the bench changed, from this screen or another (a printer joined, a model added). */
+export function onBenchChange(f: () => void): () => void {
+  listeners.add(f)
+  return () => listeners.delete(f)
+}
+
+let rev = ''
+async function lookForChanges(): Promise<void> {
+  try {
+    const r = await fetch('/bench/rev', { cache: 'no-store' })
+    if (!r.ok) return
+    const now = ((await r.json()) as { rev: string }).rev
+    if (rev && now !== rev) {
+      void loadBench()
+      listeners.forEach((f) => f())
+    }
+    rev = now
+  } catch {
+    // the box's service restarting: its next answer is a new rev, and everything is read again
+  }
+}
+
 let started = false
 /** The bench, live, once this page may see it: at once at home, after pairing or joining away. At home the box's
  *  screen also says who's watching from away. */
@@ -60,6 +83,9 @@ export function startBench(): void {
   void loadBench()
   void loadQueue()
   window.setInterval(loadQueue, 3000)
+  void lookForChanges()
+  window.setInterval(lookForChanges, 3000)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void lookForChanges() })
   if (!here.away) {
     void loadWatching()
     window.setInterval(loadWatching, 10000)

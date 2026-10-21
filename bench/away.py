@@ -163,7 +163,7 @@ class Away:
     # ── the away listener ──
 
     def app(self) -> web.Application:
-        app = web.Application(middlewares=[self._gate], client_max_size=256 * 1024 ** 2)   # a model sent to look at
+        app = web.Application(middlewares=[self._gate, self.bench.count_changes], client_max_size=256 * 1024 ** 2)   # a model sent to look at
         app.on_response_prepare.append(self._headers)
         r = app.router
         r.add_get("/door/me", self.me)
@@ -177,6 +177,7 @@ class Away:
         r.add_route("*", "/door/{tail:.*}", self.at_box)
         r.add_get("/bench/printers", self.printers)
         b = self.bench
+        r.add_get("/bench/rev", b.get_rev)
         # what the box's own screen reads, answered by the same handlers
         for path, handler in (("/bench/shelf", b.shelf.get_shelf), ("/bench/shelf/{id}/picture", b.shelf.get_picture),
                               ("/bench/shelf/{id}/parts/{n}", b.shelf.get_part), ("/bench/printable", b.shelf.get_printable),
