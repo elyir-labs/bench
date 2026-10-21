@@ -192,6 +192,12 @@ def test_a_change_that_failed_leaves_the_print_paused_with_try_again():
     assert a.plan_action("swap_slot", {"slot": 0}, service_tracker())[-1] == (P.RESUME, None)
 
 
+def test_a_failed_change_that_waited_says_the_nozzle_cooled_and_try_again_heats_it():
+    i = paused_for_a_change({"from": 2, "to": 0, "in_print": True, "cooled": True,
+                             "error": "The filament didn't come out of the toolhead."})
+    assert i["detail"].endswith("The nozzle cooled while it waited; Try again heats it first.")
+
+
 def test_push_more_through_on_the_service_goes_to_it_and_on_klipperace_stays_gcode():
     t = service_tracker()
     t._change = {"mid": False, "temp": 0}

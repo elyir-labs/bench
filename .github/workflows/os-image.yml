@@ -67,7 +67,9 @@ jobs:
       - name: The app release
         run: |
           (cd app && npm ci --no-audit --no-fund)
-          echo "RELEASE=$(RELEASE_VERSION="$VERSION" scripts/build-release.sh | tail -n 1)" >> "$GITHUB_ENV"
+          release="$(RELEASE_VERSION="$VERSION" scripts/build-release.sh | tail -n 1)"
+          [ -f "$release" ] || { echo "::error::build-release.sh didn't name a tarball (got: $release)"; exit 1; }
+          echo "RELEASE=$release" >> "$GITHUB_ENV"
 
       - name: The card and the OS bundle
         run: |

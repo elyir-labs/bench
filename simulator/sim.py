@@ -627,9 +627,10 @@ class SimPrinter:
         if abs(nch - ch["temperature"]) > 0.05:
             ch["temperature"] = round(nch, 1)
             changed["temperature_sensor Chamber"] = {"temperature": ch["temperature"]}
-        if self.status["extruder"]["temperature"] > 170 and not self.status["extruder"]["can_extrude"]:
-            self.status["extruder"]["can_extrude"] = True
-            changed.setdefault("extruder", {})["can_extrude"] = True
+        can = self.status["extruder"]["temperature"] >= 170
+        if can != self.status["extruder"]["can_extrude"]:
+            self.status["extruder"]["can_extrude"] = can
+            changed.setdefault("extruder", {})["can_extrude"] = can
 
         if "ace" in self.status:
             devices = self.status["ace"]["devices"]

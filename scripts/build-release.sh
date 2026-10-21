@@ -79,6 +79,9 @@ EOF
 
 mkdir -p "$ROOT/dist"
 OUT="$ROOT/dist/elyir-bench-$VERSION.tar.gz"
-COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -czf "$OUT" -C "$STAGE" VERSION app printer kiosk installer door slicer bench-app bench setup \
+# macOS's tar would add ._ files and extended attributes; GNU tar (a Linux build) has neither flag, and adds neither
+MAC_TAR=""
+tar --version 2>/dev/null | grep -q bsdtar && MAC_TAR="--no-xattrs --no-mac-metadata"
+COPYFILE_DISABLE=1 tar $MAC_TAR -czf "$OUT" -C "$STAGE" VERSION app printer kiosk installer door slicer bench-app bench setup \
   $([ -d "$STAGE/units" ] && echo units)
 echo "$OUT"

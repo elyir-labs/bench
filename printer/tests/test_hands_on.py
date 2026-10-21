@@ -189,3 +189,25 @@ def test_a_printer_that_reports_no_toolhead_only_heats():
         assert a.plan_action(action, {"axis": "z", "mm": 10}, t) == []
     assert act(t, "hands_nozzle") == [f"M104 S{a.MATERIAL_TEMPS['PETG']}"]
     assert act(t, "hands_heat", now=2.0, heater="bed", target=80) == ["M140 S80"]
+
+
+def test_push_filament_through_once_the_nozzle_is_hot():
+    t = tracker()
+    assert t.intent(now=1.0)["hands"]["can_push"] is False
+    assert a.plan_action("hands_push", {"mm": 10}, t) == [(a.ActionPlan.HANDS, {"mm": 10, "op": "push"})]
+    assert t.hands_input({"op": "push", "mm": 10}, now=1.0) is False   # cold: Klipper would refuse it
+    t.update_status({"extruder": {"temperature": 240, "target": 240, "can_extrude": True}}, now=2.0)
+    assert t.intent(now=2.0)["hands"]["can_push"] is True
+    push = "SAVE_GCODE_STATE NAME=elyir_bench_hands_push\nM83\nG1 E{} F150\nRESTORE_GCODE_STATE NAME=elyir_bench_hands_push"
+    assert act(t, "hands_push", now=3.0, mm=50) == [push.format(50)]
+    assert act(t, "hands_push", now=4.0, mm=-10) == [push.format(-10)]
+    assert t.hands_input({"op": "push", "mm": 500}, now=5.0) is False
+
+
+def test_nozzle_hot_offers_a_push():
+    t = tracker()
+    act(t, "hands_nozzle")
+    t.update_status({"extruder": {"temperature": 240, "target": 240, "can_extrude": True}}, now=2.0)
+    i = t.intent(now=2.0)
+    assert i["phase"] == "hands_nozzle" and "pushing filament through" in i["detail"]
+    assert [(x["id"], x.get("args")) for x in i["actions"]] == [("hands_done", None), ("hands_push", {"mm": 10})]

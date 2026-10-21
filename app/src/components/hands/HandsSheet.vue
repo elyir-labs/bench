@@ -65,6 +65,7 @@
                 <div v-for="h in heaters" :key="h.key" class="heat">
                   <div class="h">
                     <b>{{ h.label }}</b>
+                    <span v-if="h.key === 'nozzle' && canMove && pushes.length && !canPush" class="hint">Pushes once it's hot</span>
                     <span class="v a-num">{{ Math.round(h.now.temperature) }}°<small v-if="h.now.target"> of {{ Math.round(h.now.target) }}°</small></span>
                   </div>
                   <span class="bar"><i :style="{ width: pct(h.now) }"></i></span>
@@ -74,6 +75,10 @@
                       @click="heat(h.key, p.temp, p.material)"
                     >{{ p.material }} <small>{{ p.temp }}°</small></button>
                     <button class="chip" :class="{ on: !h.now.target }" @click="heat(h.key, 0)">Off</button>
+                  </div>
+                  <div v-if="h.key === 'nozzle' && canMove && pushes.length" class="chips push">
+                    <button v-for="mm in pushes" :key="mm" class="chip" :disabled="!canPush" @click="push(mm)">Push {{ mm }} mm</button>
+                    <button class="chip" :disabled="!canPush" @click="push(-pushes[0])">Pull back</button>
                   </div>
                 </div>
               </div>
@@ -110,6 +115,8 @@ const nozzle = computed(() => store.intent?.printer.nozzle ?? { temperature: 0, 
 const bed = computed(() => store.intent?.printer.bed ?? { temperature: 0, target: 0 })
 const jobList = computed(() => (hands.value ? jobs(hands.value) : []))
 const canMove = computed(() => hands.value?.can_move !== false)
+const canPush = computed(() => hands.value?.can_push === true)
+const pushes = computed(() => hands.value?.pushes ?? [])
 const heaters = computed(() => [
   { key: 'nozzle' as const, label: 'Nozzle', now: nozzle.value, presets: hands.value?.nozzle_presets ?? [] },
   { key: 'bed' as const, label: 'Bed', now: bed.value, presets: hands.value?.bed_presets ?? [] },
@@ -167,6 +174,10 @@ async function pick(j: Job) {
 
 function move(axis: 'x' | 'y' | 'z', dir: number) {
   void send('hands_move', { axis, mm: dir * step.value })
+}
+
+function push(mm: number) {
+  void send('hands_push', { mm })
 }
 
 function heat(heater: 'nozzle' | 'bed', target: number, material?: string) {
@@ -239,6 +250,9 @@ h2 { font-size: calc(22 * var(--u) + 6px); margin: 0; }
 .chip small { font-weight: 500; color: var(--a-ink-3); font-size: 0.9em; }
 .chip.on { background: var(--temp-warm, #e8743b); border-color: var(--temp-warm, #e8743b); color: #fff; }
 .chip.on small { color: rgba(255, 255, 255, 0.85); }
+.chip[disabled] { opacity: 0.45; cursor: default; }
+.chips.push { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--a-line); align-items: center; }
+.hint { font-size: calc(10 * var(--u) + 4px); color: var(--a-ink-3); }
 
 .sheet-enter-active, .sheet-leave-active { transition: opacity 0.18s ease; }
 .sheet-enter-from, .sheet-leave-to { opacity: 0; }

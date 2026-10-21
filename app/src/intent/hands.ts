@@ -19,6 +19,9 @@ export interface HandsView {
   position: { x: number; y: number; z: number } | null
   limits: { min: number[]; max: number[] }
   steps: number[]
+  /** The nozzle is hot enough for Klipper to push filament (its can_extrude). */
+  can_push?: boolean
+  pushes?: number[]
   material: string | null
   clean_temp: number
   nozzle_presets: HandsPreset[]
@@ -42,7 +45,7 @@ export function jobs(h: Pick<HandsView, 'z_moves' | 'material' | 'clean_temp' | 
   const all: Job[] = [
     { id: 'clear', title: 'Get at the bed', line: h.z_moves === 'bed' ? 'Lowers the bed out of the way' : 'Raises the head out of the way', action: 'hands_clear' },
     { id: 'clean', title: 'Clean the nozzle', line: `Hot for ${m}, at the front`, action: 'hands_clean' },
-    { id: 'nozzle', title: 'Heat the nozzle', line: 'To pull filament by hand', action: 'hands_nozzle' },
+    { id: 'nozzle', title: 'Heat the nozzle', line: 'To push filament through or pull it', action: 'hands_nozzle' },
     { id: 'bed', title: 'Heat the bed', line: 'Warm up for a material', action: null },
     { id: 'motors', title: 'Let go of the motors', line: 'Push the head by hand', action: 'hands_motors_off' },
     { id: 'move', title: 'Move it myself', line: 'Up, down, any way, any heat', action: null },

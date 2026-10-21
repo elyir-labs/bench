@@ -512,6 +512,9 @@ HANDS_STEPS = (1, 10, 50)
 HANDS_PRESETS = ("PLA", "PETG", "ABS")
 HANDS_NOZZLE_MAX = 300
 HANDS_BED_MAX = 120
+HANDS_PUSHES = (10, 50)           # Push filament through: these, and Pull back by the first
+HANDS_PUSH_SPEED = 150            # mm/min, the same as Push more through
+HANDS_PUSH_MAX = 100
 
 # First layer: squish more, squish less (design/first-layer/, B). While the first layers go down a
 # person nudges the nozzle further from the bed or closer to it; at the end they can keep it. Kept
@@ -1662,6 +1665,8 @@ class IntentTracker:
             detail = "The old filament didn't come out of the head. Check the head, then try again."
         else:
             detail = "It stopped partway. Check the head, then try again."
+        if ch.get("cooled"):
+            detail += " The nozzle cooled while it waited; Try again heats it first."
         retry = _action("swap_slot", "Try again", primary=True, style="red", slot=to) if to is not None and to >= 0 else None
         return ("problem", "tool_change_failed", f"Switching to {what} didn't finish.", detail,
                 [a for a in (retry, stop) if a], ch["error"])
@@ -2981,6 +2986,13 @@ class IntentTracker:
         """A printer reached over Anycubic's LAN mode reports no toolhead and takes only heater settings."""
         return "toolhead" in self.status
 
+    def can_push(self) -> bool:
+        """Klipper refuses to extrude below min_extrude_temp; can_extrude says whether it would."""
+        ext = self.status.get("extruder") or {}
+        if "can_extrude" in ext:
+            return bool(ext["can_extrude"])
+        return float(ext.get("temperature") or 0) >= 170
+
     def homed(self) -> bool:
         return set("xyz") <= set(str((self.status.get("toolhead") or {}).get("homed_axes") or ""))
 
@@ -3016,7 +3028,7 @@ class IntentTracker:
             return True
         if self.hands_why_not():
             return False
-        if op in ("home", "motors_off", "move", "clear", "clean", "lower") and not self.can_move():
+        if op in ("home", "motors_off", "move", "clear", "clean", "lower", "push") and not self.can_move():
             return False
         lo, hi = self._hands_limits()
         homed = self.homed()
@@ -3089,6 +3101,15 @@ class IntentTracker:
             cmds = [f"M104 S{t}"] + ([] if homed else ["G28"]) + self._hands_go(start, [front[0], front[1], z], now)
             self._hands = {"kind": "clean", "target": t, "material": m, "seen": False}
             self._hands_heat.add("nozzle")
+        elif op == "push":
+            try:
+                mm = float(payload.get("mm") or 0)
+            except (TypeError, ValueError):
+                return False
+            if not mm or abs(mm) > HANDS_PUSH_MAX or not self.can_push():
+                return False
+            cmds = ["SAVE_GCODE_STATE NAME=elyir_bench_hands_push", "M83", f"G1 E{mm:g} F{HANDS_PUSH_SPEED}",
+                    "RESTORE_GCODE_STATE NAME=elyir_bench_hands_push"]
         elif op == "lower":
             h = self._hands
             if not h or h["kind"] != "clear" or h.get("z_before") is None or not homed:
@@ -3247,6 +3268,8 @@ class IntentTracker:
             "position": {"x": round(float(live[0]), 1), "y": round(float(live[1]), 1), "z": round(float(live[2]), 1)} if (homed and live) else None,
             "limits": {"min": lo, "max": hi},
             "steps": list(HANDS_STEPS),
+            "can_push": self.can_move() and self.can_push(),
+            "pushes": list(HANDS_PUSHES),
             "material": head,
             "clean_temp": int(MATERIAL_TEMPS.get(head or "PLA", DEFAULT_CHANGE_TEMP)),
             "nozzle_presets": [{"material": m, "temp": MATERIAL_TEMPS[m]} for m in HANDS_PRESETS],
@@ -3275,8 +3298,11 @@ class IntentTracker:
         if h["kind"] == "nozzle":
             temp = float((self.status.get("extruder") or {}).get("temperature") or 0)
             hot = temp >= h["target"] - 5
-            detail = f"{h['target']}°, for pulling filament by hand. {later}" if hot else f"Heating to {h['target']}°. {later}"
-            acts = [_action("hands_done", "Done, cool it", primary=True)] + ([_action("hands_keep", "Keep it hot")] if mins <= 5 else [])
+            detail = f"{h['target']}°, for pushing filament through or pulling it out. {later}" if hot else f"Heating to {h['target']}°. {later}"
+            acts = [_action("hands_done", "Done, cool it", primary=True)]
+            if self.can_move() and self.can_push():
+                acts += [_action("hands_push", f"Push {HANDS_PUSHES[0]} mm", mm=HANDS_PUSHES[0])]
+            acts += [_action("hands_keep", "Keep it hot")] if mins <= 5 else []
             return "hands_nozzle", "Nozzle hot" if hot else "Heating the nozzle", detail, acts
         bed = self.z_moves() == "bed"
         detail = (f"The bed is down at {h['z']} mm. It comes back up by itself before the next print." if bed
@@ -3732,8 +3758,9 @@ class IntentTracker:
             out["notice"] = {"headline": f"The head looks empty, but I think {name} is loaded.",
                              "detail": "Tell me which is right and nothing moves. Or unload it to start clean."}
             out["actions"] = [_action("mark_loaded", "It's empty", primary=True, slot=-1),
-                              _action("head_ok", f"{name} is loaded"),
-                              _action("unload_spool", f"Unload {name}")]
+                              _action("head_ok", f"{name} is loaded")]
+            if (self.status.get("print_stats") or {}).get("state") != "paused":
+                out["actions"].append(_action("unload_spool", f"Unload {name}"))
         return out
 
     def _with_spool_actions(self, spools: List[Dict[str, Any]], can_move: bool) -> List[Dict[str, Any]]:
@@ -4723,9 +4750,9 @@ class ActionPlan:
 
 HANDS_OPS = {"hands_home": "home", "hands_motors_off": "motors_off", "hands_move": "move", "hands_heat": "heat",
              "hands_clear": "clear", "hands_clean": "clean", "hands_nozzle": "nozzle", "hands_lower": "lower",
-             "hands_done": "done", "hands_keep": "keep"}
+             "hands_done": "done", "hands_keep": "keep", "hands_push": "push"}
 LIGHT_OPS = {"light_on": "on", "light_off": "off", "light_try": "try", "light_pick": "pick"}
-HANDS_MOVES = {"hands_home", "hands_motors_off", "hands_move", "hands_clear", "hands_clean", "hands_lower"}
+HANDS_MOVES = {"hands_home", "hands_motors_off", "hands_move", "hands_clear", "hands_clean", "hands_lower", "hands_push"}
 
 
 def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentTracker) -> List[tuple]:
@@ -4951,12 +4978,13 @@ def swap_gcode(payload: Dict[str, Any], cmds: Optional[Any] = None) -> Any:
 
 
 def plan_spool_move(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> List[tuple]:
-    """Load, unload, or correct which spool is in the head. Only while the printer is idle;
-    loading only from a slot that has filament ready."""
+    """Load, unload, or correct which spool is in the head. Only while the printer is idle, except that a
+    paused print can be corrected (nothing moves); loading only from a slot that has filament ready."""
     cmds = tracker.unit_commands()
     if tracker.klippy_state != "ready" or tracker.direct or cmds is None:
         return []
-    if (tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
+    pstate = (tracker.status.get("print_stats") or {}).get("state")
+    if pstate == "printing" or (pstate == "paused" and action_id != "mark_loaded"):
         return []
     if tracker._swap is not None and not tracker._swap.get("error"):
         return []

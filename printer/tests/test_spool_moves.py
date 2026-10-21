@@ -76,6 +76,15 @@ def test_refusals():
     assert plan(t, "load_spool", slot=1) == []
 
 
+def test_in_a_paused_print_the_head_can_be_corrected_but_nothing_moves():
+    t = tracker(selected=2, head=False)
+    t.update_status({"print_stats": {"state": "paused"}}, now=1)
+    assert plan(t, "mark_loaded", slot=-1) == [(a.ActionPlan.GCODE, "ACE_SET_GATE GATE=-1")]
+    assert plan(t, "load_spool", slot=1) == [] and plan(t, "unload_spool") == []
+    t.intent(now=1)
+    assert [x["id"] for x in t.intent(now=12)["head"]["actions"]] == ["mark_loaded", "head_ok"]
+
+
 def test_unload_needs_something_loaded():
     assert plan(tracker(selected=0), "unload_spool") == [(a.ActionPlan.SWAP, {"to": -1, "from": 0, "purge": False})]
     assert plan(tracker(selected=-1, head=False), "unload_spool") == []
