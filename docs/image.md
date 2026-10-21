@@ -7,6 +7,7 @@ for a Raspberry Pi 4.
 ```bash
 image/build.sh --dev      # dist/elyir-bench-<release>-pi4-dev.img.xz, with this Mac's SSH key for user pi
 image/build.sh            # the same with no key: nobody can log in
+BOARD=pi5 image/build.sh  # a Raspberry Pi 5's card (image/config/elyir-bench-pi5.yaml, rpi-image-gen's rpi5 device)
 ```
 
 Flash it with Raspberry Pi Imager (Use custom), and choose **No** when Imager offers to apply OS customization:
@@ -66,7 +67,8 @@ Wi-Fi and the panel's two ways in, and setup worked from there. The first card's
   are proven on a flashed card: [os-slots.md](os-slots.md).)
 - Klipper has no `printer.cfg`, so after setup the printer shows its Problem screen. Printer profiles (or bringing a
   config over) are phase 4 of [installer.md](installer.md).
-- A Pi 5 image, and listing it in Raspberry Pi Imager. (The Pi 4 card is built by the public repository's OS
-  image workflow in GitHub Actions; a maintainer signs it before it goes live.)
+- A Pi 5 card on a real Pi 5: it's built and published (2026-10-21), never booted yet. Listing the cards in
+  Raspberry Pi Imager. (Both cards are built by the public repository's OS image workflow in GitHub Actions; a
+  maintainer signs them before they go live.)
 - The first boot shows the console until `apply` has started the kiosk (a minute or two); the boot screen from the
   first frame needs the theme baked in at build time.

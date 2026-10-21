@@ -1,17 +1,21 @@
-# The flashable card for a Raspberry Pi 4, and the same OS as an update bundle, built here in the open
-# (image/build.sh, docs/image.md). Run it from the Actions tab.
+# The flashable cards for a Raspberry Pi 4 and a Pi 5, and the same OS as an update bundle for each, built here
+# in the open (image/build.sh, docs/image.md). Run it from the Actions tab.
 #
-# Nothing goes live from here. The card and the bundle go up to https://releases.elyir.dev/bench/os/ under their
-# own names, each with a .sha256, and built-pi4.json names them. The bundle isn't signed: the release key isn't in
-# GitHub. A maintainer downloads it, signs it, and publishes the update feed and the card's download together,
-# on their own machine. A card is never offered before its own OS is the feed's: a printer updates to whatever
-# the feed names, so a newer card ahead of it would go back to the older OS.
+# Nothing goes live from here. The cards and the bundles go up to https://releases.elyir.dev/bench/os/ under their
+# own names, each with a .sha256, and built-<board>.json names them. The bundles aren't signed: the release key
+# isn't in GitHub. A maintainer downloads each, signs it, and publishes the update feed and the card's download
+# together, on their own machine. A card is never offered before its own OS is the feed's: a printer updates to
+# whatever the feed names, so a newer card ahead of it would go back to the older OS.
 #
 # Secrets in the "release" environment: R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT (R2's S3 API).
 name: OS image
 
 on:
   workflow_dispatch:
+    inputs:
+      boards:
+        description: Which boards (JSON list)
+        default: '["pi4", "pi5"]'
 
 concurrency:
   group: os-image
@@ -22,12 +26,18 @@ permissions:
 
 jobs:
   card:
-    runs-on: ubuntu-24.04-arm      # the card is arm64: native here, no emulation
+    strategy:
+      fail-fast: false             # one board's card is worth having without the other's
+      matrix:
+        board: ${{ fromJSON(inputs.boards) }}
+    name: card (${{ matrix.board }})
+    runs-on: ubuntu-24.04-arm      # the cards are arm64: native here, no emulation
     timeout-minutes: 60
     environment: release
     env:
       BUCKET: elyir-releases
       PREFIX: bench/os
+      BOARD: ${{ matrix.board }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,8 +69,8 @@ jobs:
           AWS_DEFAULT_REGION: auto
         run: |
           if aws --endpoint-url "${{ secrets.R2_ENDPOINT }}" s3api head-object --bucket "$BUCKET" \
-               --key "$PREFIX/elyir-bench-os-$VERSION-pi4.tar" >/dev/null 2>&1; then
-            echo "::error::$VERSION is already built; a release is never replaced. Export something new first."
+               --key "$PREFIX/elyir-bench-os-$VERSION-$BOARD.tar" >/dev/null 2>&1; then
+            echo "::error::$VERSION for $BOARD is already built; a release is never replaced. Export something new first."
             exit 1
           fi
 
@@ -78,8 +88,8 @@ jobs:
 
       - name: No SSH key on the card
         run: |
-          docker run --rm --privileged -v elyir-imagework:/work:ro elyir-imagegen bash -euc '
-            m=$(mktemp -d); mount -o ro,loop "$(ls /work/elyir/image-*/root.ext4 | head -1)" "$m"
+          docker run --rm --privileged -v elyir-imagework:/work:ro -e BOARD elyir-imagegen bash -euc '
+            m=$(mktemp -d); mount -o ro,loop "$(ls "/work/elyir-$BOARD"/image-*/root.ext4 | head -1)" "$m"
             k="$m/home/pi/.ssh/authorized_keys"
             if [ -s "$k" ]; then echo "the card has an SSH key in it" >&2; umount "$m"; exit 1; fi
             umount "$m"'
@@ -91,13 +101,13 @@ jobs:
           AWS_DEFAULT_REGION: auto
         run: |
           cd dist
-          card="elyir-bench-$VERSION-pi4.img.xz"; bundle="elyir-bench-os-$VERSION-pi4.tar"
+          card="elyir-bench-$VERSION-$BOARD.img.xz"; bundle="elyir-bench-os-$VERSION-$BOARD.tar"
           [ -f "$card" ] && [ -f "$bundle" ] || { echo "::error::image/build.sh didn't make $card and $bundle"; exit 1; }
           sha256sum "$card" > "$card.sha256"; sha256sum "$bundle" > "$bundle.sha256"
-          cat > built-pi4.json <<JSON
+          cat > "built-$BOARD.json" <<JSON
           {
             "version": "$VERSION",
-            "board": "pi4",
+            "board": "$BOARD",
             "card": "$card",
             "card_sha256": "$(cut -d' ' -f1 "$card.sha256")",
             "card_size": $(stat -c %s "$card"),
@@ -109,13 +119,13 @@ jobs:
             "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           JSON
-          cat built-pi4.json
+          cat "built-$BOARD.json"
           s3() { aws --endpoint-url "${{ secrets.R2_ENDPOINT }}" s3 cp --only-show-errors "$@"; }
           forever="public, max-age=31536000, immutable"
           s3 "$card" "s3://$BUCKET/$PREFIX/$card" --content-type application/x-xz --cache-control "$forever"
           s3 "$card.sha256" "s3://$BUCKET/$PREFIX/$card.sha256" --content-type text/plain --cache-control "$forever"
           s3 "$bundle" "s3://$BUCKET/$PREFIX/$bundle" --content-type application/x-tar --cache-control "$forever"
           s3 "$bundle.sha256" "s3://$BUCKET/$PREFIX/$bundle.sha256" --content-type text/plain --cache-control "$forever"
-          s3 built-pi4.json "s3://$BUCKET/$PREFIX/built-pi4.json" --content-type application/json --cache-control no-cache
-          echo "### Built $VERSION, not live yet" >> "$GITHUB_STEP_SUMMARY"
-          echo "Sign and publish it with \`scripts/release/sign-os.sh $VERSION\`." >> "$GITHUB_STEP_SUMMARY"
+          s3 "built-$BOARD.json" "s3://$BUCKET/$PREFIX/built-$BOARD.json" --content-type application/json --cache-control no-cache
+          echo "### Built $VERSION for $BOARD, not live yet" >> "$GITHUB_STEP_SUMMARY"
+          echo "Sign and publish it with \`BOARD=$BOARD scripts/release/sign-os.sh $VERSION\`." >> "$GITHUB_STEP_SUMMARY"

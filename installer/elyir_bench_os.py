@@ -728,7 +728,9 @@ def cmd_update(args) -> int:
 
 def preflight(disk: str, fat: Path, slot: str) -> None:
     d = fat / f"slot{slot}" if (fat / f"slot{slot}").exists() else fat
-    missing = [f for f in ("kernel8.img", "cmdline.txt", "config.txt") if not (d / f).exists()]
+    missing = [f for f in ("cmdline.txt", "config.txt") if not (d / f).exists()]
+    if not any(d.glob("kernel*.img")):          # kernel8.img on a Pi 4, kernel_2712.img on a Pi 5
+        missing.insert(0, "kernel*.img")
     if missing:
         raise Refused(f"slot {slot}'s boot files are incomplete: no {', '.join(missing)} in {d}")
     r = root_partuuid(read(d / "cmdline.txt"))

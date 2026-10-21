@@ -1,0 +1,30 @@
+# Elyir Bench for a Raspberry Pi 5 (docs/image.md). build.sh passes the release and, for a developer
+# build, an SSH key; a card for anyone else has none.
+device:
+  layer: rpi5
+  user1: pi
+  user1sudo: nopasswd      # no password at all: the account is locked, and the installer needs sudo -n
+  hostname: elyir-bench   # until setup names it
+
+image:
+  layer: image-elyir-bench-ab   # p1 bootfs, p2 rootfs; the first boot adds slot B and /data
+  boot_part_size: 512M
+  root_part_size: 6G       # grown to the slot size for the card on first boot (elyir-bench-layout)
+  name: elyir-bench-pi5
+  idp_enable: n            # no factory provisioning description (it wants sparse copies we don't make)
+
+layer:
+  base: elyir-bench-base
+  app: elyir-bench-printer
+
+ieee80211:
+  regdom: US               # the Wi-Fi country; asking for it is still open (docs/setup.md)
+
+ssh:
+  pubkey_only: y
+
+locale:
+  default: en_US.UTF-8
+  keyboard_keymap: us
+  keyboard_layout: English (US)
+  timezone: America/Chicago   # until setup asks (the time comes from the internet once it's on the Wi-Fi)

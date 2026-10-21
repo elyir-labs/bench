@@ -4,13 +4,14 @@
 # it were running, and the result is checked. Needs a built image in the elyir-imagework volume.
 #
 #   image/test-layout.sh            32, 16 and 8 GB cards
+#   BOARD=pi5 image/test-layout.sh  the Pi 5's card
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-docker run --rm --privileged -v elyir-imagework:/work:ro \
+docker run --rm --privileged -v elyir-imagework:/work:ro -e BOARD="${BOARD:-pi4}" \
   -v "$ROOT/image/layer/elyir-bench-printer.d/customize.overlay/usr/local/sbin/elyir-bench-layout:/layout:ro" \
   elyir-imagegen bash -euc '
   apt-get -qq update >/dev/null && apt-get -qq install -y cloud-guest-utils fdisk e2fsprogs util-linux >/dev/null
-  img=$(ls /work/elyir/image-*/*.img | head -1)
+  img=$(ls "/work/elyir-$BOARD"/image-*/*.img | head -1)
   # Docker has no udev: device nodes for the partitions of a loop device come from /sys, here and (through a
   # stand-in udevadm on PATH) after elyir-bench-layout adds slot B and /data
   mkdir -p /shim && cat > /shim/udevadm <<"SH"
