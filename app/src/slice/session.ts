@@ -20,12 +20,17 @@
 // Several colors (design/multi-color/, B): the plate's colors are session.spool (the first) and session.more; each
 // part prints in one of them (Part.spool). A 3MF that brings its own colors stays whole, alone on the plate, its
 // colors matched to the loaded spools. Where the old color goes (purge) and parts one after the other are the plate's.
+//
+// Painting and a change at a height (design/paint-and-height/, height C with A, painting A): a part's paint is a color
+// per triangle (Part.paint); a change at a height is the plate's (session.heights), offered when Bench spots a flat
+// top with something on it. Both use the plate's colors, so a color only paint or a height uses still stays.
 
 import { computed, markRaw, reactive } from 'vue'
 import * as api from './api'
 import { asKind, fitScale, matchPrinter, pickSpool, PURPOSES, spoolChoice, SUPPORT_KINDS, type Choice, type Purpose, type SpoolLike, type SupportKind } from './plan'
 import { compose, pickFrom, plateRuns, provisional, severalFrom, type Placed } from './plate'
 import { matchFileColors, sameSpool, unsorted, type FileColor, type PlateSpool, type Purge } from './colors'
+import { drawRuns, flatTop, heightColors, paintUses, toRuns, type Height } from './paint'
 import type { SupportLines } from './supports'
 import { layOn, parseModel, sizeOf } from './stl'
 import { thumbnail } from './render'
@@ -54,6 +59,8 @@ export interface Part {
   from: string                               // the file it came from
   order: number                              // its place in that file
   spool: number                              // which of the plate's colors (design/multi-color/)
+  paint: Uint8Array | null                   // a color per triangle: 0 its own, k the plate's color k - 1; markRaw
+  paintV: number                             // counts paint changes, so the plate is sliced again
   project: { colors: FileColor[]; runs: { count: number; filament: number }[] } | null   // a 3MF with its own colors
 }
 
@@ -80,6 +87,8 @@ export const session = reactive({
   more: [] as PlateSpool[],                  // the plate's second color on (design/multi-color/)
   purge: null as Purge | null,               // where the old color goes; null: the printer's usual
   oneAfterOther: false,                      // each part finished before the next starts
+  heights: [] as Height[],                   // changes at a height, lowest first (design/paint-and-height/)
+  offerOff: false,                           // "Not this time" on the spotted flat top
   jobs: {} as Partial<Record<Purpose, api.SliceJob>>,
   jobFor: '',
   kinds: {} as Partial<Record<SupportKind, api.SliceJob>>,   // the other kinds, for the chosen purpose (the sheet)
@@ -191,7 +200,7 @@ export const tooBig = (p: Part | null | undefined) => !!p && p.scale < 1
 
 /** What's on the plate, as the slicer sees it: a change to any of it makes the slices stale. */
 export function plateKey(parts: Part[] = session.parts, skipCopiesOf = -1): string {
-  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool]))
+  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool, p.paintV]))
 }
 
 /** The plate's colors, the first being session.spool. */
@@ -203,11 +212,34 @@ const unit = () => session.printer?.unit ?? (session.printer?.slots ?? 1) > 1
 export const unsortedColors = computed(() => plateSpools.value.map((s, k) => (unsorted(s, unit()) ? k : -1)).filter(k => k >= 0))
 
 const colorOf = (k: number) => plateSpools.value[k]?.color || '#8A8D91'
-/** Each part's colors as runs of triangles: one, or a 3MF's pieces in their filaments' colors. */
-export function partRuns(p: Part): { count: number; color: string }[] {
+/** Each part's colors as runs of triangles: one, a 3MF's pieces in their filaments' colors, or a color per
+ *  triangle from its paint and the plate's changes at a height (paint wins where both are). */
+export function partRuns(p: Part, heights: Height[] = session.heights): { count: number; color: string }[] {
   if (p.project) return p.project.runs.map(r => ({ count: r.count, color: colorOf(r.filament - 1) }))
-  return [{ count: (p.tris?.length ?? 0) / 9, color: colorOf(p.spool) }]
+  const states = colorStates(p, heights)
+  if (!states) return [{ count: (p.tris?.length ?? 0) / 9, color: colorOf(p.spool) }]
+  let start = 0
+  return drawRuns(states, s => colorOf(s - 1)).map(r => { const count = r.end - start; start = r.end; return { count, color: r.color } })
 }
+
+/** A color per triangle (the plate's color + 1), or null when the part is all its own color. */
+export function colorStates(p: Part, heights: Height[] = session.heights): Uint8Array | null {
+  if (!p.tris || p.project || (!heights.length && !p.paint)) return null
+  const out = heights.length ? heightColors(p.tris, heights, p.scale, p.spool) : new Uint8Array(p.tris.length / 9).fill(p.spool + 1)
+  if (p.paint && p.paint.length === out.length) for (let t = 0; t < out.length; t++) if (p.paint[t]) out[t] = p.paint[t]
+  return out
+}
+
+/** Only STL parts can be painted: the triangles drawn here are the ones the slicer gets. */
+export const paintable = (p: Part | null | undefined) => !!p && !p.project && !!p.tris && /\.stl$/i.test(p.name)
+/** A change at a height is the whole plate's: offered for one part (any number of copies). */
+export const canHeight = computed(() => session.parts.length === 1 && !session.parts[0].project && !!session.parts[0].tris && !session.oneAfterOther)
+/** C, "Bench spots it": a flat top with something on it, offered once, until there's a change or paint. */
+export const spotted = computed(() => {
+  const p = session.parts[0]
+  if (!canHeight.value || session.heights.length || session.offerOff || p.paint) return null
+  return flatTop(p.tris!, p.scale)
+})
 
 /** Every copy of every part, where Orca put it (or, until it has, in rows in the middle of the bed). */
 export const plate = computed(() => {
@@ -255,7 +287,7 @@ function newPart(name: string, up: api.UploadedModel, tris: Float32Array | null,
     key: nextKey++, name, model: up.model, trisFile: tris ? markRaw(tris) : null, tris: null,
     sizeFile: up.size ?? (tris ? sizeOf(tris) : null), size: null, lying: up.lying ?? null,
     lay: 'file', layAuto: true, down: null, brim: 'auto', scale: 1, fit: 1, copies: Math.max(1, up.copies ?? 1), fill: null,
-    spool: 0, project: null,
+    spool: 0, project: null, paint: null, paintV: 0,
   }) as Part
   applyLay(p, p.lying?.flat_better ? 'flat' : 'file')
   return p
@@ -320,7 +352,7 @@ export async function begin(files: File[], spools: SpoolLike[], printerName: str
   dropUnfinished()
   Object.assign(session, {
     stage: 'reading', error: '', errorInfo: null, parts: [], files: files.map(f => f.name), adding: 0, purpose: 'everyday', spool: null, spoolAuto: true,
-    more: [], purge: null, oneAfterOther: false,
+    more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
     jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null, sent: null, sentLater: [], settings: {}, pending: false,
     left: [], picking: null, undo: null,
   })
@@ -393,7 +425,13 @@ export async function addFiles(files: File[]): Promise<void> {
 
 function partRequest(p: Part): api.PartRequest {
   return { model: p.model!, copies: p.copies, scale: p.scale, lay: p.lay, ...(p.lay === 'side' && p.down ? { down: p.down } : {}),
-    ...(p.brim !== 'auto' ? { brim: p.brim } : {}), ...(multi.value && !p.project ? { spool: p.spool } : {}) }
+    ...(p.brim !== 'auto' ? { brim: p.brim } : {}), ...(multi.value && !p.project ? { spool: p.spool } : {}),
+    ...(multi.value && p.paint && paintable(p) ? paintRequest(p.paint) : {}) }
+}
+
+function paintRequest(states: Uint8Array): { paint?: number[] } {
+  const runs = toRuns(states)
+  return runs ? { paint: runs } : {}
 }
 
 /** The plate's colors for the slicer. One not sorted yet is sliced as by hand, so the price is real meanwhile. */
@@ -405,6 +443,7 @@ function spoolsRequest(): Pick<api.SliceRequest, 'spools' | 'purge' | 'one_after
       hand: k > 0 && (s.hand || !u || s.slot == null) })),
     ...(session.purge ? { purge: session.purge } : {}),
     ...(session.oneAfterOther ? { one_after_other: true } : {}),
+    ...(session.heights.length ? { heights: session.heights.map(h => ({ z: h.z, spool: h.spool })) } : {}),
   }
 }
 
@@ -421,7 +460,7 @@ function request(purpose: Purpose, png: string | null, parts: Part[], supports: 
 
 const pictured = () => (plate.value.length ? thumbnail(plate.value, session.spool?.color ?? '#8A8D91') : null)
 /** What the other kinds were sliced for: the plate, the purpose and the spool. */
-const kindsKey = () => JSON.stringify([session.jobFor, session.purpose, session.spool, session.more, session.purge, session.oneAfterOther,
+const kindsKey = () => JSON.stringify([session.jobFor, session.purpose, session.spool, session.more, session.purge, session.oneAfterOther, session.heights,
   session.settings, session.kept[session.purpose]])
 
 /** Slice every purpose again, the chosen one first. seed: a slice already done for the chosen purpose (a kind
@@ -495,12 +534,19 @@ export function setSpool(c: Choice) { session.spool = c; session.spoolAuto = fal
 
 // ── several colors (design/multi-color/, B) ──
 
+/** The plate's color for this spool, added when it isn't one yet. */
+function colorFor(s: PlateSpool): number {
+  const k = plateSpools.value.findIndex(x => (s.hand ? x.hand && x.color === s.color && x.material === s.material : !x.hand && sameSpool(x, s)))
+  if (k >= 0) return k
+  session.more = [...session.more, s]
+  return session.more.length
+}
+
 /** Part i prints in this spool: one of the plate's colors, or a new one. Colors no part uses any more go. */
 export function setPartSpool(i: number, s: PlateSpool) {
   const p = session.parts[i]
   if (!p || p.project) return
-  let k = plateSpools.value.findIndex(x => (s.hand ? x.hand && x.color === s.color && x.material === s.material : !x.hand && sameSpool(x, s)))
-  if (k < 0) { session.more = [...session.more, s]; k = session.more.length }
+  const k = colorFor(s)
   if (p.spool === k) return
   p.spool = k
   tidyColors()
@@ -517,10 +563,52 @@ export function setPlateSpool(k: number, s: PlateSpool) {
 export function setPurge(p: Purge) { if (session.purge !== p) { session.purge = p; void sliceAll() } }
 export function setOneAfterOther(on: boolean) { if (session.oneAfterOther !== on) { session.oneAfterOther = on; void sliceAll() } }
 
+// ── painting and a change at a height (design/paint-and-height/) ──
+
+/** From z (mm) up, the plate prints in this spool. One already at that height is replaced. */
+export function setHeight(z: number, s: PlateSpool, at = -1) {
+  const k = colorFor(s)
+  const rest = session.heights.filter((h, i) => i !== at && Math.abs(h.z - z) > 0.001)
+  session.heights = [...rest, { z, spool: k }].sort((a, b) => a.z - b.z)
+  tidyColors()
+  void sliceAll()
+}
+
+export function removeHeight(i: number) {
+  session.heights = session.heights.filter((_, j) => j !== i)
+  tidyColors()
+  void sliceAll()
+}
+
+/** Part i painted: each triangle's color from `palette` (state k = palette[k - 1]; 0 = its own). */
+export function setPaint(i: number, states: Uint8Array, palette: PlateSpool[]) {
+  const p = session.parts[i]
+  if (!p || !paintable(p)) return
+  const to = palette.map(s => colorFor(s) + 1)
+  const out = new Uint8Array(states.length)
+  for (let t = 0; t < states.length; t++) out[t] = states[t] ? to[states[t] - 1] : 0
+  for (let t = 0; t < out.length; t++) if (out[t] === p.spool + 1) out[t] = 0
+  p.paint = out.some(v => v) ? markRaw(out) : null
+  p.paintV++
+  tidyColors()
+  void sliceAll()
+}
+
+export function dismissOffer() { session.offerOff = true }
+
+/** Undo a change at a height: the heights and colors as they were. */
+export function restoreHeights(heights: Height[], more: PlateSpool[]) {
+  session.heights = heights
+  session.more = more
+  tidyColors()
+  void sliceAll()
+}
+
 /** "One color": every part in the plate's first color. */
 export function oneColor() {
   if (session.parts.some(p => p.project)) return
-  session.parts.forEach(p => { p.spool = 0 })
+  session.parts.forEach(p => { p.spool = 0; if (p.paint) { p.paint = null; p.paintV++ } })
+  session.heights = []
   session.more = []
   session.oneAfterOther = false
   void sliceAll()
@@ -531,11 +619,20 @@ export function oneColor() {
 function tidyColors() {
   if (session.parts.some(p => p.project) || !session.parts.length) return
   const all = plateSpools.value
-  const used = [...new Set(session.parts.map(p => p.spool))].filter(k => all[k]).sort((a, b) => a - b)
+  const used = [...new Set([...session.parts.flatMap(p => [p.spool, ...paintUses(p.paint)]), ...session.heights.map(h => h.spool)])]
+    .filter(k => all[k]).sort((a, b) => a - b)
   const lead = used.find(k => !all[k].hand) ?? used[0] ?? 0
   const keep = [lead, ...used.filter(k => k !== lead)]
   const to = new Map(keep.map((k, j) => [k, j]))
-  session.parts.forEach(p => { p.spool = to.get(p.spool) ?? 0 })
+  session.parts.forEach(p => {
+    const own = p.spool
+    p.spool = to.get(own) ?? 0
+    if (p.paint) {
+      const out = p.paint.map(v => (v ? (to.get(v - 1) ?? own) + 1 : 0))
+      p.paint = out.some(v => v) ? markRaw(out) : null
+    }
+  })
+  session.heights = session.heights.map(h => ({ ...h, spool: to.get(h.spool) ?? 0 }))
   if (lead !== 0) {
     const s = all[lead]
     session.spool = { slot: s.slot, material: s.material, color: s.color, name: s.name }
@@ -742,6 +839,6 @@ export function reset() {
   Object.assign(session, {
     stage: 'idle', error: '', parts: [], files: [], adding: 0, jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null,
     left: [], picking: null, undo: null, pending: false,
-    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false,
+    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
   })
 }

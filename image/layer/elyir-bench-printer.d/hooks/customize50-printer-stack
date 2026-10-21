@@ -65,4 +65,4 @@ tar -xzf "$IGconf_bench_release" -C "$ROOT/tmp" installer/elyir_bench_os.py
 chroot "$ROOT" python3 -c 'import sys; sys.path.insert(0, "/tmp/installer"); from pathlib import Path; import elyir_bench_os; elyir_bench_os.install_kit(Path("/"))'
 rm -rf "$ROOT/tmp/installer"
 
-chroot "$ROOT" systemctl enable klipper moonraker nginx avahi-daemon elyir-bench-layout elyir-bench-firstboot elyir-bench-os-update.timer
+chroot "$ROOT" systemctl enable klipper moonraker nginx avahi-daemon elyir-bench-layout elyir-bench-firstboot elyir-bench-os-update.timer elyir-bench-ssh-key

@@ -1,0 +1,21 @@
+#!/bin/bash
+# An SSH key from the card's boot partition (docs/image.md, "Signing in over SSH"): ssh.pub, put there from any
+# computer, lets that key sign in as pi from the next boot. The file is renamed ssh.pub.added once it's in, so a
+# key taken off later (Care > SSH) doesn't come back. Whoever holds the card can change anything on it anyway.
+set -eu
+keys=/home/pi/.ssh/authorized_keys
+for fat in /boot/bootfs /boot/firmware; do      # the partition's root: /boot/bootfs once the OS slots are laid out
+  f="$fat/ssh.pub"
+  [ -f "$f" ] || continue
+  install -d -m 700 -o pi -g pi /home/pi/.ssh
+  touch "$keys"
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      ssh-*|ecdsa-*|sk-*) grep -qxF "$line" "$keys" || printf '%s\n' "$line" >> "$keys" ;;
+    esac
+  done < "$f"
+  chown pi:pi "$keys"; chmod 600 "$keys"
+  mv "$f" "$f.added"
+  echo "added the SSH key(s) in $f"
+done

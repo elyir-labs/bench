@@ -76,6 +76,39 @@ export function plateUnder(tris: Float32Array, margin = 0.35, bed?: number[] | n
   return new Float32Array([a[0], a[1], z0, b[0], a[1], z0, b[0], b[1], z0, a[0], a[1], z0, b[0], b[1], z0, a[0], b[1], z0])
 }
 
+/** Where everything lands on a canvas of W x H device pixels: the projection, the scale and the offset. */
+function frameOf(tris: Float32Array, W: number, H: number, view: View, pad: number, opts: DrawOptions) {
+  const plate = opts.plate ? plateUnder(withLines(tris, opts.supports), 0.35, opts.bed) : null
+  const p = project(plate ? concat(tris, plate) : tris, view)
+  const sup = opts.supports?.lines.length ? lineView(opts.supports.lines, view) : null
+  let [x0, y0, x1, y1] = p.box
+  if (sup) { x0 = Math.min(x0, sup.box[0]); y0 = Math.min(y0, sup.box[1]); x1 = Math.max(x1, sup.box[2]); y1 = Math.max(y1, sup.box[3]) }
+  const s = Math.min(((W - 2 * Math.abs(opts.shift ?? 0)) * (1 - 2 * pad)) / (x1 - x0 || 1), (H * (1 - 2 * pad)) / (y1 - y0 || 1)) * (opts.zoom ?? 1)
+  const ox = (W - (x1 - x0) * s) / 2 - x0 * s + (opts.shift ?? 0), oy = (H - (y1 - y0) * s) / 2 - y0 * s
+  return { plate, p, sup, s, ox, oy }
+}
+
+/** The model's triangle under a point of the canvas (device pixels), the nearest one when several are, or -1
+ *  (design/paint-and-height/, A: a tap paints). The same framing as draw() with the same arguments. */
+export function pick(tris: Float32Array, W: number, H: number, x: number, y: number, view: View = {}, pad = 0.1,
+  opts: DrawOptions = {}): number {
+  if (!tris.length) return -1
+  const { p, s, ox, oy } = frameOf(tris, W, H, view, pad, opts)
+  const px = (x - ox) / s, py = (y - oy) / s
+  let best = -1, depth = Infinity
+  for (let t = 0; t < tris.length / 9; t++) {
+    if (!p.keep[t] || p.depth[t] >= depth) continue
+    const q = t * 6
+    const ax = p.pts[q], ay = p.pts[q + 1], bx = p.pts[q + 2], by = p.pts[q + 3], cx = p.pts[q + 4], cy = p.pts[q + 5]
+    const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by)
+    const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy)
+    const d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay)
+    if ((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)) continue
+    best = t; depth = p.depth[t]
+  }
+  return best
+}
+
 /** Draw into a canvas already sized in device pixels. Transparent around the model. */
 export function draw(canvas: HTMLCanvasElement, tris: Float32Array, color: string, view: View = {}, pad = 0.1,
   opts: DrawOptions = {}): void {
@@ -84,13 +117,7 @@ export function draw(canvas: HTMLCanvasElement, tris: Float32Array, color: strin
   const W = canvas.width, H = canvas.height
   ctx.clearRect(0, 0, W, H)
   if (!tris.length) return
-  const plate = opts.plate ? plateUnder(withLines(tris, opts.supports), 0.35, opts.bed) : null
-  const p = project(plate ? concat(tris, plate) : tris, view)
-  const sup = opts.supports?.lines.length ? lineView(opts.supports.lines, view) : null
-  let [x0, y0, x1, y1] = p.box
-  if (sup) { x0 = Math.min(x0, sup.box[0]); y0 = Math.min(y0, sup.box[1]); x1 = Math.max(x1, sup.box[2]); y1 = Math.max(y1, sup.box[3]) }
-  const s = Math.min(((W - 2 * Math.abs(opts.shift ?? 0)) * (1 - 2 * pad)) / (x1 - x0 || 1), (H * (1 - 2 * pad)) / (y1 - y0 || 1)) * (opts.zoom ?? 1)
-  const ox = (W - (x1 - x0) * s) / 2 - x0 * s + (opts.shift ?? 0), oy = (H - (y1 - y0) * s) / 2 - y0 * s
+  const { plate, p, sup, s, ox, oy } = frameOf(tris, W, H, view, pad, opts)
   if (plate) {
     // the plate first, flat and quiet, with a grid every 10 mm, then the model's contact shadow on it
     const first = tris.length / 9

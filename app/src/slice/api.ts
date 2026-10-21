@@ -78,6 +78,7 @@ export interface PartRequest {
   down?: number[]
   brim?: BrimAsk                   // auto (left out): the rule picks; none | ears | all: the person did
   spool?: number                   // which of the plate's colors, when it has several
+  paint?: number[]                 // painted (design/paint-and-height/, A): [color, count, ...] over its triangles
 }
 export interface SliceRequest {
   parts: PartRequest[]
@@ -93,6 +94,7 @@ export interface SliceRequest {
   spools?: { material: string; color: string | null; slot: number | null; hand: boolean }[]   // several colors, slot 1-based
   purge?: Purge
   one_after_other?: boolean
+  heights?: { z: number; spool: number }[]   // changes at a height: from z (mm) up, the plate's color `spool`
 }
 
 const BASE = `${ROOT}/slice`

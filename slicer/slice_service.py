@@ -104,9 +104,11 @@ class Job:
                         **({"spools": [{"material": s.material.upper(), "color": s.color, "slot": s.slot, "hand": s.hand}
                                        for s in r.spools],
                             "purge": r.purge or sl.default_purge(self.printer)} if r.spools else {}),
-                        **({"one_after_other": True} if r.one_after_other else {})},
+                        **({"one_after_other": True} if r.one_after_other else {}),
+                        **({"heights": [{"z": h.z, "spool": h.spool} for h in r.heights]} if r.heights else {})},
             "parts": [{"model": p.name, "copies": p.copies, "scale": p.scale, "lay": p.lay, "brim": p.brim, "spool": p.spool,
                        **({"down": p.down} if p.lay == "side" else {}),
+                       **({"painted": sorted(p.painted())} if p.paint else {}),
                        **({"brim_pick": self.brims[i]} if i < len(self.brims) else {})} for i, p in enumerate(self.parts)],
             "changes": [c.as_dict() for c in self.changes],
         }
@@ -660,6 +662,7 @@ class Service:
                 spools=_spools(fields.get("spools")),
                 purge=str(fields["purge"]) if fields.get("purge") else None,
                 one_after_other=fields.get("one_after_other") is True,
+                heights=_heights(fields.get("heights")),
             )
             problems = req.problems(printer) + [q for p in parts for q in p.problems()] + self._plate_problems(req, parts)
             if problems:
@@ -686,6 +689,8 @@ class Service:
     def _plate_problems(self, req: sl.Request, parts: List[sl.Part]) -> List[str]:
         out = [f"part {i + 1}: spool must be one of the plate's {req.colors} colors"
                for i, p in enumerate(parts) if p.spool >= req.colors]
+        out += [f"part {i + 1}: its paint uses a color the plate hasn't got (it has {req.colors})"
+                for i, p in enumerate(parts) if p.paint and max(p.painted(), default=0) >= req.colors]
         project = next((p for p in parts if p.project), None)
         if project:
             if len(parts) > 1:
@@ -1056,12 +1061,18 @@ class Service:
         n = job.req.colors
         # each model's color (a 3MF that brings its own keeps them)
         ids = [p.spool + 1 for p in job.parts for _ in range(p.copies)] if n > 1 and not job.parts[0].project else None
-        if mixed:
+        painted = {i: part.paint for i, part in enumerate(job.parts) if part.paint}
+        if mixed or job.req.heights or painted:
+            # arranged first, then the 3MF edited (each part's brim, the changes at a height, the paint) and sliced as it is
             code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient, slice_it=False,
                                                          filaments=n, ids=ids))
             if code == 0 and os.path.exists(three_mf) and job.state != "cancelled":
-                own = os.path.join(job.workdir, "brims.3mf")
-                await asyncio.to_thread(sl.set_brims, three_mf, own, orca_brims)
+                own = os.path.join(job.workdir, "own.3mf")
+                try:
+                    await asyncio.to_thread(_own_plates, job, p, three_mf, own, orca_brims if mixed else None, files, painted)
+                except ValueError as e:
+                    job.state, job.error = "failed", str(e)
+                    return
                 code = await self._orca(job, sl.orca_slice_3mf(self.orca, job.workdir, own, out, filaments=n))
         else:
             code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient,
@@ -1198,7 +1209,17 @@ def _part(path: str, g: Dict[str, Any], lying: Optional[Dict[str, Any]] = None) 
     down = g.get("down")
     return sl.Part(model=path, copies=int(g.get("copies", 1)), scale=float(g.get("scale") or 1),
                    lay=str(g.get("lay") or "file"), lying=lying, down=down if isinstance(down, list) else None,
-                   brim=str(g.get("brim") or "auto"), spool=int(g.get("spool") or 0))
+                   brim=str(g.get("brim") or "auto"), spool=int(g.get("spool") or 0),
+                   paint=g.get("paint") if g.get("paint") not in (None, []) else None)
+
+
+def _heights(given: Any) -> List[sl.Height]:
+    """Changes at a height from a request: [{z (mm, where the color starts), spool (0-based, the plate's colors)}]."""
+    if given in (None, []):
+        return []
+    if not isinstance(given, list) or not all(isinstance(h, dict) for h in given):
+        raise ValueError("heights must be a list of {z, spool}")
+    return [sl.Height(z=round(float(h.get("z")), 3), spool=int(h.get("spool"))) for h in given]
 
 
 PIECES = "pieces"
@@ -1229,6 +1250,32 @@ def _spools(given: Any) -> List[sl.Spool]:
     return out
 
 
+def _own_plates(job: "Job", p: sl.Plan, src: str, dst: str, brims: Optional[List[str]], files: List[str],
+                painted: Dict[int, List[int]]) -> None:
+    heights = None
+    if job.req.heights:
+        first = float(_one(p.process.get("initial_layer_print_height"), 0.2))
+        height = float(_one(p.process.get("layer_height"), 0.2))
+        heights = sl.heights_xml(job.req.heights, job.req.spools, sl.plates_in(src), first, height)
+    paint = {}
+    for i, runs in painted.items():
+        tris, states = sl._triangles(files[i]), sl.unrun(runs)
+        if len(states) != len(tris):
+            raise ValueError(f"{job.parts[i].name} has {len(tris)} triangles, but its paint is for {len(states)}: paint it again")
+        paint[i] = (tris, states)
+    done = sl.edit_plates(src, dst, brims=brims, heights=heights, paint=paint)
+    for i in painted:
+        if not done.get(i):
+            job.warnings.append(f"{job.parts[i].name}'s paint couldn't be matched to the model as sliced, so it prints in one color.")
+
+
+def _one(v: Any, default: float) -> Any:
+    """A preset value, which Orca sometimes keeps as a list of one."""
+    if isinstance(v, list):
+        v = v[0] if v else None
+    return v if v not in (None, "") else default
+
+
 def _colors(job: "Job", assigned: Dict[str, Any]) -> Dict[str, Any]:
     """What the Colors card shows (design/multi-color/, B): which parts use each spool, every change, the swaps by
     hand and when, and the time the changes add (the unit's, and a swap's taken as the same)."""
@@ -1238,6 +1285,8 @@ def _colors(job: "Job", assigned: Dict[str, Any]) -> Dict[str, Any]:
         spools.append({"spool": k, "parts": [i for i, p in enumerate(job.parts) if p.spool == k and not p.project],
                        "first": assigned["first"] == k,
                        "swaps": [c["at"] for c in changes if c["to"] == k and c["hand"]],
+                       "painted": [i for i, p in enumerate(job.parts) if k in p.painted()],
+                       "heights": [h.z for h in job.req.heights if h.spool == k],
                        "changes": sum(1 for c in changes if c["to"] == k)})
     return {"spools": spools, "changes": changes, "hand_swaps": sum(1 for c in changes if c["hand"]),
             "unit_changes": sum(1 for c in changes if not c["hand"]),

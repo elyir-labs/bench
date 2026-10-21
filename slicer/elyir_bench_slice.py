@@ -637,6 +637,17 @@ def spool_problems(printer: Printer, spools: List["Spool"], purge: Optional[str]
     return out
 
 
+MAX_HEIGHTS = 16
+
+
+@dataclass
+class Height:
+    """A change at a height (design/paint-and-height/, C with A): from z up (mm, where the new color starts), the
+    plate prints in its color `spool`."""
+    z: float
+    spool: int
+
+
 @dataclass
 class Request:
     purpose: str = "everyday"
@@ -652,6 +663,7 @@ class Request:
     spools: List[Spool] = field(default_factory=list)        # several colors: one per color, in Orca's filament order
     purge: Optional[str] = None          # PURGES; None = the printer's usual (default_purge)
     one_after_other: bool = False        # each part finished before the next starts: one change per part
+    heights: List[Height] = field(default_factory=list)      # changes at a height, lowest first
 
     def __post_init__(self) -> None:
         if self.spools:                  # the first color is the plate's material, color and slot as before
@@ -661,6 +673,24 @@ class Request:
     @property
     def colors(self) -> int:
         return max(1, len(self.spools))
+
+    def height_problems(self) -> List[str]:
+        out = []
+        if len(self.spools) < 2:
+            out.append("a change at a height needs the plate's colors: send spools")
+        if len(self.heights) > MAX_HEIGHTS:
+            out.append(f"at most {MAX_HEIGHTS} changes at a height")
+        if self.one_after_other:
+            out.append("a change at a height is for the whole plate, so not with parts one after the other")
+        zs = [h.z for h in self.heights]
+        if zs != sorted(set(zs)):
+            out.append("heights must go up, each once")
+        for h in self.heights:
+            if not 0 < h.z <= 2000:
+                out.append("a height must be above 0 mm")
+            if not 0 <= h.spool < max(len(self.spools), 1):
+                out.append(f"a height's spool must be one of the plate's {len(self.spools)} colors")
+        return out
 
     def problems(self, printer: Printer) -> List[str]:
         out = []
@@ -678,6 +708,8 @@ class Request:
             out.append(f"test must be one of {', '.join(TESTS)}")
         if self.spools or self.purge is not None:
             out += spool_problems(printer, self.spools, self.purge)
+        if self.heights:
+            out += self.height_problems()
         for given in (self.kept, self.settings):
             if not isinstance(given, dict):
                 out.append("settings must be an object of setting and value")
@@ -708,6 +740,8 @@ class Part:
     down: Optional[List[float]] = None   # lay "side": the outward normal of the side the person put down
     brim: str = "auto"                   # auto: picked from its shape (brim_pick) | none | ears | all (design/brim/, A)
     spool: int = 0                       # which of the plate's colors it prints in (Request.spools)
+    paint: Optional[List[int]] = None    # painted (design/paint-and-height/, A): [color, count, ...] runs over its
+                                         # triangles in the file's order; color 0 = its own, k = the plate's color k-1
 
     @property
     def project(self) -> bool:
@@ -741,7 +775,20 @@ class Part:
             out.append("a 3MF with its own colors prints once")
         if self.spool < 0:
             out.append("spool must be 0 or more")
+        if self.paint is not None:
+            runs = self.paint
+            if (not isinstance(runs, list) or len(runs) % 2 or not all(isinstance(x, int) and not isinstance(x, bool) for x in runs)
+                    or any(not 0 <= c <= MAX_SPOOLS for c in runs[0::2]) or any(n < 1 for n in runs[1::2])):
+                out.append("paint must be [color, count, ...]: colors 0 to 16, counts 1 or more")
+            elif Path(self.model).suffix.lower() != ".stl":
+                out.append("only STL models can be painted")
+            elif self.project:
+                out.append("a 3MF with its own colors is painted already")
         return out
+
+    def painted(self) -> set:
+        """The plate's colors (0-based) its paint uses."""
+        return {c - 1 for c in (self.paint or [])[0::2] if c}
 
 
 @dataclass
@@ -1063,12 +1110,91 @@ def orca_brim(kind: str) -> str:
 def set_brims(src: str, dst: str, brims: List[str]) -> None:
     """The arranged 3MF again, each object with its part's brim_type (brims: Orca's value, by part index, read
     from the object's name, p{i}c{k}__...)."""
+    edit_plates(src, dst, brims=brims)
+
+
+def layer_top(z: float, first: float, height: float) -> float:
+    """The top of the first layer that starts at or above z. Orca changes color before the layer whose top is
+    top_z, so a change "from 3.2 mm" on 0.2 mm layers goes at 3.4."""
+    n = max(0, math.ceil((z - first) / height - 1e-6))
+    return round(first + (n + 1) * height, 4)
+
+
+def heights_xml(heights: List[Height], spools: List[Spool], plates: int, first: float, height: float) -> bytes:
+    """Metadata/custom_gcode_per_layer.xml: each change at a height as a tool change, on every plate."""
+    root = ET.Element("custom_gcodes_per_layer")
+    for k in range(1, plates + 1):
+        plate = ET.SubElement(root, "plate")
+        ET.SubElement(plate, "plate_info", id=str(k))
+        for h in heights:
+            ET.SubElement(plate, "layer", top_z=f"{layer_top(h.z, first, height):g}", type="2", extruder=str(h.spool + 1),
+                          color=spools[h.spool].color or "", extra="", gcode="tool_change")
+        ET.SubElement(plate, "mode", value="MultiAsSingle")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def unrun(runs: List[int]) -> List[int]:
+    out: List[int] = []
+    for c, n in zip(runs[0::2], runs[1::2]):
+        out += [c] * n
+    return out
+
+
+def paint_code(state: int) -> str:
+    """Orca's paint_color for a whole triangle in filament `state` (paint_state, the other way)."""
+    return f"{state << 2:X}" if state < 3 else f"{state - 3:X}C"
+
+
+_VERTEX = re.compile(rb'<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"')
+_TRIANGLE = re.compile(rb'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"([^>]*?)/>')
+
+
+def paint_object(xml: bytes, tris: List[Tuple[Tuple[float, ...], ...]], states: List[int]) -> Tuple[bytes, int]:
+    """An object's mesh in the arranged 3MF with each painted triangle's paint_color. Orca moves the mesh (its
+    middle to 0) and may drop broken triangles, so the file's triangles are found by shape: in the same order when
+    they all match, else by where their middles are. Returns the mesh and how many triangles were painted."""
+    verts = [tuple(float(v) for v in m.groups()) for m in _VERTEX.finditer(xml)]
+    faces = [tuple(int(v) for v in m.groups()[:3]) for m in _TRIANGLE.finditer(xml)]
+    if not verts or not tris:
+        return xml, 0
+    lo3 = [min(v[i] for v in verts) for i in range(3)]
+    los = [min(v[i] for t in tris for v in t) for i in range(3)]
+    mine = lambda f: sorted(tuple(round(verts[j][i] - lo3[i], 3) for i in range(3)) for j in f)
+    theirs = lambda t: sorted(tuple(round(v[i] - los[i], 3) for i in range(3)) for v in t)
+    same = lambda a, b: all(abs(x - y) <= 2e-3 for p, q in zip(a, b) for x, y in zip(p, q))
+    if len(faces) == len(tris) and all(same(mine(f), theirs(t)) for f, t in zip(faces, tris)):
+        wanted = states
+    else:
+        middle = lambda pts: tuple(round(sum(p[i] for p in pts) / 3, 2) for i in range(3))
+        by_middle = {middle(theirs(t)): c for t, c in zip(tris, states) if c}
+        wanted = [by_middle.get(middle(mine(f)), 0) for f in faces]
+    painted = 0
+    it = iter(wanted)
+
+    def one(m: "re.Match") -> bytes:
+        nonlocal painted
+        c = next(it, 0)
+        rest = re.sub(rb'\s*paint_color="[^"]*"', b"", m.group(4))
+        if not c:
+            return m.group(0)
+        painted += 1
+        return b'<triangle v1="%s" v2="%s" v3="%s"%s paint_color="%s"/>' % (m.group(1), m.group(2), m.group(3), rest,
+                                                                            paint_code(c).encode())
+    return _TRIANGLE.sub(one, xml), painted
+
+
+def edit_plates(src: str, dst: str, brims: Optional[List[str]] = None, heights: Optional[bytes] = None,
+                paint: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None) -> Dict[int, int]:
+    """The arranged 3MF again, to slice as it is: each object with its part's brim_type (brims: Orca's value, by
+    part index, read from the object's name, p{i}c{k}__...), the changes at a height (heights_xml), and each part's
+    paint (paint: part index -> its triangles as prepared, and each one's color). Returns triangles painted by part."""
+    painted: Dict[int, int] = {}
     with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
         for item in zi.infolist():
-            if item.filename.endswith((".gcode", ".md5")):
+            if item.filename.endswith((".gcode", ".md5")) or heights and item.filename == "Metadata/custom_gcode_per_layer.xml":
                 continue
             data = zi.read(item.filename)
-            if item.filename == "Metadata/model_settings.config":
+            if brims and item.filename == "Metadata/model_settings.config":
                 root = ET.fromstring(data)
                 for obj in root.iter("object"):
                     name = next((m.get("value") for m in obj.findall("metadata") if m.get("key") == "name"), "")
@@ -1078,7 +1204,22 @@ def set_brims(src: str, dst: str, brims: List[str]) -> None:
                             obj.remove(old)
                         ET.SubElement(obj, "metadata", key="brim_type", value=brims[int(found.group(1))])
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            found = _PART_FILE.search(item.filename) if paint and item.filename.startswith("3D/Objects/") else None
+            if found and int(found.group(1)) in paint:
+                i = int(found.group(1))
+                data, n = paint_object(data, *paint[i])
+                painted[i] = painted.get(i, 0) + n
             zo.writestr(item, data)
+        if heights:
+            zo.writestr("Metadata/custom_gcode_per_layer.xml", heights)
+    return painted
+
+
+def plates_in(three_mf: str) -> int:
+    with zipfile.ZipFile(three_mf) as z:
+        if "Metadata/model_settings.config" not in z.namelist():
+            return 1
+        return max(1, len(ET.fromstring(z.read("Metadata/model_settings.config")).findall("plate")))
 
 
 def orca_slice_3mf(orca: List[str], workdir: str, three_mf: str, outdir: str, filaments: int = 1) -> List[str]:

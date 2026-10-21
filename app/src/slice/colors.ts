@@ -12,7 +12,7 @@ export interface FileColor { color: string | null; material: string | null; used
 /** What the slicer says the colors did (slice_service.py, _colors). at: seconds into the print. */
 export interface ColorChange { layer: number; at: number; to: number; hand: boolean; purge: number }
 export interface ColorsResult {
-  spools: { spool: number; parts: number[]; first: boolean; swaps: number[]; changes: number }[]
+  spools: { spool: number; parts: number[]; first: boolean; swaps: number[]; changes: number; painted?: number[]; heights?: number[] }[]
   changes: ColorChange[]
   hand_swaps: number
   unit_changes: number

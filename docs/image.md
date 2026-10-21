@@ -50,6 +50,20 @@ first boot: with no network they say "waits for the network". Renaming during se
 the setup service runs a full `apply` in the background (`~/elyir-bench/state/apply-after-setup.log`), which
 downloads them. The first card sat 55 minutes in pip offline and never reached the Wi-Fi setup, which is why.
 
+## Signing in over SSH
+
+A card's user `pi` has no password, and a card for anyone else has no key, so nobody signs in until the owner adds
+theirs. Two ways:
+
+- **Care > SSH > Add a key**, on a Bench Box (`bench/box.py`): paste a public key, from the box's own screen or a
+  phone or computer at home (never from away). Each key is listed there and can be taken off again.
+- **`ssh.pub` on the boot partition** (`bootfs` on a Mac), for when the app can't be reached: put the public key in a
+  file of that name at the partition's root. `elyir-bench-ssh-key.service` adds it at the next boot and renames the
+  file `ssh.pub.added`, so a key taken off in Care doesn't come back.
+
+Keys are carried into the other slot by an OS update (`CARRY` in `installer/elyir_bench_os.py`). A printer's own Care
+doesn't have the SSH row yet.
+
 ## Tried on a Pi 4 (5 October 2026)
 
 First card, a Pi 4 with the 7-inch DSI touchscreen and an iPhone: scanned the setup code, joined, picked the home

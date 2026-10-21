@@ -108,6 +108,9 @@
         <!-- The plate where Orca put things; drag to look round it -->
         <ModelPicture v-if="!stage" :tris="plate" :color="colour" :runs="runs" :alt="label" plate :bed="printer?.bed" turnable class="pic">
           <span v-if="picNote" class="picnote">{{ picNote }}</span>
+          <button v-if="only && paintable(only)" type="button" class="pictool" @click="openPaint(0)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 3.5l-9 9M9 13.5c-2 0-3.5 1.5-3.5 3.5 0 1.2-.8 2.3-2 2.5 1 .7 2.3 1 3.5 1 2.8 0 5-2.2 5-5z" /></svg>Paint
+          </button>
         </ModelPicture>
         <h1 class="a-display head">{{ headline }}</h1>
 
@@ -126,7 +129,7 @@
         <div class="plist">
           <div v-for="(p, i) in session.parts" :key="p.key" class="pl">
             <button class="pl-open" :aria-label="`${partName(p)}: size, which way down`" @click="openPart(i)">
-              <ModelPicture :tris="p.tris" :color="partColor(p)" :runs="p.project ? ownRuns(p) : null" alt="" class="thumb" />
+              <ModelPicture :tris="p.tris" :color="partColor(p)" :runs="p.project || p.paint || session.heights.length ? ownRuns(p) : null" alt="" class="thumb" />
               <span class="t"><b>{{ partName(p) }}</b>
                 <span v-if="p.project" class="pcol"><span class="dots"><i v-for="(c, k) in fileDots(p)" :key="k" :style="{ '--c': c }"></i></span>{{ fileDots(p).length }} colors from the file</span>
                 <span v-else :class="{ you: subOf(p, i).amber, pcol: multi }"><i v-if="multi" class="dot sm" :style="{ '--c': partColor(p) }"></i>{{ multi ? `${plateSpools[p.spool]?.color ? colorWord(plateSpools[p.spool]?.color) : plateSpools[p.spool]?.material ?? ''} · ` : '' }}{{ subOf(p, i).text }}</span></span>
@@ -145,6 +148,23 @@
         </p>
         <p v-if="addError" class="bad small">{{ addError }}</p>
 
+        <!-- Bench spots it (design/paint-and-height/, C): a flat top with something on it, one tap to color what's above -->
+        <div v-if="spotted && offerSpools.length" class="offer">
+          <b class="h">{{ spotted.raised ? 'Raised parts on top' : 'A base, then the rest' }}</b>
+          <p>{{ spotted.raised ? `They start at ${mm(spotted.z)}, on top of a flat area.` : `The base is ${mm(spotted.z)} tall.` }}
+            Print {{ spotted.raised ? 'them' : "what's above it" }} in another color? One change{{ unitHere ? ', about 2 minutes' : ', swapped by hand' }}.</p>
+          <div class="choices">
+            <button v-for="s in offerSpools" :key="`${s.slot}${s.color}`" type="button" class="choice" @click="takeOffer(s)">
+              <i class="dot" :style="{ '--c': s.color || 'transparent' }"></i>{{ colorWord(s.color) }}</button>
+            <button type="button" class="choice plain" @click="openHeight(-1, spotted.z)">Another</button>
+          </div>
+          <div class="offer-foot">
+            <button type="button" class="every" @click="openHeight(-1, spotted.z)">Somewhere else…</button>
+            <button type="button" class="every quiet" @click="dismissOffer()">Not this time</button>
+          </div>
+        </div>
+        <button v-else-if="canHeight && !multi" type="button" class="every" @click="openHeight(-1)">Change color at a height</button>
+
         <!-- Colors (design/multi-color/, B): one row per color, where it comes from, then the cost and the purge -->
         <template v-if="multi">
           <h3 class="grp">Colors<span class="grp-n">{{ plateSpools.length }} spools</span></h3>
@@ -156,6 +176,8 @@
               <span class="g a-num">{{ gramsFor(k) }}</span>
               <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
             </button>
+            <!-- a new change at a height (design/paint-and-height/, A); one already made is moved from its color's sheet -->
+            <button v-if="canHeight" type="button" class="addrow" @click="openHeight(-1)"><i aria-hidden="true">+</i>Change color at a height</button>
             <div class="cost">
               <div v-if="many" class="toomany">
                 <p><b>{{ many.count }} swaps by hand,</b> {{ tooManyWords(many) }}. That's too many to stand by.</p>
@@ -207,7 +229,11 @@
 
         <!-- The time and Print stay in view while the page scrolls under them -->
         <div class="dock">
-          <div v-if="session.undo" class="toast" role="status">
+          <div v-if="heightToast" class="toast" role="status">
+            <span>{{ heightToast }}</span>
+            <button type="button" @click="undoHeight">Undo</button>
+          </div>
+          <div v-else-if="session.undo" class="toast" role="status">
             <span>Took {{ partName(session.undo.part) }} off</span>
             <button type="button" @click="undoRemove">Undo</button>
           </div>
@@ -263,6 +289,12 @@
               <small>{{ multi ? lineOf(plateSpools[editing.spool], editing.spool).text : spoolNote }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
           </button>
+          <button v-if="paintable(editing)" class="row" @click="openPaint(editAt)">
+            <span class="k">Paint</span>
+            <span class="v">{{ editing.paint ? `${paintUses(editing.paint).size} ${paintUses(editing.paint).size === 1 ? 'color' : 'colors'} painted on` : 'Not painted' }}
+              <small>{{ editing.paint ? 'Tap areas in another color, or Undo there' : 'Tap areas of it in another color' }}</small></span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
           <button class="row" @click="open = 'size'">
             <span class="k">Size</span>
             <span class="v a-num">{{ pct(editing.scale) }}<small>{{ sizeAt(editing, editing.scale) }}</small></span>
@@ -288,6 +320,13 @@
         <button v-if="session.parts.length > 1" class="takeoff" @click="takeOff">Take it off the plate</button>
       </template>
     </SliceSheet>
+
+    <HeightSheet :open="heightOpen" :tris="session.parts[0]?.tris ?? null" :scale="session.parts[0]?.scale ?? 1" :own="session.parts[0]?.spool ?? 0"
+                 :heights="session.heights" :choices="trayChoices" :layer="layer" :start="heightStart" :at="heightAt"
+                 :start-spool="heightAt >= 0 ? session.heights[heightAt]?.spool : undefined"
+                 @close="heightOpen = false" @add="addHeight" @remove="dropHeight" />
+    <PaintScreen :open="paintAt >= 0" :name="painting ? partName(painting) : ''" :tris="painting?.tris ?? null" :paint="painting?.paint ?? null"
+                 :own="painting?.spool ?? 0" :choices="trayChoices" @close="paintAt = -1" @done="paintDone" />
 
     <!-- What it's for: all four sliced, so the real times -->
     <SliceSheet :open="open === 'purpose'" title="What's it for?" sub="All four are sliced, so these are the real times." @close="open = null">
@@ -369,6 +408,13 @@
           <span class="t"><b>{{ s.name || s.material }}</b><span>{{ s.direct ? 'Loaded' : `Slot ${s.slot + 1}` }}<template v-if="otherMaterial(s)"> · another material, may not stick</template><template v-else-if="s.grams"> · {{ s.grams }} g left</template></span></span>
         </button>
       </div>
+      <template v-for="(h, i) in session.heights" :key="'h' + i">
+        <div v-if="colorAt && h.spool === colorAt.k" class="hacts">
+          <span>From {{ mm(h.z) }} up, a change at a height</span>
+          <button type="button" class="every" @click="open = null; openHeight(i, h.z)">Move it</button>
+          <button type="button" class="every" @click="open = null; dropHeight(i)">Remove it</button>
+        </div>
+      </template>
       <template v-if="colorAt && colorAt.k > 0 && !unitHere">
         <p class="sub2">Which color will you swap in?</p>
         <div class="chips swatches">
@@ -453,12 +499,16 @@ import FootprintPicture from '@/components/slice/FootprintPicture.vue'
 import Stepper from '@/components/slice/Stepper.vue'
 import BedClearSheet from '@/components/slice/BedClearSheet.vue'
 import PrintCheckSheet from '@/components/print/PrintCheckSheet.vue'
+import HeightSheet from '@/components/slice/HeightSheet.vue'
+import PaintScreen from '@/components/slice/PaintScreen.vue'
+import { mm, paintUses } from '@/slice/paint'
 import { needsSheet } from '@/intent/colour'
 import {
   session, current, only, plate, tooBig, addFiles, askFill, downOf, followSpools, onlyWhatFits, removePart, reset, send,
   setCopies, setPurpose, setScale, setSide, setSpool, setSupports, askKinds, kindJob, loadLines, makeUsual, plateOf, type Part,
   setSetting, setScope, resetPurpose, wanted, isKept, undoRemove, openPicker, pick, closePicker, setBrim, retry,
   multi, plateSpools, runs, partRuns, unsortedColors, setPartSpool, setPlateSpool, setPurge, setOneAfterOther, oneColor,
+  paintable, canHeight, spotted, setHeight, removeHeight, restoreHeights, setPaint, dismissOffer,
 } from '@/slice/session'
 import { colorWord, costLine, footColors, PURGE_WORDS, spoolLine, tooMany, tooManyWords, type PlateSpool, type Purge } from '@/slice/colors'
 import { offTitle, readyNote, waitWords } from '@/slice/elsewhere'
@@ -653,8 +703,55 @@ function colorName(s: PlateSpool | undefined, k: number) {
 function usesOf(k: number) {
   if (hasProject.value) return ''
   const names = session.parts.filter(p => p.spool === k).map(partName)
-  return names.length > 2 ? `${names.length} parts` : names.join(', ')
+  const hs = session.heights
+  const bits: string[] = []
+  if (names.length) bits.push(hs.length && session.parts.length === 1 ? `up to ${mm(hs[0].z)}` : names.length > 2 ? `${names.length} parts` : names.join(', '))
+  for (const h of hs) if (h.spool === k) bits.push(`from ${mm(h.z)} up`)
+  const painted = session.parts.filter(p => paintUses(p.paint).has(k)).map(partName)
+  if (painted.length) bits.push(`painted on ${painted.length > 2 ? `${painted.length} parts` : painted.join(', ')}`)
+  return bits.join(', ')
 }
+
+// ── painting and a change at a height (design/paint-and-height/, height C with A, painting A) ──
+/** What a height or a paint can use: the plate's colors, then the spools loaded in the unit that aren't one yet. */
+const trayChoices = computed<PlateSpool[]>(() => [...plateSpools.value, ...offPlate.value.map(loaded)])
+const layer = computed(() => {
+  const v = current.value?.values ?? {}
+  const first = parseFloat(v.initial_layer_print_height ?? ''), height = parseFloat(v.layer_height ?? '')
+  return { first: first > 0 ? first : 0.2, height: height > 0 ? height : 0.2 }
+})
+// the spotted flat top's one-tap answers: loaded spools other than the part's own, two at most
+const offerSpools = computed(() => {
+  const own = plateSpools.value[session.parts[0]?.spool ?? 0]
+  return usable.value.map(loaded).filter(s => !own || s.color !== own.color || s.material !== own.material).slice(0, 2)
+})
+const heightOpen = ref(false)
+const heightAt = ref(-1)
+const heightStart = ref<number | null>(null)
+const heightToast = ref('')
+let heightBefore: { heights: typeof session.heights; more: PlateSpool[] } | null = null
+let toastTimer = 0
+function openHeight(at: number, z?: number) { heightAt.value = at; heightStart.value = z ?? null; heightOpen.value = true }
+function remember() { heightBefore = { heights: [...session.heights], more: [...session.more] } }
+function addHeight(z: number, s: PlateSpool, at: number) { remember(); setHeight(z, s, at); heightOpen.value = false }
+function dropHeight(at: number) { remember(); removeHeight(at); heightOpen.value = false }
+function takeOffer(s: PlateSpool) {
+  if (!spotted.value) return
+  const raised = spotted.value.raised
+  remember()
+  setHeight(spotted.value.z, s)
+  heightToast.value = `${raised ? 'The raised parts' : "What's above the base"} print${raised ? '' : 's'} in ${colorWord(s.color).toLowerCase()}.`
+  clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => { heightToast.value = '' }, 6000)
+}
+function undoHeight() {
+  if (heightBefore) { restoreHeights(heightBefore.heights, heightBefore.more); heightBefore = null }
+  heightToast.value = ''
+}
+const paintAt = ref(-1)
+const painting = computed(() => session.parts[paintAt.value] ?? null)
+function openPaint(i: number) { open.value = null; paintAt.value = i }
+function paintDone(states: Uint8Array, palette: PlateSpool[]) { setPaint(paintAt.value, states, palette); paintAt.value = -1 }
 function lineOf(s: PlateSpool | undefined, k: number) {
   return s ? spoolLine(s, k, colorsNow.value, unitHere.value, usesOf(k)) : { text: '', amber: false }
 }
@@ -1073,6 +1170,27 @@ const ICONS: Record<string, string> = {
 .cr .t span { font-size: 13px; color: var(--a-ink-3); line-height: 1.3; }
 .cr .t span.you { color: var(--a-amber-text); font-weight: 600; }
 .cr .g { font-size: 13px; color: var(--a-ink-3); flex: none; }
+.hacts { display: flex; align-items: baseline; gap: 14px; margin-top: 14px; font-size: 14px; color: var(--a-ink-3); }
+.hacts span { flex: 1; }
+.hacts .every { padding: 0; font-size: 14px; }
+.addrow { appearance: none; border: 0; border-top: 1px solid var(--a-line); background: none; font: inherit; cursor: pointer; width: 100%; display: flex; align-items: center; gap: 11px; padding: 12px 12px; color: var(--a-accent-text); font-size: 15px; font-weight: 600; text-align: left; }
+.addrow i { width: 34px; height: 34px; border-radius: 50%; border: 2px dashed currentColor; display: grid; place-items: center; font-style: normal; font-size: 18px; flex: none; box-sizing: border-box; }
+.addrow:focus-visible { outline: 2px solid var(--a-accent); outline-offset: -2px; }
+/* Bench spots it (design/paint-and-height/, C) */
+.offer { margin-top: 12px; background: var(--a-surface); border-radius: 18px; box-shadow: var(--a-card-shadow); border-left: 5px solid var(--a-accent); padding: 13px 14px 12px; display: grid; gap: 9px; }
+.offer .h { font-size: 16.5px; }
+.offer p { margin: 0; font-size: 13.5px; color: var(--a-ink-2); line-height: 1.35; }
+.offer .choices { display: flex; flex-wrap: wrap; gap: 7px; }
+.offer .choice { appearance: none; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 13px 0 7px; border-radius: 99px; border: 1px solid var(--a-line); background: var(--a-surface); font-weight: 600; font-size: 15px; color: var(--a-ink); }
+.offer .choice .dot { width: 22px; height: 22px; }
+.offer .choice.plain { padding: 0 13px; }
+.offer .choice:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
+.offer-foot { display: flex; justify-content: space-between; }
+.offer-foot .every { padding: 2px 0 0; font-size: 14px; }
+.every.quiet { color: var(--a-ink-3); }
+.pictool { position: absolute; top: 10px; right: 10px; appearance: none; border: 0; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 13px 0 10px; border-radius: 99px; background: var(--a-surface); box-shadow: var(--a-card-shadow); font-size: 14px; font-weight: 600; color: var(--a-ink); }
+.pictool svg { width: 18px; height: 18px; }
+.pictool:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
 .cr .tag, .opt .t b .tag { white-space: nowrap; display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-accent-text); margin-left: 8px; vertical-align: 2px; }
 .dot.big.hand { border: 3px dashed var(--a-ink-2); }
 .dot.big.miss { border: 3px dashed var(--a-amber); }

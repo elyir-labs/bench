@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ObjectImage from '@/components/now/ObjectImage.vue'
-import { draw, drawLayers, type LayersPicture, type Run } from '@/slice/render'
+import { draw, drawLayers, pick, type LayersPicture, type Run } from '@/slice/render'
 import type { SupportLines } from '@/slice/supports'
 
 // plate: the build plate under it, so which side is down is plain to see (design/orientation/)
@@ -24,10 +24,11 @@ import type { SupportLines } from '@/slice/supports'
 // zoomable also pinches on a touch screen; spin: turns slowly by itself, for showing someone (design/look/)
 // layers: the slice instead of the model, cut at a layer (design/look/, A with C's layers)
 // runs: a color per run of triangles, for a plate of several colors (design/multi-color/)
+// paintable: a tap (not a drag) says which triangle it landed on (design/paint-and-height/, A)
 const props = defineProps<{ tris: Float32Array | null; color: string; alt: string; plate?: boolean; bed?: number[] | null;
   turnable?: boolean; zoomable?: boolean; shift?: number; supports?: SupportLines | null; spin?: boolean; layers?: LayersPicture | null;
-  runs?: Run[] | null }>()
-const emit = defineEmits<{ moved: [changed: boolean] }>()
+  runs?: Run[] | null; paintable?: boolean }>()
+const emit = defineEmits<{ moved: [changed: boolean]; pick: [triangle: number, x: number, y: number] }>()
 const box = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 
@@ -38,6 +39,7 @@ let zoom = 1
 let shiftNow = props.shift ?? 0       // eased towards props.shift when the card opens or closes
 let glide = 0
 let drag: { x: number; y: number; az: number; el: number; id: number } | null = null
+let tap: { x: number; y: number; id: number } | null = null
 const touches = new Map<number, { x: number; y: number }>()
 let pinch = 0
 let frame = 0
@@ -61,10 +63,14 @@ function paint(fast = false) {
 const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y) }
 function down(e: PointerEvent) {
   if (!props.turnable || !(props.tris?.length || props.layers)) return
+  if ((e.target as Element | null)?.closest?.('button, a, input')) return   // a button on the picture keeps its tap
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
   box.value?.setPointerCapture(e.pointerId)
-  if (props.zoomable && touches.size === 2) { drag = null; pinch = spread(); return }
-  if (touches.size === 1) drag = { x: e.clientX, y: e.clientY, az: view.az, el: view.el, id: e.pointerId }
+  if (props.zoomable && touches.size === 2) { drag = null; tap = null; pinch = spread(); return }
+  if (touches.size === 1) {
+    drag = { x: e.clientX, y: e.clientY, az: view.az, el: view.el, id: e.pointerId }
+    tap = props.paintable ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null
+  }
 }
 function move(e: PointerEvent) {
   if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -75,12 +81,16 @@ function move(e: PointerEvent) {
     return
   }
   if (!drag || e.pointerId !== drag.id) return
+  if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 8) return    // still a tap
+  tap = null
   const w = box.value?.clientWidth || 300
   view.az = drag.az - ((e.clientX - drag.x) / w) * Math.PI
   view.el = Math.min(1.25, Math.max(0.2, drag.el + ((e.clientY - drag.y) / w) * Math.PI * 0.6))
   if (!frame) frame = requestAnimationFrame(() => { frame = 0; paint(true) })
 }
 function up(e?: PointerEvent) {
+  if (e && tap && tap.id === e.pointerId && e.type === 'pointerup') tapped(e)
+  tap = null
   if (e) touches.delete(e.pointerId)
   if (pinch && touches.size < 2) { pinch = 0; paint(); return }
   if (!drag) return
@@ -88,6 +98,14 @@ function up(e?: PointerEvent) {
   cancelAnimationFrame(frame); frame = 0
   paint()
   emit('moved', changed())
+}
+function tapped(e: PointerEvent) {
+  const c = canvas.value, b = box.value
+  if (!c || !b || !props.tris) return
+  const r = b.getBoundingClientRect(), k = c.width / Math.max(1, b.clientWidth)
+  const opts = { zoom, shift: shiftNow * k, ...(props.plate ? { plate: true, bed: props.bed } : {}) }
+  emit('pick', pick(props.tris, c.width, c.height, (e.clientX - r.left) * k, (e.clientY - r.top) * k, view, 0.1, opts),
+    e.clientX - r.left, e.clientY - r.top)
 }
 const changed = () => zoom !== 1 || view.az !== AZ || view.el !== EL
 function wheel(e: WheelEvent) {

@@ -1,0 +1,14 @@
+# Elyir Bench image (docs/image.md): an ssh.pub put on the boot partition lets that key sign in as pi.
+[Unit]
+Description=Elyir Bench: an SSH key from the boot partition
+After=local-fs.target
+Before=ssh.service
+ConditionPathExists=|/boot/firmware/ssh.pub
+ConditionPathExists=|/boot/bootfs/ssh.pub
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/elyir-bench-ssh-key
+
+[Install]
+WantedBy=multi-user.target
