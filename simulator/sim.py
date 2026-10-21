@@ -93,8 +93,9 @@ SIM_TUBE_MM = 900   # pulled back this far, the slot's sensor no longer sees the
 
 
 class SimPrinter:
-    def __init__(self, name: str, speed: float, ace: bool = True):
+    def __init__(self, name: str, speed: float, ace: bool = True, light: str = "pin"):
         self.name = name
+        self.light = light   # the chamber light (--light): pin (an on/off light), strip (status LEDs), both, none
         self.speed = speed
         self.port = 7126   # main() sets the one it serves on: the Advanced door's stand-in page is there
         self.ace = ace   # False: a printer without a filament unit, one spool (--no-ace)
@@ -149,6 +150,11 @@ class SimPrinter:
             status["save_variables"] = {"variables": deepcopy(self.saved_vars)}
         if self.units is not None:
             status.pop("ace", None)
+        if self.light in ("pin", "both"):
+            status["output_pin caselight"] = {"value": 0.0}
+        if self.light in ("strip", "both"):
+            status["neopixel caselight"] = {"color_data": [[0.0, 0.0, 0.3, 0.0]] * 16}
+            status["led_effect rainbow"] = {"enabled": True}
         return status
 
     def save_vars(self, values: Dict[str, Any]) -> None:
@@ -212,6 +218,19 @@ class SimPrinter:
                 best, best_d = k, d
         return best
 
+    def light_gcode(self, script: str) -> None:
+        """The chamber light's commands, as Klipper and the LED effects plugin report them."""
+        params = {k.upper(): v for k, v in (w.split("=", 1) for w in script.split()[1:] if "=" in w)}
+        if script.startswith("SET_PIN ") and f"output_pin {params.get('PIN')}" in self.status:
+            self.patch({f"output_pin {params['PIN']}": {"value": float(params.get("VALUE", 0))}})
+        elif script.startswith("SET_LED ") and f"neopixel {params.get('LED')}" in self.status:
+            color = [float(params.get(k, 0)) for k in ("RED", "GREEN", "BLUE", "WHITE")]
+            self.patch({f"neopixel {params['LED']}": {"color_data": [color] * 16}})
+        elif script.startswith("STOP_LED_EFFECTS"):
+            self.patch({k: {"enabled": False} for k in self.status if k.startswith("led_effect ")})
+        elif script.startswith("SET_LED_EFFECT ") and f"led_effect {params.get('EFFECT')}" in self.status:
+            self.patch({f"led_effect {params['EFFECT']}": {"enabled": "STOP" not in params}})
+
     def ace_gcode(self, script: str) -> bool:
         """The filament unit's quick commands. True when it was one."""
         words = script.split()
@@ -253,6 +272,8 @@ class SimPrinter:
         t.set_units_on_usb(2 if self.ace else 0)   # two filament units plugged in, like workshop
         t.head_sensor = "filament_switch_sensor extruder_sensor"
         t.has_unit = self.ace
+        t.light_objects = engine.light_candidates(list(self.status))
+        t.light_choice = DATABASE.get("elyir-bench", {}).get("light")
         if self.units is not None:
             st = self.units["state"]
             t.update_status({"elyir_units": st or {"units": [], "slots": []}})
@@ -775,6 +796,11 @@ class SimPrinter:
             elif kind == P.CHANGE:
                 self.tracker.change_input(payload)
                 self.drive()
+            elif kind == P.OUTAGE:
+                self.tracker.outage_input(payload)
+                self.drive()
+            elif kind == P.LOST:
+                self.tracker.lost_input(payload)
             elif kind == P.POWER:
                 self.tracker.power_input(payload)
             elif kind == P.WARM:
@@ -782,6 +808,12 @@ class SimPrinter:
                 self.drive()
             elif kind == P.HANDS:
                 self.tracker.hands_input(payload)
+                self.drive()
+            elif kind == P.LIGHT:
+                self.tracker.light_input(payload)
+                if self.tracker.light_choice_dirty:
+                    self.tracker.light_choice_dirty = False
+                    DATABASE.setdefault("elyir-bench", {})["light"] = self.tracker.light_choice
                 self.drive()
             elif kind == P.FIRST_LAYER:
                 self.tracker.first_layer_input(payload)
@@ -818,17 +850,23 @@ class SimPrinter:
         import tempfile
         import service as units_service
         from pretend_ace import PretendAce
+        from pretend_printer import PretendPrinter
         aces = [PretendAce(time_scale=self.speed) for _ in range(2)]
         for a in aces:
             await a.start()
         aces[0].insert(0, color=(217, 83, 79), kind="PLA", sku="AHPLRD-101")
         aces[0].insert(2, color=(117, 120, 123), kind="PETG", sku="AHPEGY-101")
         aces[1].empty(3)
+        # The service's Moonraker for tool changes: the extruder, its sensor and the filament path (units/pretend_printer.py)
+        printer = PretendPrinter(aces, time_scale=self.speed, macros=())
+        await printer.start()
         work = tempfile.mkdtemp(prefix="sim-units-", dir="/tmp")   # short: macOS caps socket paths at 104
         atexit.register(shutil.rmtree, work, True)
         sock = os.path.join(work, "s")
-        svc = units_service.Service(os.path.join(work, "units.json"), scan=lambda: {"1-1.1": aces[0].port, "1-1.2": aces[1].port})
-        self.units = {"aces": aces, "service": svc, "state": None, "task": asyncio.ensure_future(svc.run(sock))}
+        svc = units_service.Service(os.path.join(work, "units.json"), scan=lambda: {"1-1.1": aces[0].port, "1-1.2": aces[1].port},
+                                    moonraker=printer.url)
+        self.units = {"aces": aces, "printer": printer, "service": svc, "state": None,
+                      "task": asyncio.ensure_future(svc.run(sock))}
         for _ in range(100):
             if os.path.exists(sock):
                 break
@@ -838,6 +876,10 @@ class SimPrinter:
         self.units["link_task"] = asyncio.ensure_future(link.run())
 
     def _on_units(self, state: Optional[Dict[str, Any]]) -> None:
+        sensor = "filament_switch_sensor extruder_sensor"
+        seen = self.units["printer"].detected
+        if (self.status.get(sensor) or {}).get("filament_detected") != seen:
+            self.patch({sensor: {"filament_detected": seen}})
         self.units["state"] = state
         self.tracker.update_status({"elyir_units": state or {"units": [], "slots": []}})
         self.tracker.has_unit = bool(state and state.get("units"))
@@ -880,6 +922,8 @@ class SimPrinter:
             lex.whitespace_split, lex.commenters = True, "#;"
             params = {k.upper(): v for k, v in (arg.split("=", 1) for arg in lex)}
             self.save_vars({params["VARIABLE"].lower(): ast.literal_eval(params["VALUE"])})
+        elif script.startswith(("SET_PIN ", "SET_LED ", "SET_LED_EFFECT ", "STOP_LED_EFFECTS")):
+            self.light_gcode(script)
         elif script == "G28":   # Move and heat (design/hands-on/): home takes a moment, like the real thing
             th = self.status["toolhead"]
             self.patch({"toolhead": {"homed_axes": ""}, "motion_report": {"live_position": [th["axis_maximum"][0] / 2, th["axis_maximum"][1] / 2, 10.0, 0.0]}})
@@ -898,6 +942,8 @@ class SimPrinter:
             self.patch({"heater_bed": {"target": float(script.split("S")[1])}})
         elif script == "TURN_OFF_HEATERS":
             self.patch({"heater_bed": {"target": 0.0}, "extruder": {"target": 0.0}})
+        elif script == "PAUSE":   # holding on a battery (design/power-loss/)
+            self.patch({"pause_resume": {"is_paused": True}, "print_stats": {"state": "paused"}})
         elif script == "RESUME":   # a planned colour change, done by itself (design/colour-change/, C)
             self.patch({"pause_resume": {"is_paused": False}, "print_stats": {"state": "printing"}})
             self._release("resume")
@@ -984,6 +1030,9 @@ class SimPrinter:
         """A tool change the way the filament unit reports it on the console."""
         to, frm = payload["to"], payload["from"]
         step = lambda s: asyncio.sleep(s / self.speed)
+        if self.units is not None:
+            await self._swap_on_service(payload)
+            return
         self.gcode_response(f"// {engine.swap_gcode(payload)}")
         self.gcode_response(f"// ACE: Tool change {frm if frm is not None else -1} => {to}")
         try:
@@ -1018,6 +1067,20 @@ class SimPrinter:
             self.gcode_response(f"!! {e}")
             self.patch({"extruder": {"target": 0.0}})
             self.tracker.end_swap(str(e))
+        self.publish(force=True)
+
+    async def _swap_on_service(self, payload: Dict[str, Any]) -> None:
+        step = engine.swap_gcode(payload, self.tracker.unit_commands())
+        self.gcode_response(f"// unit {json.dumps(step)}")
+        try:
+            await self.units["link"].call(step, timeout=900)
+            error = None
+        except Exception as e:
+            error = str(e) or e.__class__.__name__
+            self.gcode_response(f"!! {error}")
+        self._on_units(self.units["state"])
+        self.tracker.end_swap(error)
+        self.drive()
         self.publish(force=True)
 
     # ---- scenarios -------------------------------------------------------
@@ -1556,6 +1619,8 @@ def main() -> None:
     ap.add_argument("--name", default="Workshop")
     ap.add_argument("--no-camera", action="store_true", help="a printer without a camera")
     ap.add_argument("--no-ace", action="store_true", help="a printer without a filament unit: one spool")
+    ap.add_argument("--light", choices=["pin", "strip", "both", "none"], default="pin",
+                    help="its chamber light: an on/off pin, a status LED strip, both (Bench asks which), or none")
     ap.add_argument("--no-files", action="store_true", help="nothing on the printer and nothing printed yet")
     ap.add_argument("--config", help="a folder served as the printer's config files, like Moonraker's config root "
                     "(a slicer elsewhere copies elyir-bench-slicer/ from it: docs/slicer.md)")
@@ -1570,7 +1635,7 @@ def main() -> None:
     global CONFIG_DIR
     CONFIG_DIR = Path(a.config).expanduser() if a.config else None
     app = web.Application(middlewares=[cors], client_max_size=256 * 1024 * 1024)   # G-code uploads
-    app["sim"] = SimPrinter(a.name, a.speed, ace=not a.no_ace)
+    app["sim"] = SimPrinter(a.name, a.speed, ace=not a.no_ace, light=a.light)
     app["sim"].port = a.port
     if a.tap:
         app["sim"].tap = app["sim"].tap_default = True

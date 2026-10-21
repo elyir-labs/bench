@@ -15,7 +15,11 @@ export interface DrawOptions { plate?: boolean; plateColor?: string; gridColor?:
   zoom?: number; shift?: number
   /** supports: the slice's support lines, drawn solid under a see-through part (design/supports/, A).
    *  ghost: how opaque the part is then, 0 to 1. */
-  supports?: SupportLines | null; supportColor?: string; ghost?: number }
+  supports?: SupportLines | null; supportColor?: string; ghost?: number
+  /** runs: a color per run of triangles (each run ends before triangle `end`), for a plate of several colors
+   *  (design/multi-color/); `color` is used past the last run. */
+  runs?: Run[] }
+export interface Run { end: number; color: string }
 
 /** Each triangle turned towards the camera: screen corners, depth, and how much light it gets. */
 export function project(tris: Float32Array, { az = -0.6, el = 0.62 }: View = {}) {
@@ -141,11 +145,21 @@ export function draw(canvas: HTMLCanvasElement, tris: Float32Array, color: strin
   const modelTris = tris.length / 9
   for (let t = 0; t < modelTris; t++) if (p.keep[t]) order.push(t)
   order.sort((a, b) => p.depth[b] - p.depth[a])                  // far first
-  const [r, g, b] = rgb(color)
+  const base = rgb(color)
+  const pal = opts.runs?.length ? opts.runs.map(r => rgb(r.color)) : null
+  const runOf = pal ? new Uint16Array(modelTris) : null
+  if (runOf && opts.runs) {
+    let k = 0
+    for (let t = 0; t < modelTris; t++) {
+      while (k < opts.runs.length && t >= opts.runs[k].end) k++
+      runOf[t] = k
+    }
+  }
   paint.lineJoin = 'round'
   paint.lineWidth = Math.max(0.6, W / 900)                         // hides the hairline seams between triangles
   for (const t of order) {
     const k = 0.42 + 0.58 * p.light[t]
+    const [r, g, b] = (pal && runOf ? pal[runOf[t]] : undefined) ?? base
     const c = `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})`
     const q = t * 6
     paint.beginPath()

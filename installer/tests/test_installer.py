@@ -136,6 +136,23 @@ def test_cmdline_off_gives_back_the_original():
     assert a.render_cmdline(on, False, WORKSHOP_CMDLINE + "\n") == WORKSHOP_CMDLINE + "\n"
 
 
+def test_cmdline_tells_the_kernel_an_upside_down_panel_so_plymouth_draws_upright():
+    flip = a.orientation_arg("DSI-1", 180)
+    assert flip == "video=DSI-1:panel_orientation=upside_down"
+    assert a.orientation_arg("DSI-1", 0) is None and a.orientation_arg("DSI-1", 90) is None
+    assert a.orientation_arg("auto", 180) is None and a.orientation_arg(None, 180) is None
+    on = a.render_cmdline(WORKSHOP_CMDLINE, True, None, flip)
+    assert on.split().count(flip) == 1 and on.count("\n") == 1
+    assert a.render_cmdline(on, True, WORKSHOP_CMDLINE, flip) == on                       # idempotent
+    assert flip not in a.render_cmdline(on, True, WORKSHOP_CMDLINE).split()               # turned back to 0
+    assert a.render_cmdline(on, False, WORKSHOP_CMDLINE + "\n") == WORKSHOP_CMDLINE + "\n"   # boot screen off
+    # an orientation the person set for that output stays theirs, and ours isn't added beside it
+    theirs = WORKSHOP_CMDLINE + " video=DSI-1:panel_orientation=right_side_up"
+    on = a.render_cmdline(theirs, True, theirs, flip)
+    assert "video=DSI-1:panel_orientation=right_side_up" in on.split() and flip not in on.split()
+    assert a.render_cmdline(on, False, theirs).split() == theirs.split()
+
+
 def test_cmdline_off_keeps_what_the_person_had_before():
     theirs = WORKSHOP_CMDLINE.replace("console=tty1", "console=tty3") + " quiet"
     on = a.render_cmdline(theirs, True)

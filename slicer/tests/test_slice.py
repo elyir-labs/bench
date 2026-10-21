@@ -281,7 +281,7 @@ G1 X2 Y2
 def test_read_result(tmp_path):
     g = tmp_path / "p.gcode"
     g.write_text(GCODE)
-    assert sl.read_result(str(g)) == {"seconds": 3723, "grams": 11.1, "layers": 127, "supports": True}
+    assert sl.read_result(str(g)) == {"seconds": 3723, "grams": 11.1, "layers": 127, "supports": True, "grams_each": [11.1]}
 
 
 SUPPORT_GCODE = """M83
@@ -376,6 +376,16 @@ def test_use_slot_rewrites_only_the_start_macro(tmp_path):
     text = g.read_text()
     assert "PRINT_START EXTRUDER=260 BED=110 TOOL=5" in text
     assert "; MACRO TOOL=0 stays as it is" in text
+    assert "\nT5\n" not in text
+
+
+def test_with_a_unit_the_slot_is_loaded_after_the_start_too(tmp_path):
+    # the filament-unit service's start macro doesn't load TOOL= (found on the main test printer, 21 October 2026)
+    g = tmp_path / "p.gcode"
+    g.write_text(GCODE.replace(" TOOL=0", ""))
+    assert sl.use_slot(str(g), 0, load=True)
+    text = g.read_text()
+    assert text.index("PRINT_START") < text.index("\nT0\n")
 
 
 def test_names_read_like_orcas():
@@ -527,13 +537,15 @@ async def test_slice_then_send(rig):
     assert moon.uploads[0]["print"] is None and "TOOL=3" in moon.uploads[0]["body"]
 
 
-async def test_a_slot_the_start_gcode_cant_take_is_said(rig, tmp_path):
+async def test_a_slot_the_start_gcode_cant_take_is_loaded_after_it(rig, tmp_path):
     client, _, svc = rig
     orca = Path(svc.orca[1])
     orca.write_text(orca.read_text().replace("PRINT_START BED=110 TOOL=0", "PRINT_START BED=110"))
     r = await client.post("/slice", data=model_form(printer="workshop", material="ASA", slot=2))
     d = await wait_done(client, (await r.json())["id"])
-    assert d["state"] == "done" and "not slot 2" in d["warnings"][0]
+    assert d["state"] == "done" and not d["warnings"]
+    body = await (await client.get(f"/slice/{d['id']}/gcode")).text()
+    assert "PRINT_START BED=110\nT1\n" in body
 
 
 async def test_send_and_print_only_when_asked(rig):
@@ -589,7 +601,8 @@ async def test_options_and_cors(rig):
     d = await r.json()
     assert [p["id"] for p in d["purposes"]] == ["draft", "everyday", "display", "strong"]
     assert d["printers"][0] == {"id": "workshop", "name": "Workshop", "materials": ["ASA"], "slots": 8,
-                                "bed": [350.0, 350.0, 0.0], "base": "0.20mm Standard @Voron", "supports": "normal"}
+                                "bed": [350.0, 350.0, 0.0], "base": "0.20mm Standard @Voron", "supports": "normal",
+                                "unit": True, "purges": ["tower"], "change_seconds": 105}
     assert d["supports"] == ["auto", "normal", "tree", "off"]
     walls = next(e for e in d["editable"] if e["key"] == "wall_loops")
     assert walls["label"] == "Walls" and (walls["min"], walls["max"], walls["step"]) == (1, 10, 1)
@@ -667,7 +680,7 @@ async def test_upload_once_slice_many(rig, tmp_path):
         ids.append((await r.json())["id"])
     for jid in ids:
         d = await wait_done(client, jid)
-        assert d["state"] == "done" and d["parts"] == [{"model": "cube.stl", "copies": 1, "scale": 0.5, "lay": "file", "brim": "auto",
+        assert d["state"] == "done" and d["parts"] == [{"model": "cube.stl", "copies": 1, "scale": 0.5, "lay": "file", "brim": "auto", "spool": 0,
                                                        "brim_pick": {"kind": "none", "why": "Low and wide on 4 cm²: it stays down by itself", "by": "auto", "rule": "none"}}]
         body = await (await client.get(f"/slice/{jid}/gcode")).text()
         assert "; thumbnail begin 2x3" in body and "TOOL=1" in body
@@ -913,7 +926,7 @@ async def test_a_part_lies_on_the_side_picked(rig, tmp_path):
     side = [1.0, 0.0, 0.0]
     r = await client.post("/slice", json={"parts": [{"model": m["model"], "lay": "side", "down": side}], "printer": "workshop", "material": "ASA"})
     d = await wait_done(client, (await r.json())["id"])
-    assert d["state"] == "done" and d["parts"][0] == {"model": "block.stl", "copies": 1, "scale": 1, "lay": "side", "down": side, "brim": "auto",
+    assert d["state"] == "done" and d["parts"][0] == {"model": "block.stl", "copies": 1, "scale": 1, "lay": "side", "down": side, "brim": "auto", "spool": 0,
                                                       "brim_pick": {"kind": "all", "why": "30 mm tall on a 10 mm base: a rim keeps it standing", "by": "auto", "rule": "all"}}
     assert [c["value"] for c in d["changes"] if c["key"] == "orientation"] == ["on the side you picked"]
     assert (await client.post("/slice", json={"parts": [{"model": m["model"], "lay": "side"}], "printer": "workshop", "material": "ASA"})).status == 400
@@ -1524,3 +1537,60 @@ def test_the_kobra_3_max_lays_its_top_down_as_the_kobra_3_does(tmp_path):
     printer = sl.Printer.from_config("kobra-3-max", {**pj, "presets": [str(home)]})
     p = sl.plan(printer, sl.Request(purpose="draft", material="PETG"), sl.Presets([*printer.presets]))
     assert p.process["top_solid_infill_flow_ratio"] == "0.97" and p.process["top_shell_layers"] == "5"
+
+
+# ── Print the rest (design/power-loss/): the part of a model above where a print stopped ──
+
+def _box(x0, y0, z0, x1, y1, z1):
+    v = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
+    f = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
+    return [[v[i] for i in t] for t in f]
+
+
+def test_cut_above_keeps_the_top_set_on_the_plate_and_closed(tmp_path):
+    # an L (a slab and a back wall) and a ring around a hole, standing 10 mm up as a model might
+    tris = _box(0, 0, 10, 40, 30, 15) + _box(0, 22, 15, 40, 30, 40)
+    tris += _box(60, 0, 10, 80, 5, 30) + _box(60, 15, 10, 80, 20, 30) + _box(60, 5, 10, 65, 15, 30) + _box(75, 5, 10, 80, 15, 30)
+    src, dst = tmp_path / "stand.stl", tmp_path / "rest.stl"
+    sl.write_stl(str(src), tris)
+    assert sl.cut_above(str(src), str(dst), 12.2)
+    assert sl.model_size(str(dst)) == pytest.approx([80.0, 30.0, 17.8], abs=0.01)
+    rest = sl._triangles(str(dst))
+    assert min(v[2] for t in rest for v in t) == pytest.approx(0, abs=1e-3)
+    # the cut faces the plate
+    cap = [t for t in rest if all(abs(v[2]) < 1e-3 for v in t)]
+    assert cap and all((sl._normal_area(t)[0] or [0, 0, 0])[2] < 0 for t in cap if sl._normal_area(t)[1] > 1e-6)
+
+
+def test_a_closed_model_stays_closed_when_cut(tmp_path):
+    src, dst = tmp_path / "box.stl", tmp_path / "rest.stl"
+    sl.write_stl(str(src), _box(0, 0, 0, 20, 10, 30))
+    assert sl.cut_above(str(src), str(dst), 12.2)
+    edges = {}
+    for t in sl._triangles(str(dst)):
+        for i in range(3):
+            k = tuple(sorted((tuple(round(c, 3) for c in t[i]), tuple(round(c, 3) for c in t[(i + 1) % 3]))))
+            edges[k] = edges.get(k, 0) + 1
+    assert all(n == 2 for n in edges.values())
+
+
+def test_cut_above_the_top_is_nothing(tmp_path):
+    src = tmp_path / "box.stl"
+    sl.write_stl(str(src), _box(0, 0, 0, 10, 10, 10))
+    assert not sl.cut_above(str(src), str(tmp_path / "rest.stl"), 10)
+
+
+async def test_the_rest_of_a_model_laid_on_its_side_is_cut_as_it_was_printed(rig, tmp_path):
+    """design/power-loss/: Print the rest cuts the model the way the plate had it (laid on its side here: 10 mm tall)."""
+    client, moon, svc = rig
+    _boxes_stl(tmp_path / "block.stl", [((0, 0, 0), (30, 20, 10))])
+    m = await _upload(client, "block.stl", (tmp_path / "block.stl").read_bytes())
+    r = await client.post(f"/slice/models/{m}/cut", json={"z": 4, "lay": "side", "down": [1.0, 0.0, 0.0], "scale": 1})
+    assert r.status == 201, await r.text()
+    cut = await r.json()
+    assert cut["name"] == "block_rest.stl" and cut["size"][2] == pytest.approx(26, abs=0.01)
+    f = await client.get(f"/slice/models/{cut['model']}/file")
+    assert f.status == 200
+    assert (await client.post(f"/slice/models/{m}/cut", json={"z": 40, "lay": "side", "down": [1.0, 0.0, 0.0]})).status == 422
+    assert (await client.post("/slice/models/000000000000/cut", json={"z": 4})).status == 404
+    assert (await client.post(f"/slice/models/{m}/cut", json={})).status == 400

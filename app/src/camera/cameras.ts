@@ -82,18 +82,27 @@ export function toCameras(list: MoonrakerWebcam[], pageUrl: string, printerHttp:
     .filter(c => c.stream || c.snapshot)
 }
 
-/** Live video, or a still refreshed every couple of seconds.
- *  Stills when there is no stream, or when data is dear (the browser says to save data, or the
- *  phone is on cellular) and the person hasn't asked to watch. Full screen always asks. */
+/** Live video, or a still refreshed now and then.
+ *  Stills when there is no stream, when data is dear (the browser says to save data, or the
+ *  phone is on cellular), or when the printer is idle, unless the person asked to watch.
+ *  Full screen always asks. */
 export type CameraMode = 'live' | 'stills'
-export function cameraMode(c: Pick<Camera, 'stream' | 'snapshot'>, opts: { saveData: boolean; watching: boolean }): CameraMode {
+export function cameraMode(c: Pick<Camera, 'stream' | 'snapshot'>, opts: { saveData: boolean; watching: boolean; idle?: boolean }): CameraMode {
   if (!c.stream) return 'stills'
   if (opts.watching) return 'live'
-  if (opts.saveData && c.snapshot) return 'stills'
+  if ((opts.saveData || opts.idle) && c.snapshot) return 'stills'
   return 'live'
 }
 
-/** States where the camera takes the ring's place in Now. Ready is an idle printer: nothing to watch. */
-export function cameraShownFor(state: string | undefined): boolean {
-  return !!state && state !== 'ready'
+/** Seconds between stills: an idle printer changes slowly, so it is asked less often. */
+export function stillEvery(idle: boolean): number {
+  return idle ? 10 : 2
+}
+
+/** How Now shows the camera, off the printer's own screen (design/camera-anytime/, A): in every state, Ready
+ *  included, so the bed can be seen before a print. Ready is idle (a still now and then) unless it is warming
+ *  up, which is watched like a print getting ready. */
+export function nowCamera(state: string | undefined, opts: { warming: boolean }): 'live' | 'idle' | null {
+  if (!state) return null
+  return state === 'ready' && !opts.warming ? 'idle' : 'live'
 }

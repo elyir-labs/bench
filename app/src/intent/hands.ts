@@ -12,6 +12,8 @@ export interface HandsPreset { material: string; temp: number }
 export interface HandsView {
   why_not: string | null
   z_moves: ZMoves
+  /** False for a printer that takes heater settings only (a Kobra over Anycubic's LAN mode). */
+  can_move?: boolean
   homed: boolean
   homing: boolean
   position: { x: number; y: number; z: number } | null
@@ -35,16 +37,19 @@ export interface Job {
 }
 
 /** The jobs, in the order drawn on design/hands-on/'s C board. */
-export function jobs(h: Pick<HandsView, 'z_moves' | 'material' | 'clean_temp'>): Job[] {
+export function jobs(h: Pick<HandsView, 'z_moves' | 'material' | 'clean_temp' | 'can_move'>): Job[] {
   const m = h.material ?? 'PLA'
-  return [
+  const all: Job[] = [
     { id: 'clear', title: 'Get at the bed', line: h.z_moves === 'bed' ? 'Lowers the bed out of the way' : 'Raises the head out of the way', action: 'hands_clear' },
     { id: 'clean', title: 'Clean the nozzle', line: `Hot for ${m}, at the front`, action: 'hands_clean' },
     { id: 'nozzle', title: 'Heat the nozzle', line: 'To pull filament by hand', action: 'hands_nozzle' },
-    { id: 'bed', title: 'Heat the bed', line: 'To loosen a print or clean the plate', action: h.material ? 'warm_up' : null, args: h.material ? { material: h.material } : undefined },
+    { id: 'bed', title: 'Heat the bed', line: 'Warm up for a material', action: null },
     { id: 'motors', title: 'Let go of the motors', line: 'Push the head by hand', action: 'hands_motors_off' },
     { id: 'move', title: 'Move it myself', line: 'Up, down, any way, any heat', action: null },
   ]
+  if (h.can_move !== false) return all
+  return [...all.filter((j) => j.id === 'nozzle' || j.id === 'bed'),
+    { id: 'move', title: 'Set the heat', line: 'Nozzle and bed, any material', action: null }]
 }
 
 /** The two Z buttons, top first: each says what moves, and which way Z goes for it. */
@@ -64,7 +69,7 @@ export const PAD: { arrow: 'up' | 'down' | 'left' | 'right'; axis: 'x' | 'y'; di
 export function rowLine(h: HandsView | null | undefined, away: boolean): string {
   if (away) return 'At the printer.'
   if (!h) return "The printer isn't ready."
-  return h.why_not ?? 'Get at the bed, clean the nozzle, or move it yourself.'
+  return h.why_not ?? (h.can_move === false ? 'Heat the nozzle or the bed.' : 'Get at the bed, clean the nozzle, or move it yourself.')
 }
 
 /** Under the sheet's title. */

@@ -1,7 +1,7 @@
 // The camera in Now (design/responsive/, "B with the camera", 1 October 2026).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { resolveCameraUrl, cameraTransform, cameraAspect, toCameras, cameraMode, cameraShownFor } from '../src/camera/cameras.ts'
+import { resolveCameraUrl, cameraTransform, cameraAspect, toCameras, cameraMode, nowCamera, stillEvery } from '../src/camera/cameras.ts'
 
 // workshop's camera as Moonraker lists it
 const Workshop = {
@@ -58,8 +58,17 @@ test('live at home, stills when data is dear, always live in full screen', () =>
   assert.equal(cameraMode(c, { saveData: true, watching: true }), 'live')
 })
 
-test('the camera replaces the ring in every state but Ready', () => {
-  for (const s of ['preparing', 'printing', 'needs_you', 'problem', 'finished']) assert.equal(cameraShownFor(s), true, s)
-  assert.equal(cameraShownFor('ready'), false)
-  assert.equal(cameraShownFor(undefined), false)
+test('Now shows the camera in every state, Ready included (design/camera-anytime/, A)', () => {
+  for (const s of ['preparing', 'printing', 'needs_you', 'problem', 'finished']) assert.equal(nowCamera(s, { warming: false }), 'live', s)
+  assert.equal(nowCamera('ready', { warming: false }), 'idle')
+  assert.equal(nowCamera('ready', { warming: true }), 'live')
+  assert.equal(nowCamera(undefined, { warming: false }), null)
+})
+
+test('an idle printer shows a still every 10 s until someone asks to watch', () => {
+  const c = { stream: 's', snapshot: 'p' }
+  assert.equal(cameraMode(c, { saveData: false, watching: false, idle: true }), 'stills')
+  assert.equal(cameraMode(c, { saveData: false, watching: true, idle: true }), 'live')
+  assert.equal(stillEvery(true), 10)
+  assert.equal(stillEvery(false), 2)
 })

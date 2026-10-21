@@ -16,11 +16,16 @@
 // Take parts off (design/remove-parts/, C): a file of several parts opens on a picker before anything is sliced;
 // parts left off wait beside the plate (session.left) so "Change" can put them back. A part taken off the plate
 // can be put back (Undo), and the plate is sliced once the taps stop.
+//
+// Several colors (design/multi-color/, B): the plate's colors are session.spool (the first) and session.more; each
+// part prints in one of them (Part.spool). A 3MF that brings its own colors stays whole, alone on the plate, its
+// colors matched to the loaded spools. Where the old color goes (purge) and parts one after the other are the plate's.
 
 import { computed, markRaw, reactive } from 'vue'
 import * as api from './api'
 import { asKind, fitScale, matchPrinter, pickSpool, PURPOSES, spoolChoice, SUPPORT_KINDS, type Choice, type Purpose, type SpoolLike, type SupportKind } from './plan'
-import { compose, pickFrom, provisional, severalFrom, type Placed } from './plate'
+import { compose, pickFrom, plateRuns, provisional, severalFrom, type Placed } from './plate'
+import { matchFileColors, sameSpool, unsorted, type FileColor, type PlateSpool, type Purge } from './colors'
 import type { SupportLines } from './supports'
 import { layOn, parseModel, sizeOf } from './stl'
 import { thumbnail } from './render'
@@ -48,6 +53,8 @@ export interface Part {
   fill: (api.FitAnswer & { for: string }) | null   // how many fit ("Fill the plate"), for the plate as it was asked
   from: string                               // the file it came from
   order: number                              // its place in that file
+  spool: number                              // which of the plate's colors (design/multi-color/)
+  project: { colors: FileColor[]; runs: { count: number; filament: number }[] } | null   // a 3MF with its own colors
 }
 
 export const session = reactive({
@@ -58,7 +65,7 @@ export const session = reactive({
   files: [] as string[],                     // the files picked (a 3MF brings several parts)
   left: [] as Part[],                        // read from a file but not on the plate (design/remove-parts/, C)
   picking: null as { from: string; first: boolean } | null,   // the picker, for one file's parts
-  undo: null as { part: Part; at: number } | null,            // the part last taken off, until Undo goes
+  undo: null as { part: Part; at: number; spool?: PlateSpool } | null,   // the part last taken off (and its color), until Undo goes
   pending: false,                            // changed, slicing once the taps stop: the last slice's price is old
   adding: 0,                                 // files being read and uploaded after the first
   options: null as api.SliceOptions | null,
@@ -70,6 +77,9 @@ export const session = reactive({
   kept: {} as Partial<Record<Purpose, Record<string, string>>>,   // changed for good, per purpose
   spool: null as Choice | null,
   spoolAuto: true,                           // chosen by the app, not the person: may follow the printer
+  more: [] as PlateSpool[],                  // the plate's second color on (design/multi-color/)
+  purge: null as Purge | null,               // where the old color goes; null: the printer's usual
+  oneAfterOther: false,                      // each part finished before the next starts
   jobs: {} as Partial<Record<Purpose, api.SliceJob>>,
   jobFor: '',
   kinds: {} as Partial<Record<SupportKind, api.SliceJob>>,   // the other kinds, for the chosen purpose (the sheet)
@@ -181,7 +191,22 @@ export const tooBig = (p: Part | null | undefined) => !!p && p.scale < 1
 
 /** What's on the plate, as the slicer sees it: a change to any of it makes the slices stale. */
 export function plateKey(parts: Part[] = session.parts, skipCopiesOf = -1): string {
-  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim]))
+  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool]))
+}
+
+/** The plate's colors, the first being session.spool. */
+export const plateSpools = computed<PlateSpool[]>(() => (session.spool ? [{ ...session.spool, hand: false }, ...session.more] : []))
+/** More than one color, or a 3MF that brings its own. */
+export const multi = computed(() => plateSpools.value.length > 1 || session.parts.some(p => p.project))
+const unit = () => session.printer?.unit ?? (session.printer?.slots ?? 1) > 1
+/** A color that still needs a spool (not loaded, not by hand): Print waits for it. */
+export const unsortedColors = computed(() => plateSpools.value.map((s, k) => (unsorted(s, unit()) ? k : -1)).filter(k => k >= 0))
+
+const colorOf = (k: number) => plateSpools.value[k]?.color || '#8A8D91'
+/** Each part's colors as runs of triangles: one, or a 3MF's pieces in their filaments' colors. */
+export function partRuns(p: Part): { count: number; color: string }[] {
+  if (p.project) return p.project.runs.map(r => ({ count: r.count, color: colorOf(r.filament - 1) }))
+  return [{ count: (p.tris?.length ?? 0) / 9, color: colorOf(p.spool) }]
 }
 
 /** Every copy of every part, where Orca put it (or, until it has, in rows in the middle of the bed). */
@@ -190,6 +215,14 @@ export const plate = computed(() => {
   const key = plateKey()
   const at = session.placed?.for === key ? session.placed.at : provisional(parts, session.printer?.bed)
   return markRaw(compose(parts, at))
+})
+/** The plate's colors, run by run, in the picture's order. */
+export const runs = computed(() => {
+  if (!multi.value) return null
+  const key = plateKey()
+  const parts = session.parts.map(p => ({ tris: p.tris, copies: p.copies, scale: p.scale, runs: partRuns(p) }))
+  const at = session.placed?.for === key ? session.placed.at : provisional(parts, session.printer?.bed)
+  return markRaw(plateRuns(parts, at))
 })
 
 
@@ -222,6 +255,7 @@ function newPart(name: string, up: api.UploadedModel, tris: Float32Array | null,
     key: nextKey++, name, model: up.model, trisFile: tris ? markRaw(tris) : null, tris: null,
     sizeFile: up.size ?? (tris ? sizeOf(tris) : null), size: null, lying: up.lying ?? null,
     lay: 'file', layAuto: true, down: null, brim: 'auto', scale: 1, fit: 1, copies: Math.max(1, up.copies ?? 1), fill: null,
+    spool: 0, project: null,
   }) as Part
   applyLay(p, p.lying?.flat_better ? 'flat' : 'file')
   return p
@@ -231,6 +265,7 @@ function newPart(name: string, up: api.UploadedModel, tris: Float32Array | null,
  *  as the parts in it; each comes back as an STL to draw. */
 async function readParts(file: File): Promise<Part[]> {
   const up = await api.uploadModel(file)
+  if ('colors' in up) return [await projectPart(file, up)]
   if ('models' in up) {
     return Promise.all(up.models.map(async (m, i) => {
       const stl = await api.modelFile(m.model, m.name)
@@ -238,6 +273,28 @@ async function readParts(file: File): Promise<Part[]> {
     }))
   }
   return [newPart(file.name, up, parseModel(file.name, await file.arrayBuffer()), file.name)]
+}
+
+/** A 3MF that brings its own colors: drawn from its pieces, each in its filament's color. */
+async function projectPart(file: File, up: api.UploadedProject): Promise<Part> {
+  const read = await Promise.all(up.pieces.map(async x => ({ x, tris: parseModel('piece.stl', await api.modelPiece(up.model, x.piece)) })))
+  const all = read.filter(r => r.tris?.length)
+  const n = all.reduce((a, r) => a + r.tris!.length, 0)
+  const tris = new Float32Array(n)
+  let o = 0
+  for (const r of all) { tris.set(r.tris!, o); o += r.tris!.length }
+  const p = newPart(file.name, up, n ? tris : null, file.name)
+  p.project = { colors: up.colors.colors, runs: all.map(r => ({ count: r.tris!.length / 9, filament: r.x.filament })) }
+  return p
+}
+
+/** A 3MF's own colors become the plate's, each from the loaded spool that matches. */
+function takeColors(p: Part, spools: SpoolLike[]) {
+  const m = matchFileColors(p.project!.colors, spools, session.printer?.materials ?? [])
+  const [first, ...rest] = m
+  session.spool = { slot: first.slot, material: first.material, color: first.color, name: first.name }
+  session.spoolAuto = false
+  session.more = rest
 }
 
 /** How a plate is set up before its first slice, when it isn't new: a skipped part printed again
@@ -263,6 +320,7 @@ export async function begin(files: File[], spools: SpoolLike[], printerName: str
   dropUnfinished()
   Object.assign(session, {
     stage: 'reading', error: '', errorInfo: null, parts: [], files: files.map(f => f.name), adding: 0, purpose: 'everyday', spool: null, spoolAuto: true,
+    more: [], purge: null, oneAfterOther: false,
     jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null, sent: null, sentLater: [], settings: {}, pending: false,
     left: [], picking: null, undo: null,
   })
@@ -295,7 +353,9 @@ export async function begin(files: File[], spools: SpoolLike[], printerName: str
         p.copies = Math.max(1, s.copies)
       })
     }
-    session.parts = parts
+    const project = parts.find(p => p.project)
+    if (project) takeColors(project, spools)
+    session.parts = project ? [project] : parts
     session.stage = 'ready'
     // a file of several parts: choose which to print before anything is sliced (a plate printed again is as it was)
     const several = setup ? null : severalFrom(parts)
@@ -317,6 +377,9 @@ export async function addFiles(files: File[]): Promise<void> {
   try {
     const parts = (await Promise.all(files.map(readParts))).flat()
     if (gen !== generation) return
+    if (parts.some(p => p.project) || session.parts.some(p => p.project)) {
+      throw new Error('A 3MF with its own colors prints on a plate of its own.')
+    }
     session.parts.push(...parts)
     session.files.push(...files.map(f => f.name))
     session.sent = null
@@ -330,7 +393,19 @@ export async function addFiles(files: File[]): Promise<void> {
 
 function partRequest(p: Part): api.PartRequest {
   return { model: p.model!, copies: p.copies, scale: p.scale, lay: p.lay, ...(p.lay === 'side' && p.down ? { down: p.down } : {}),
-    ...(p.brim !== 'auto' ? { brim: p.brim } : {}) }
+    ...(p.brim !== 'auto' ? { brim: p.brim } : {}), ...(multi.value && !p.project ? { spool: p.spool } : {}) }
+}
+
+/** The plate's colors for the slicer. One not sorted yet is sliced as by hand, so the price is real meanwhile. */
+function spoolsRequest(): Pick<api.SliceRequest, 'spools' | 'purge' | 'one_after_other'> {
+  if (!multi.value) return {}
+  const u = unit()
+  return {
+    spools: plateSpools.value.map((s, k) => ({ material: s.material, color: s.color, slot: s.slot == null ? null : s.slot + 1,
+      hand: k > 0 && (s.hand || !u || s.slot == null) })),
+    ...(session.purge ? { purge: session.purge } : {}),
+    ...(session.oneAfterOther ? { one_after_other: true } : {}),
+  }
 }
 
 function request(purpose: Purpose, png: string | null, parts: Part[], supports: SupportKind = session.supports): api.SliceRequest {
@@ -340,13 +415,14 @@ function request(purpose: Purpose, png: string | null, parts: Part[], supports: 
     printer: session.printer!.id, purpose, supports,
     kept: session.kept[purpose] ?? {}, settings: session.settings,
     material: sp.material, color: sp.color, slot: sp.slot == null ? null : sp.slot + 1,
-    thumbnail: png,
+    thumbnail: png, ...spoolsRequest(),
   }
 }
 
 const pictured = () => (plate.value.length ? thumbnail(plate.value, session.spool?.color ?? '#8A8D91') : null)
 /** What the other kinds were sliced for: the plate, the purpose and the spool. */
-const kindsKey = () => JSON.stringify([session.jobFor, session.purpose, session.spool, session.settings, session.kept[session.purpose]])
+const kindsKey = () => JSON.stringify([session.jobFor, session.purpose, session.spool, session.more, session.purge, session.oneAfterOther,
+  session.settings, session.kept[session.purpose]])
 
 /** Slice every purpose again, the chosen one first. seed: a slice already done for the chosen purpose (a kind
  *  picked on the Supports sheet), kept instead of slicing it again, with the kinds still worth showing. */
@@ -416,6 +492,58 @@ export function setPurpose(p: Purpose) {
   if (done?.state === 'done' && done.placed?.length) session.placed = { for: session.jobFor, at: done.placed }
 }
 export function setSpool(c: Choice) { session.spool = c; session.spoolAuto = false; void sliceAll() }
+
+// ── several colors (design/multi-color/, B) ──
+
+/** Part i prints in this spool: one of the plate's colors, or a new one. Colors no part uses any more go. */
+export function setPartSpool(i: number, s: PlateSpool) {
+  const p = session.parts[i]
+  if (!p || p.project) return
+  let k = plateSpools.value.findIndex(x => (s.hand ? x.hand && x.color === s.color && x.material === s.material : !x.hand && sameSpool(x, s)))
+  if (k < 0) { session.more = [...session.more, s]; k = session.more.length }
+  if (p.spool === k) return
+  p.spool = k
+  tidyColors()
+  void sliceAll()
+}
+
+/** Color k of the plate comes from another spool, or by hand: every part in it follows. */
+export function setPlateSpool(k: number, s: PlateSpool) {
+  if (k === 0) { session.spool = { slot: s.slot, material: s.material, color: s.color, name: s.name }; session.spoolAuto = false }
+  else if (session.more[k - 1]) session.more = session.more.map((x, j) => (j === k - 1 ? s : x))
+  void sliceAll()
+}
+
+export function setPurge(p: Purge) { if (session.purge !== p) { session.purge = p; void sliceAll() } }
+export function setOneAfterOther(on: boolean) { if (session.oneAfterOther !== on) { session.oneAfterOther = on; void sliceAll() } }
+
+/** "One color": every part in the plate's first color. */
+export function oneColor() {
+  if (session.parts.some(p => p.project)) return
+  session.parts.forEach(p => { p.spool = 0 })
+  session.more = []
+  session.oneAfterOther = false
+  void sliceAll()
+}
+
+/** Colors no part prints in go, and the parts' numbers follow. The first color is one in use, from a slot when
+ *  one is (it's loaded before the print starts). A 3MF's own colors all stay. */
+function tidyColors() {
+  if (session.parts.some(p => p.project) || !session.parts.length) return
+  const all = plateSpools.value
+  const used = [...new Set(session.parts.map(p => p.spool))].filter(k => all[k]).sort((a, b) => a - b)
+  const lead = used.find(k => !all[k].hand) ?? used[0] ?? 0
+  const keep = [lead, ...used.filter(k => k !== lead)]
+  const to = new Map(keep.map((k, j) => [k, j]))
+  session.parts.forEach(p => { p.spool = to.get(p.spool) ?? 0 })
+  if (lead !== 0) {
+    const s = all[lead]
+    session.spool = { slot: s.slot, material: s.material, color: s.color, name: s.name }
+    session.spoolAuto = false
+  }
+  session.more = keep.slice(1).map(k => all[k])
+  if (!session.more.length) session.oneAfterOther = false
+}
 
 /** The printer's spools arrived (or changed) after the model was picked: while the spool is still the
  *  app's own guess, take the one in the head. A spool the person chose is never replaced. */
@@ -531,9 +659,11 @@ export function setBrim(i: number, k: api.BrimAsk) {
  *  come back with Undo. Sliced once the taps stop. */
 export function removePart(i: number) {
   if (session.parts.length < 2 || !session.parts[i]) return
+  const spool = plateSpools.value[session.parts[i].spool]
   const [p] = session.parts.splice(i, 1)
   if ([...session.parts, ...session.left].some(o => o.from === p.from)) session.left.push(p)
-  session.undo = { part: p, at: i }
+  session.undo = { part: p, at: i, spool }
+  tidyColors()
   sliceSoon()
 }
 
@@ -541,6 +671,11 @@ export function undoRemove() {
   const u = session.undo
   if (!u) return
   session.left = session.left.filter(p => p.key !== u.part.key)
+  if (u.spool && !session.parts.some(p => p.project)) {
+    let k = plateSpools.value.findIndex(x => x.hand === u.spool!.hand && sameSpool(x, u.spool!))
+    if (k < 0) { session.more = [...session.more, u.spool]; k = session.more.length }
+    u.part.spool = k
+  }
   session.parts.splice(Math.min(u.at, session.parts.length), 0, u.part)
   session.undo = null
   sliceSoon()
@@ -607,6 +742,6 @@ export function reset() {
   Object.assign(session, {
     stage: 'idle', error: '', parts: [], files: [], adding: 0, jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null,
     left: [], picking: null, undo: null, pending: false,
-    sent: null, sentLater: [], spool: null,
+    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false,
   })
 }

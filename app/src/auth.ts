@@ -98,9 +98,11 @@ export function reportConnection(connected: () => boolean): void {
  *  shell hands over for this printer's Print ("Print on Workshop…" from Look at a model, design/look/). */
 export function linkToShell(currentPath: () => string, go: (path: string) => void, takeModels?: (files: File[]) => void): void {
   if (!embedded) return
+  hideWithShell()
   window.addEventListener('message', (ev) => {
     if (ev.source !== window.parent || !parents.has(ev.origin)) return
     if (ev.data?.type === 'elyir-bench:navigate' && typeof ev.data.path === 'string' && ev.data.path.startsWith('/')) go(ev.data.path)
+    if (ev.data?.type === 'elyir-bench:shown' && typeof ev.data.shown === 'boolean') setHiddenByShell(!ev.data.shown)
     if (ev.data?.type === 'elyir-bench:model' && takeModels && Array.isArray(ev.data.files)) {
       const files = ev.data.files.filter((f: unknown): f is File => f instanceof File)
       if (files.length) {
@@ -109,7 +111,7 @@ export function linkToShell(currentPath: () => string, go: (path: string) => voi
       }
     }
   })
-  window.parent.postMessage({ type: 'elyir-bench:listening' }, '*')   // carries nothing; a file waiting for this printer comes now
+  window.parent.postMessage({ type: 'elyir-bench:listening', hides: true }, '*')   // carries nothing; a file waiting for this printer comes now
   let last = ''
   window.setInterval(() => {
     const p = currentPath()
@@ -118,4 +120,19 @@ export function linkToShell(currentPath: () => string, go: (path: string) => voi
       window.parent.postMessage({ type: 'elyir-bench:path', path: p }, '*')
     }
   }, 400)
+}
+
+// The shell keeps printers you've opened loaded behind the one you're looking at. To the browser a hidden frame is still
+// a visible page, so the frame says hidden itself, and whatever already pauses for a hidden page (the camera) pauses.
+let hiddenByShell = false
+function hideWithShell(): void {
+  const native = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')?.get
+  if (!native) return
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (hiddenByShell ? 'hidden' : native.call(document)) })
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => document.visibilityState === 'hidden' })
+}
+function setHiddenByShell(hidden: boolean): void {
+  if (hidden === hiddenByShell) return
+  hiddenByShell = hidden
+  document.dispatchEvent(new Event('visibilitychange'))
 }

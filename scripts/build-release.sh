@@ -55,6 +55,11 @@ cp -R "$SRC/app/dist-bench/." "$STAGE/bench-app/"          # a Bench Box's scree
 cp "$SRC/bench/"*.py "$STAGE/bench/"                         # the service and its shelf
 cp -R "$SRC/bench/profiles" "$STAGE/bench/"                  # slicing profiles for printers the box speaks for (design/bench-kobra/)
 cp "$SRC/setup/wifi_setup.py" "$SRC/setup/phone.html" "$STAGE/setup/"   # a new printer's first Wi-Fi (docs/setup.md)
+if [ -d "$SRC/units" ]; then   # the filament-unit service (design/ace-driver/); not in the public copy yet
+  mkdir -p "$STAGE/units/klipper"
+  cp "$SRC/units/"{ace_link,service,toolchange,moonraker}.py "$STAGE/units/"
+  cp "$SRC/units/klipper/elyir_units.cfg" "$STAGE/units/klipper/"
+fi
 echo "$VERSION" > "$STAGE/VERSION"
 
 # The built app talks to whatever host served it (nginx proxies Moonraker), never a fixed printer.
@@ -74,5 +79,6 @@ EOF
 
 mkdir -p "$ROOT/dist"
 OUT="$ROOT/dist/elyir-bench-$VERSION.tar.gz"
-COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -czf "$OUT" -C "$STAGE" VERSION app printer kiosk installer door slicer bench-app bench setup
+COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -czf "$OUT" -C "$STAGE" VERSION app printer kiosk installer door slicer bench-app bench setup \
+  $([ -d "$STAGE/units" ] && echo units)
 echo "$OUT"

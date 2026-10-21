@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import os
 import re
 import time
@@ -198,6 +199,17 @@ STOP_RESTART_SECONDS = 120   # Stop now: emergency stop + restart; give up showi
 POWER_COOL_TEMP = 50.0
 POWER_MAX_WAIT_SECONDS = 15 * 60
 NEEDS_YOU_HOLD_SECONDS = 20 * 60
+# Power cuts (design/power-loss/, A). On a UPS, a print holds after this long on battery (a flicker never shows)
+# and carries on once the power has been back this long. Holding keeps the motors on, so nothing loses its place:
+# Klipper's idle timeout would turn them off 10 minutes into the pause, so it's raised while holding.
+OUTAGE_HOLD_AFTER_SECONDS = 30
+OUTAGE_BACK_AFTER_SECONDS = 30
+OUTAGE_HOLD_NOZZLE = 150
+OUTAGE_BED_DROP = 15       # the bed stays warm enough for the part to stay stuck, a little below printing heat
+OUTAGE_BED_MIN = 40
+OUTAGE_IDLE_TIMEOUT = 12 * 3600
+OUTAGE_PAUSE_GRACE_SECONDS = 10   # Klipper says paused a moment after PAUSE; printing after this is someone resuming
+DEFAULT_IDLE_TIMEOUT = 600
 OFFLINE_GRACE_SECONDS = 60
 STARTUP_SLOW_SECONDS = 90   # a normal Klipper start is well under this; longer usually means a board isn't answering
 
@@ -463,6 +475,30 @@ WARM_TARGET_GRACE = 30
 WARM_BED_RATE = 0.6               # °C/s a heated bed gains, roughly, for "about N minutes"
 WARM_CHAMBER_RATE = 1.0 / 60      # °C/s an enclosure gains from the bed, roughly
 
+# The chamber light (design/chamber-light/, A): a Klipper output pin or LED named for the case or chamber. A printer
+# with two (an on/off light and a status strip) is asked once which one lights the bed. On is full white; a strip that
+# shows status colors gets its effects back when it goes off. It goes off by itself once the printer has been quiet
+# this long, never during a print.
+LIGHT_KINDS = ("output_pin", "neopixel", "dotstar", "led", "pca9533", "pca9632")
+LIGHT_WORDS = ("case", "chamber", "light", "lamp", "enclosure")
+LIGHT_IDLE_SECONDS = 30 * 60
+
+
+def light_candidates(objects: List[str]) -> List[str]:
+    """The Klipper objects that look like the printer's light, in Klipper's order."""
+    out = []
+    for o in objects:
+        kind, _, name = o.partition(" ")
+        if kind in LIGHT_KINDS and name and any(w in name.lower() for w in LIGHT_WORDS):
+            out.append(o)
+    return out
+
+
+def light_label(obj: str) -> str:
+    kind = obj.partition(" ")[0]
+    return {"output_pin": "On/off light", "neopixel": "LED strip", "dotstar": "LED strip"}.get(kind, "LED")
+
+
 # Move and heat by hand (design/hands-on/, C): jobs first (Get at the bed, Clean the nozzle, Heat the
 # nozzle, Let go of the motors), then the controls. Never while printing, at the printer only (door.py).
 HANDS_IDLE_SECONDS = 15 * 60      # heat set by hand, untouched this long: off
@@ -568,24 +604,32 @@ def check_print(filename: str, metadata: Optional[Dict[str, Any]], spools: List[
     that doesn't say what it needs, there's nothing to check. `uses` says, per filament
     the file uses, where it would come from: the file's sheet on the Print tab shows it."""
     result = _check_print(filename, metadata, spools)
-    result["uses"] = _uses(job_filaments(metadata or {}), spools, result)
+    result["uses"] = _uses(job_filaments(metadata or {}), spools, result, _hand_colors(metadata))
     colour = colour_sheet(filename, metadata, spools)
     if colour:
         # A file with colour changes on a printer with a unit: the Print sheet plans them (design/colour-change/, C)
         result["colour"] = colour
-        result["colour_changes"] = [{"layer": r["layer"], "color": r["color"], "slot": r["slot"], "not_loaded": r["not_loaded"]}
-                                    for r in colour["changes"]]
+        result["colour_changes"] = [{"layer": r["layer"], "color": r["color"], "slot": r["slot"], "not_loaded": r["not_loaded"],
+                                     **({"hand": True} if r["hand"] else {})} for r in colour["changes"]]
     return result
 
 
-def _uses(needs: List[Dict[str, Optional[str]]], spools: List[Dict[str, Any]], result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """"Blue PLA is loaded, slot 4", "Black PETG isn't loaded", or "Uses White PLA" when there's
-    nothing to tell it by (no filament unit, or one spool the printer isn't sure of)."""
+def _hand_colors(metadata: Optional[Dict[str, Any]]) -> set:
+    """The colors Bench's slicer marked as swapped in by hand (design/multi-color/)."""
+    return {_hex_color(c.get("color")) for c in (metadata or {}).get("colour_changes") or [] if c.get("hand") and c.get("color")}
+
+
+def _uses(needs: List[Dict[str, Optional[str]]], spools: List[Dict[str, Any]], result: Dict[str, Any],
+          hand: Optional[set] = None) -> List[Dict[str, Any]]:
+    """"Blue PLA is loaded, slot 4", "Black PETG isn't loaded", "Gold PLA, swapped in by hand", or "Uses White PLA"
+    when there's nothing to tell it by (no filament unit, or one spool the printer isn't sure of)."""
     direct = len(spools) == 1 and bool(spools[0].get("direct"))
     out = []
     for n in needs:
         words = _filament_words(n)
-        if not spools or (direct and result.get("ask")):
+        if n["color"] and n["color"] in (hand or set()):
+            loaded, slot, line = None, None, f"{words}, swapped in by hand"
+        elif not spools or (direct and result.get("ask")):
             loaded, slot, line = None, None, f"Uses {words}"
         else:
             s = next((s for s in spools if _spool_matches(n, s)), None)
@@ -599,6 +643,9 @@ def _uses(needs: List[Dict[str, Optional[str]]], spools: List[Dict[str, Any]], r
 
 def _check_print(filename: str, metadata: Optional[Dict[str, Any]], spools: List[Dict[str, Any]]) -> Dict[str, Any]:
     needs = job_filaments(metadata or {})
+    # a color swapped in by hand (design/multi-color/) isn't in the unit, and isn't meant to be
+    hand = _hand_colors(metadata)
+    needs = [n for n in needs if not (n["color"] and n["color"] in hand)]
     if not spools or not needs:
         return {"ok": True, "filename": filename, "missing": []}
     if len(spools) == 1 and spools[0].get("direct"):
@@ -710,11 +757,14 @@ def colour_changes_in(lines: Any) -> List[Dict[str, Any]]:
     markers (Orca and PrusaSlicer write ";LAYER_CHANGE", Cura ";LAYER:n" from 0) or takes Klipper's own
     SET_PRINT_STATS_INFO CURRENT_LAYER=, which is the number print_stats shows. The colour comes from a
     COLOR_CHANGE line with a #RRGGBB near the M600 (PrusaSlicer writes ";COLOR_CHANGE,T0,#F4F4F2" just
-    before it); without one it's None. Moves, most of a file, are skipped without a look."""
+    before it); without one it's None. Bench's own slicer marks a color the person chose to swap in by hand
+    ("; elyir: by hand" between the marker and the M600, design/multi-color/): hand True, so it's never planned
+    onto a spool. Moves, most of a file, are skipped without a look."""
     out: List[Dict[str, Any]] = []
     layer = 0
     mark: Optional[tuple] = None   # (colour, line) of a COLOR_CHANGE marker waiting for its M600
     bare: Optional[tuple] = None   # (index in out, line) of an M600 still without a colour
+    hand_at: Optional[int] = None  # the line of a "by hand" mark waiting for its M600
     for i, raw in enumerate(lines):
         if raw[:1] == "G" and raw[1:2] in ("0", "1", "2", "3") and raw[2:3] in (" ", "\n", "\r", ""):
             continue
@@ -733,7 +783,9 @@ def colour_changes_in(lines: Any) -> List[Dict[str, Any]]:
             continue
         if line.startswith(";"):
             body = line[1:].lstrip()
-            if body.startswith("LAYER_CHANGE"):
+            if body.startswith("elyir: by hand"):
+                hand_at = i
+            elif body.startswith("LAYER_CHANGE"):
                 layer += 1
             elif body.startswith("LAYER:"):
                 try:
@@ -750,7 +802,9 @@ def colour_changes_in(lines: Any) -> List[Dict[str, Any]]:
         elif word == "M600" and len(out) < COLOUR_PLAN_MAX:
             col = mark[0] if mark and i - mark[1] <= COLOUR_MARK_LINES else None
             mark = None
-            out.append({"layer": layer or None, "color": col})
+            out.append({"layer": layer or None, "color": col,
+                        **({"hand": True} if hand_at is not None and i - hand_at <= COLOUR_MARK_LINES else {})})
+            hand_at = None
             bare = None if col else (len(out) - 1, i)
     return out
 
@@ -819,15 +873,19 @@ def colour_sheet(filename: str, metadata: Optional[Dict[str, Any]], spools: List
     rows = []
     for k, ch in enumerate(changes):
         layer, color = ch.get("layer"), _hex_color(ch.get("color"))
-        match = _closest({"color": color, "material": material}, loaded) if color else None
+        hand = bool(ch.get("hand"))
+        match = _closest({"color": color, "material": material}, loaded) if color and not hand else None
         cw = _colour_word(color) if color else None
+        missing = (f"You swap in {cw or 'the next color'} by hand: I'll pause at {_at_layer(layer)}." if hand
+                   else f"There's no {cw} in the unit. I'll pause at {_at_layer(layer)}." if color and not match else None)
         rows.append({
             "n": k + 1, "layer": layer, "color": color,
             "label": f"Layer {layer}" if layer else f"Change {k + 1}",
             "slot": match["slot"] if match else None,
-            "not_loaded": bool(color) and match is None,
+            "not_loaded": hand or (bool(color) and match is None),
+            "hand": hand,
             "named_line": f"Slot {match['slot'] + 1} · the file's {cw}" if match else None,
-            "missing_line": f"There's no {cw} in the unit. I'll pause at {_at_layer(layer)}." if color and not match else None,
+            "missing_line": missing,
             "pause_line": f"I'll pause at {_at_layer(layer)} for you to choose.",
         })
 
@@ -835,7 +893,10 @@ def colour_sheet(filename: str, metadata: Optional[Dict[str, Any]], spools: List
     if len(rows) == 1:
         r = rows[0]
         cw = _colour_word(r["color"]) if r["color"] else None
-        if r["slot"] is not None:
+        if r["hand"]:
+            headline = f"{job} changes color at {at}."
+            detail = f"You swap in {cw or 'the next color'} by hand there. I'll pause and wait for you."
+        elif r["slot"] is not None:
             headline = f"{job} changes color once."
             detail = f"The file asks for {cw} at {at}. The unit can do it, so nobody needs to be here."
         elif r["not_loaded"]:
@@ -845,9 +906,15 @@ def colour_sheet(filename: str, metadata: Optional[Dict[str, Any]], spools: List
             headline = f"{job} changes color at {at}."
             detail = "The file doesn't say which color. Which spool? Then the unit does it, and nobody needs to be here."
     else:
+        hands = sum(1 for r in rows if r["hand"])
         headline = f"{job} changes color {len(rows)} times."
-        detail = ("The unit can do them all, so nobody needs to be here." if all(r["slot"] is not None for r in rows)
-                  else "Pick a spool for each one. Then the unit does them, and nobody needs to be here.")
+        if hands == len(rows):
+            detail = f"You swap every one by hand: I'll pause at each."
+        elif hands:
+            detail = f"You swap {hands} by hand, so I'll pause for {'it' if hands == 1 else 'those'}; the unit does the rest."
+        else:
+            detail = ("The unit can do them all, so nobody needs to be here." if all(r["slot"] is not None for r in rows)
+                      else "Pick a spool for each one. Then the unit does them, and nobody needs to be here.")
     return {"headline": headline, "detail": detail, "material": material, "start": start_row, "changes": rows,
             "choices": choices,
             "labels": {"start": "To start", "pause": "Pause there and let me choose", "print": "Print", "back": "Back",
@@ -948,6 +1015,25 @@ class IntentTracker:
         self._stopping_since: Optional[float] = None   # Stop now pressed; cleared when Klipper is back
         # Turn off / Restart (design/power/): {kind: off|restart, since, from, now, going, error}
         self._power: Optional[Dict[str, Any]] = None
+        # Power cuts (design/power-loss/, A). ups is what the component reads from NUT ({on_battery, charge,
+        # runtime_s}), None without one. A held print is _outage. The checkpoint is where the print is, kept in
+        # Moonraker's database at elyir-bench/checkpoint whenever checkpoint_dirty is set: one still there when the
+        # component starts again, with Klipper not printing, is a print the power took (lost).
+        self.ups: Optional[Dict[str, Any]] = None
+        self.idle_timeout_s: float = DEFAULT_IDLE_TIMEOUT
+        # The chamber light: what could be it (set by whoever subscribes), the one picked (settings, or the ask, kept
+        # at elyir-bench/light), and the one Bench turned on: {name, since, effects to give back, seen}
+        self.light_objects: List[str] = []
+        self.light_choice: Optional[str] = None
+        self.light_choice_dirty = False
+        self._light: Optional[Dict[str, Any]] = None
+        self._light_queue: List[tuple] = []
+        self._quiet_since: Optional[float] = None
+        self._outage: Optional[Dict[str, Any]] = None
+        self.checkpoint: Optional[Dict[str, Any]] = None
+        self.checkpoint_dirty = False
+        self._restored: Optional[Dict[str, Any]] = None
+        self.lost: Optional[Dict[str, Any]] = None
         self._stop_saw_down = False
         self._state_since: Optional[float] = None
         self._last_state: Optional[str] = None
@@ -1214,6 +1300,177 @@ class IntentTracker:
                         progress=round(progress, 3), nozzle=round(t, 1))
         return view
 
+    # ---- power cuts (design/power-loss/, A) ---------------------------------------
+
+    def set_ups(self, ups: Optional[Dict[str, Any]]) -> None:
+        """What NUT says ({on_battery, charge, runtime_s}), or None without a UPS or when it stops answering."""
+        self.ups = ups
+
+    def restore_checkpoint(self, record: Any, now: Optional[float] = None) -> None:
+        """The checkpoint kept at elyir-bench/checkpoint, read once when the component starts. What it means waits for
+        Klipper: still printing that file is Moonraker restarting on its own; anything else, the power took it."""
+        if isinstance(record, dict) and record.get("file"):
+            self._restored = dict(record, back=record.get("back") or (time.time() if now is None else now))
+
+    def checkpoint_record(self) -> Optional[Dict[str, Any]]:
+        return self.checkpoint or self.lost
+
+    def _layer_z(self, layer: Any, md: Dict[str, Any]) -> Optional[float]:
+        lh, first = md.get("layer_height"), md.get("first_layer_height") or md.get("layer_height")
+        if isinstance(layer, (int, float)) and layer >= 1 and isinstance(lh, (int, float)) and isinstance(first, (int, float)):
+            return round(float(first) + (int(layer) - 1) * float(lh), 2)
+        pos = (self.status.get("motion_report") or {}).get("live_position")
+        return round(float(pos[2]), 2) if isinstance(pos, list) and len(pos) > 2 else None
+
+    def _observe_checkpoint(self, state: str, now: float) -> None:
+        if self._restored is not None and self.klippy_state == "ready":
+            r, self._restored = self._restored, None
+            if state in ("printing", "paused") and (self.status.get("print_stats") or {}).get("filename") == r["file"]:
+                self.checkpoint = {k: v for k, v in r.items() if k != "back"}
+            else:
+                self.lost, self.checkpoint_dirty = r, True   # saved with when it came back
+        if state in ("printing", "paused") and self._print_started:
+            ps = self.status.get("print_stats") or {}
+            info, file = ps.get("info") or {}, ps.get("filename")
+            md = self.metadata if self.metadata_file == file else {}
+            progress = float((self.status.get("virtual_sdcard") or {}).get("progress") or 0)
+            layer = info.get("current_layer")
+            cp = self.checkpoint
+            if cp and cp.get("file") == file and cp.get("layer") == layer and int(cp.get("progress", 0) * 100) == int(progress * 100):
+                return
+            ext, bed = self.status.get("extruder") or {}, self.status.get("heater_bed") or {}
+            o = self._outage
+            ex = self.status.get("exclude_object") or {}
+            skipped = set(ex.get("excluded_objects") or [])
+            self.checkpoint = {
+                "objects": [x["name"] for x in ex.get("objects") or [] if isinstance(x, dict) and x.get("name") and x["name"] not in skipped],
+                "file": file, "layer": layer, "layers": info.get("total_layer"), "z": self._layer_z(layer, md),
+                "height": md.get("object_height"), "progress": round(progress, 4), "material": job_material(md),
+                "nozzle": float((o or {}).get("nozzle") or ext.get("target") or 0),
+                "bed": float((o or {}).get("bed") or bed.get("target") or 0),
+                "slot": self._selected_slot(), "at": now,
+                "outage_since": o["since"] if o and o.get("held") else None,
+            }
+            self.checkpoint_dirty = True
+        elif self.checkpoint is not None and state not in ("printing", "paused"):
+            self.checkpoint, self.checkpoint_dirty = None, True   # it ended while we watched
+
+    def lost_input(self, payload: Dict[str, Any]) -> None:
+        """dismiss: leave the lost print be."""
+        if payload.get("op") == "dismiss" and self.lost is not None:
+            self.lost, self.checkpoint_dirty = None, True
+
+    def _lost_view(self) -> Optional[Dict[str, Any]]:
+        lp = self.lost
+        if not lp:
+            return None
+        return {"file": lp["file"], "name": _pretty_job_name(lp["file"]), "layer": lp.get("layer"), "layers": lp.get("layers"),
+                "z": lp.get("z"), "height": lp.get("height"), "pct": int(round(float(lp.get("progress") or 0) * 100)),
+                "material": lp.get("material"), "off_at": _clock(lp.get("outage_since") or lp["at"]),
+                "back_at": _clock(lp["back"]), "held": bool(lp.get("outage_since")), "objects": lp.get("objects") or []}
+
+    def outage_input(self, payload: Dict[str, Any]) -> None:
+        """keep: the power is back, but stay paused (someone wants to look first)."""
+        if payload.get("op") == "keep" and self._outage is not None:
+            self._outage["keep"] = True
+
+    def _outage_shown(self) -> bool:
+        o = self._outage
+        if o is None or not o.get("held") or o.get("keep"):
+            return False
+        return o["back_since"] is None or o["held"] == "print"
+
+    def _update_outage(self, now: float) -> List[tuple]:
+        ps = self.status.get("print_stats") or {}
+        pstate = ps.get("state")
+        paused = bool((self.status.get("pause_resume") or {}).get("is_paused")) or pstate == "paused"
+        ext, bed = self.status.get("extruder") or {}, self.status.get("heater_bed") or {}
+        restore = ("gcode", f"SET_IDLE_TIMEOUT TIMEOUT={int(self.idle_timeout_s)}")
+        o = self._outage
+        over = o is not None and o.get("held") and (pstate not in ("printing", "paused") or (
+            not paused and now - o["held_at"] > OUTAGE_PAUSE_GRACE_SECONDS))   # stopped, or carried on by hand
+        if (self.ups or {}).get("on_battery"):
+            if over:
+                self._outage = None
+                return [restore]
+            if o is None:
+                o = self._outage = {"since": now, "held": None, "back_since": None, "heat_sent": None, "keep": False}
+            o["back_since"] = None
+            if o["held"] == "print" and o["heat_sent"] is not None:
+                o["heat_sent"] = None   # out again while heating back up
+                return [("gcode", f"M104 S{OUTAGE_HOLD_NOZZLE}"), ("gcode", f"M140 S{o['hold_bed']}")]
+            if o["held"] is not None or now - o["since"] < OUTAGE_HOLD_AFTER_SECONDS:
+                return []
+            hold = ("gcode", f"SET_IDLE_TIMEOUT TIMEOUT={OUTAGE_IDLE_TIMEOUT}")
+            if pstate == "printing" and self._print_started and not self.prep_stage():
+                b = float(bed.get("target") or 0)
+                hold_bed = int(b if b <= OUTAGE_BED_MIN else max(OUTAGE_BED_MIN, b - OUTAGE_BED_DROP))
+                layer = (ps.get("info") or {}).get("current_layer")
+                o.update(held="print", held_at=now, nozzle=float(ext.get("target") or 0), bed=b, hold_bed=hold_bed, layer=layer)
+                if self.checkpoint is not None:
+                    self.checkpoint.update(outage_since=o["since"], nozzle=o["nozzle"], bed=b)
+                    self.checkpoint_dirty = True
+                return [hold, ("gcode", "PAUSE"), ("gcode", f"M104 S{OUTAGE_HOLD_NOZZLE}"), ("gcode", f"M140 S{hold_bed}")]
+            if paused:
+                o.update(held="paused", held_at=now)   # paused by a person already: only keep its motors on
+                return [hold]
+            return []
+        if o is None:
+            return []
+        if o["held"] is None:
+            self._outage = None   # a flicker: nothing was done
+            return []
+        if o["back_since"] is None:
+            o["back_since"] = now
+        if over or o["held"] == "paused" or o["keep"]:
+            self._outage = None
+            return [restore]
+        if not paused:
+            return []   # PAUSE not through yet
+        if now - o["back_since"] < OUTAGE_BACK_AFTER_SECONDS:
+            return []
+        if o["heat_sent"] is None:
+            o["heat_sent"] = now
+            return [("gcode", f"M140 S{int(o['bed'])}"), ("gcode", f"M104 S{int(o['nozzle'])}")]
+        if (o.get("resumed") is None and float(ext.get("temperature") or 0) >= o["nozzle"] - 3
+                and float(bed.get("temperature") or 0) >= o["bed"] - 3):
+            o["resumed"] = now   # shown until Klipper says printing, then over (idle timeout put back)
+            return [("gcode", "RESUME")]
+        return []
+
+    def _outage_view(self, now: float) -> Optional[Dict[str, Any]]:
+        if not self._outage_shown():
+            return None
+        o, ups = self._outage, self.ups or {}
+        runtime = ups.get("runtime_s")
+        view = {"back": o["back_since"] is not None, "held": o["held"],
+                "minutes": max(1, round(((o["back_since"] or now) - o["since"]) / 60)),
+                "battery": ups.get("charge"), "runtime_min": round(runtime / 60) if isinstance(runtime, (int, float)) else None,
+                "bed": o.get("hold_bed"), "layer": o.get("layer"), "heating": o["heat_sent"] is not None, "to": o.get("nozzle"),
+                "carry_in": None}
+        if view["back"] and o["heat_sent"] is None:
+            view["carry_in"] = max(0, math.ceil(OUTAGE_BACK_AFTER_SECONDS - (now - o["back_since"])))
+        return view
+
+    def _outage_intent(self, job: Optional[Dict[str, Any]], now: float) -> tuple:
+        o = self._outage
+        name = job["name"] if job else "The print"
+        if o["back_since"] is None:
+            detail = ("Holding it right where it stopped. The motors stay on, so nothing loses its place." if o["held"] == "print"
+                      else f"{name} stays paused, with its motors on so nothing loses its place.")
+            return "needs_you", "power_hold", "The power is out", detail, [_action("cancel", "Stop the print", hold=True)], []
+        mins = max(1, round((o["back_since"] - o["since"]) / 60))
+        heating = o["heat_sent"] is not None
+        steps = [{"id": "steady", "label": f"Power steady for {OUTAGE_BACK_AFTER_SECONDS} seconds", "status": "done" if heating else "now"},
+                 {"id": "heat", "label": f"Heating the nozzle back to {int(o['nozzle'])}°", "status": "now" if heating else "todo"},
+                 {"id": "carry", "label": f"Carrying on from layer {o['layer']}" if o.get("layer") else "Carrying on",
+                  "status": "now" if o.get("resumed") else "todo"}]
+        if o.get("resumed"):
+            steps[1]["status"] = "done"
+        detail = f"It held {mins} minute{'s' if mins != 1 else ''}, right where it stopped."
+        actions = [_action("outage_keep", "Pause"), _action("cancel", "Stop the print", hold=True)]
+        return "preparing", "power_back", "The power is back", detail, actions, steps
+
     def begin_stop(self, now: Optional[float] = None) -> None:
         """Stop now: the emergency stop and firmware restart that follow are expected, not a problem."""
         now = time.time() if now is None else now
@@ -1265,6 +1522,9 @@ class IntentTracker:
                 self._colour_tried, self._colour_done = set(), set()
                 self._colour_attended = None
                 self._claim_colour_plan(filename, now)
+                if self.lost is not None:
+                    self.lost = None   # a new print: the lost one was either started over or let go
+                    self.checkpoint_dirty = True
         # None: the first look after Moonraker started. Klipper keeps saying cancelled long after
         # a cancel, so only a change we watched happen is a print that was just stopped.
         if state == "cancelled" and self._last_state not in ("cancelled", None):
@@ -1309,6 +1569,7 @@ class IntentTracker:
         self._observe_dryers(now)
         self._guess_from_print(now)
         self._observe_squish(state, getting_ready or bool(self.prep_stage()))
+        self._observe_checkpoint(state, now)
         self._last_state = state
 
     def _observe_steps(self) -> None:
@@ -1375,6 +1636,35 @@ class IntentTracker:
     def unit_state(self) -> Optional[Dict[str, Any]]:
         """The filament units in one shape, whatever drives them (filament_units.py); None without one."""
         return None if self.direct else filament_units.read(self.status)
+
+    def _unit_change(self, pstate: str) -> Optional[Dict[str, Any]]:
+        """A tool change our service is doing in a print (the quiet pause pauses the file), or one that failed and
+        left it paused. A change asked for from the screen shows as the swap it is."""
+        fu = self.unit_state()
+        ch = fu.get("change") if fu else None
+        if not ch or not ch.get("in_print") or pstate != "paused":
+            return None
+        return ch
+
+    def _unit_change_view(self, ch: Dict[str, Any], spools: List[Dict[str, Any]]) -> tuple:
+        """state, phase, headline, detail, actions, raw."""
+        to = ch.get("to")
+        names = {s["slot"]: s.get("name") for s in spools}
+        what = "the filament" if to is None or to < 0 else (names.get(to) or f"slot {to + 1}")
+        stop = _action("cancel", "Stop this print", hold=True)
+        if not ch.get("error"):
+            headline = f"Switching to {what}" if to is not None and to >= 0 else "Unloading the filament"
+            return ("preparing", "tool_change", headline, "The file asks for it here. Nobody's needed.", [stop], "")
+        low = ch["error"].lower()
+        if "reach" in low:
+            detail = "The filament didn't get where it should. Check the tube between the unit and the head is clear, then try again."
+        elif "come out" in low:
+            detail = "The old filament didn't come out of the head. Check the head, then try again."
+        else:
+            detail = "It stopped partway. Check the head, then try again."
+        retry = _action("swap_slot", "Try again", primary=True, style="red", slot=to) if to is not None and to >= 0 else None
+        return ("problem", "tool_change_failed", f"Switching to {what} didn't finish.", detail,
+                [a for a in (retry, stop) if a], ch["error"])
 
     def unit_commands(self) -> Optional[Any]:
         """The commands the unit's driver takes, or None when Bench can only watch it."""
@@ -2062,7 +2352,7 @@ class IntentTracker:
                 break
             if c["more"]:
                 c["more"], c["busy"] = False, "purge"
-                return out + [("macro", self._purge_gcode(MORE_PURGE_MM))]
+                return out + [self._purge_step(MORE_PURGE_MM)]
             step = c["step"]
             s = self._slot_now(slot) or {}
             st = s.get("status")
@@ -2114,7 +2404,7 @@ class IntentTracker:
                 if c["auto"]:
                     if not c["purges"]:
                         c["busy"] = "purge"
-                        return out + [("macro", self._purge_gcode(AUTO_PURGE_MM))]
+                        return out + [self._purge_step(AUTO_PURGE_MM)]
                     self._finish_auto(now)
                     return out + [("gcode", "RESUME")]
                 self._enter("check")
@@ -2361,6 +2651,14 @@ class IntentTracker:
         return (f"M109 S{t}\nSAVE_GCODE_STATE NAME=elyir_bench_purge\nM83\nG1 E{mm} F150\n"
                 "RESTORE_GCODE_STATE NAME=elyir_bench_purge")
 
+    def _purge_step(self, mm: int = MORE_PURGE_MM) -> tuple:
+        """Push more through. A unit on our service does it at the printer's purge spot (units_purge_moves)."""
+        cmds = self.unit_commands()
+        if cmds is not None and hasattr(cmds, "purge"):
+            c = self._change
+            return (cmds.long_kind, cmds.purge(mm, c["temp"] if c["mid"] else self._load_temp()))
+        return ("macro", self._purge_gcode(mm))
+
     def _finish_change(self, now: float) -> None:
         """Looks good, or the filament is out after "Take it out". Remember what's loaded now.
         Mid-print, wait for Carry on; idle, stay warm a while in case a print comes next."""
@@ -2488,6 +2786,8 @@ class IntentTracker:
         out, self._change_queue = list(self._change_queue), []
         out += self._update_warm(now)
         out += self._update_hands(now)
+        out += self._update_light(now)
+        out += self._update_outage(now)
         out += self._assist_work()
         if self._keep_warm_until is not None:
             pstate = (self.status.get("print_stats") or {}).get("state")
@@ -2506,7 +2806,7 @@ class IntentTracker:
             return self._work_colour(c, out, now)
         if c["more"]:
             c["more"], c["busy"] = False, "purge"
-            return out + [("macro", self._purge_gcode())]
+            return out + [self._purge_step()]
         loaded = self.head_loaded()
         ext = self.status.get("extruder") or {}
         for _ in range(len(CHANGE_LABELS)):   # a step can finish at once and hand over to the next
@@ -2677,6 +2977,10 @@ class IntentTracker:
             return "head"
         return "bed" if "z_tilt" in self.status else "head"
 
+    def can_move(self) -> bool:
+        """A printer reached over Anycubic's LAN mode reports no toolhead and takes only heater settings."""
+        return "toolhead" in self.status
+
     def homed(self) -> bool:
         return set("xyz") <= set(str((self.status.get("toolhead") or {}).get("homed_axes") or ""))
 
@@ -2711,6 +3015,8 @@ class IntentTracker:
             self._hands, self._hands_heat, self._hands_until = None, set(), None
             return True
         if self.hands_why_not():
+            return False
+        if op in ("home", "motors_off", "move", "clear", "clean", "lower") and not self.can_move():
             return False
         lo, hi = self._hands_limits()
         homed = self.homed()
@@ -2826,6 +3132,102 @@ class IntentTracker:
             return [("gcode", "\n".join(off))] if off else []
         return []
 
+    # ---- the chamber light (design/chamber-light/, A) ----
+
+    def light_name(self) -> Optional[str]:
+        """The light Bench switches; None while a printer with more than one hasn't said which."""
+        if self.light_choice in self.light_objects:
+            return self.light_choice
+        return self.light_objects[0] if len(self.light_objects) == 1 else None
+
+    def _one_on(self, obj: str) -> bool:
+        if obj.startswith("output_pin "):
+            return float((self.status.get(obj) or {}).get("value") or 0) > 0   # also when Mainsail or a macro did it
+        return self._light is not None and self._light["name"] == obj
+
+    def light_is_on(self) -> bool:
+        name = self.light_name()
+        return bool(name) and self._one_on(name)
+
+    def _light_script(self, obj: str, on: bool, effects: List[str] = ()) -> str:
+        kind, _, name = obj.partition(" ")
+        if kind == "output_pin":
+            return f"SET_PIN PIN={name} VALUE={1 if on else 0}"
+        if on:
+            lines = [f'STOP_LED_EFFECTS LEDS="{kind}:{name}"'] if any(k.startswith("led_effect ") for k in self.status) else []
+            return "\n".join(lines + [f"SET_LED LED={name} RED=1 GREEN=1 BLUE=1"])
+        return "\n".join([f"SET_LED LED={name} RED=0 GREEN=0 BLUE=0"] + [f"SET_LED_EFFECT EFFECT={e}" for e in effects])
+
+    def _light_on(self, obj: str, now: float) -> None:
+        effects = [k[len("led_effect "):] for k, v in self.status.items()
+                   if k.startswith("led_effect ") and (v or {}).get("enabled")] if not obj.startswith("output_pin ") else []
+        self._light = {"name": obj, "since": now, "effects": effects, "seen": False}
+        self._light_queue.append(("gcode", self._light_script(obj, True)))
+
+    def _light_off(self, obj: str) -> None:
+        mine = self._light if self._light is not None and self._light["name"] == obj else None
+        back = [e for e in (mine or {}).get("effects", []) if not (self.status.get(f"led_effect {e}") or {}).get("enabled")]
+        if mine is not None:
+            self._light = None
+        self._light_queue.append(("gcode", self._light_script(obj, False, back)))
+
+    def light_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> bool:
+        """On, Off, or the ask: try one (it comes on, any other goes off) and pick it. False when there's nothing to do."""
+        now = time.time() if now is None else now
+        op = payload.get("op")
+        if op in ("try", "pick"):
+            obj = str(payload.get("name") or "")
+            if obj not in self.light_objects:
+                return False
+            if op == "pick":
+                self.light_choice, self.light_choice_dirty = obj, True
+                for other in self.light_objects:
+                    if other != obj and self._one_on(other):
+                        self._light_off(other)
+                return True
+            for other in self.light_objects:
+                if other != obj and self._one_on(other):
+                    self._light_off(other)
+            if not self._one_on(obj):
+                self._light_on(obj, now)
+            return True
+        name = self.light_name()
+        if name is None:
+            return False
+        if op == "on":
+            self._light_on(name, now)
+            return True
+        if op == "off":
+            self._light_off(name)
+            return True
+        return False
+
+    def _update_light(self, now: float) -> List[tuple]:
+        out, self._light_queue = self._light_queue, []
+        busy = ((self.status.get("print_stats") or {}).get("state") in ("printing", "paused")
+                or self._warm is not None or self._hands is not None or self._change is not None)
+        self._quiet_since = None if busy else (self._quiet_since if self._quiet_since is not None else now)
+        mine = self._light
+        if mine is not None and mine["name"].startswith("output_pin "):
+            if self._one_on(mine["name"]):
+                mine["seen"] = True
+            elif mine["seen"]:
+                self._light = None   # turned off elsewhere
+        name = self.light_name()
+        if self._quiet_since is not None and name and self._one_on(name):
+            since = max(self._quiet_since, self._light["since"] if self._light else self._quiet_since)
+            if now - since >= LIGHT_IDLE_SECONDS:
+                self._light_off(name)
+                out, self._light_queue = out + self._light_queue, []
+        return out
+
+    def _light_view(self) -> Optional[Dict[str, Any]]:
+        if not self.light_objects:
+            return None
+        name = self.light_name()
+        ask = None if name else [{"name": o, "label": light_label(o), "on": self._one_on(o)} for o in self.light_objects]
+        return {"on": self.light_is_on(), "ask": ask}
+
     def _hands_minutes_left(self, now: float) -> Optional[int]:
         return None if self._hands_until is None else max(1, int((self._hands_until - now + 59) // 60))
 
@@ -2839,6 +3241,7 @@ class IntentTracker:
         return {
             "why_not": self.hands_why_not(),
             "z_moves": self.z_moves(),
+            "can_move": self.can_move(),
             "homed": homed,
             "homing": self._hands_homing is not None and not homed,
             "position": {"x": round(float(live[0]), 1), "y": round(float(live[1]), 1), "z": round(float(live[2]), 1)} if (homed and live) else None,
@@ -3737,6 +4140,12 @@ class IntentTracker:
             actions = [_action("try_again", "Try again", primary=True, style="red"),
                        _action("help", "Show me what to check")]
 
+        elif self._outage_shown() and (paused or pstate == "paused"):
+            state, phase, headline, detail, actions, steps = self._outage_intent(job, now)
+
+        elif self._unit_change(pstate) is not None:
+            state, phase, headline, detail, actions, raw = self._unit_change_view(self._unit_change(pstate), spools)
+
         elif self._swap is not None and self._swap.get("error"):
             sw = self._swap
             state, phase = "problem", "swap_failed"
@@ -3966,18 +4375,24 @@ class IntentTracker:
                     phase = "unit_missing"
                     detail = f"{detail} {units['notice']['headline']}"
                     actions = [_action("rescan_units", "Look again", primary=True)]
+                elif self.lost:
+                    # a print the power took (design/power-loss/, A): the picture card says what's left of it
+                    phase = "lost_print"
+                    lp = self._lost_view()
+                    detail = f"The printer lost power at {lp['off_at']} and came back at {lp['back_at']}."
                 elif self.care and self.care.get("hint"):
                     # last: upkeep never hides a hardware problem
                     phase = "care_due"
                     detail = f"{detail} {self.care['hint']}"
                 if phase in ("idle", "care_due") and self.klippy_state == "ready":
-                    # Warm up before a print: one tap for the spool in the head, or ask
+                    # Warm up before a print: one tap for the spool in the head, or ask. Beside it, Move and heat
+                    # (design/hands-on-find/, B), whose Heat the bed asks what Something else used to.
                     head_mat = next((_material_key(s["material"]) for s in spools if s.get("in_use") and s.get("material")), None)
                     if head_mat:
-                        actions = [_action("warm_up", f"Warm up for {head_mat}", primary=True, material=head_mat),
-                                   _action("warm_choose", "Something else")]
+                        actions = [_action("warm_up", f"Warm up for {head_mat}", primary=True, material=head_mat)]
                     else:
                         actions = [_action("warm_choose", "Warm up", primary=True)]
+                    actions.append(_action("hands_open", "Move and heat"))
             self._update_warm(now)
             held = self._hands_now(now)
             if held is not None:
@@ -4037,7 +4452,10 @@ class IntentTracker:
             "head": self.head(now),
             "care": dict(self.care, hint=self.care["hint"] if phase == "care_due" else None) if self.care else None,
             "power": self._power_view(),
-            "hands": self._hands_view(now) if state == "ready" or self._hands is not None else None,
+            "outage": self._outage_view(now),
+            "lost": self._lost_view() if state == "ready" else None,
+            "hands":self._hands_view(now) if state == "ready" or self._hands is not None else None,
+            "light": self._light_view() if self.klippy_state == "ready" else None,
             "printer": {
                 "name": self.printer_name,
                 "connected": self.klippy_state == "ready",
@@ -4100,11 +4518,26 @@ class Notifier:
         self._your_turn: Optional[List[Any]] = None   # [phase, since, sent] for a change routine step
         self._drying: Dict[int, Dict[str, Any]] = {}   # unit index -> its drying, last seen
         self._carried: Optional[tuple] = None           # the carry-on last told
+        self._lost: Optional[tuple] = None              # the lost print last told
 
     def observe(self, intent: Dict[str, Any], now: Optional[float] = None) -> List[Dict[str, Any]]:
         now = time.time() if now is None else now
         priming = self._prev is None
-        return self._observe_job(intent, now) + self._care_due(intent, now, priming) + self._units(intent, now, priming)
+        return (self._lost_print(intent, now) + self._observe_job(intent, now) + self._care_due(intent, now, priming)
+                + self._units(intent, now, priming))
+
+    def _lost_print(self, intent: Dict[str, Any], now: float) -> List[Dict[str, Any]]:
+        """A print the power took (design/power-loss/). Told even on the first look after a restart: coming back
+        is when it's news."""
+        lp = intent.get("lost")
+        key = (lp["file"], lp["off_at"]) if lp else None
+        if key is None or key == self._lost:
+            self._lost = key or self._lost
+            return []
+        self._lost = key
+        printer = (intent.get("printer") or {}).get("name") or "Printer"
+        return [self._event("lost", now, intent, f"{printer} lost power mid-print",
+                            f"{lp['name']} stopped at {lp['pct']}%. Print the rest, or start over.")]
 
     def _units(self, intent: Dict[str, Any], now: float, priming: bool) -> List[Dict[str, Any]]:
         """A unit that finished drying (not one somebody stopped early), and a print that carried
@@ -4186,6 +4619,14 @@ class Notifier:
         headline, detail = intent.get("headline", ""), intent.get("detail", "")
         was_busy = prev[0] in ("printing", "needs_you") or (prev[0] == "preparing" and prev[1] != "starting_up")
 
+        if phase == "power_hold":
+            o = intent.get("outage") or {}
+            left = f" Battery: about {o['runtime_min']} min." if o.get("runtime_min") else ""
+            pct = f" at {int(job['progress'] * 100)}%" if job.get("progress") is not None else ""
+            return self._alert("needs_you", now, intent, f"{printer}: the power is out",
+                               f"Holding {name}{pct}.{left}" if o.get("held") == "print" else f"{name} stays paused.{left}")
+        if phase == "power_back":
+            return [self._event("power_back", now, intent, f"{printer}: the power is back", f"Carrying on with {name} once it's warm.")]
         if state == "ready" and phase == "warmed" and prev[1] == "warming_up":
             material = (intent.get("warm") or {}).get("material") or "printing"
             return [self._event("warmed", now, intent, f"{printer} is warm for {material}",
@@ -4274,12 +4715,17 @@ class ActionPlan:
     COLOUR = "colour"        # payload {"op": "plan" | "choose", ...}, for IntentTracker.colour_input; a plan is also
                              # stored in Moonraker's database at elyir-bench/colour_plan (design/colour-change/)
     HANDS = "hands"          # payload {"op", ...}, for IntentTracker.hands_input (design/hands-on/)
+    OUTAGE = "outage"        # payload {"op": "keep"}, for IntentTracker.outage_input (design/power-loss/)
+    LOST = "lost"            # payload {"op": "dismiss"}, for IntentTracker.lost_input
+    LIGHT = "light"          # payload {"op": "on" | "off" | "try" | "pick", "name"?}, for IntentTracker.light_input
     NONE = "none"
 
 
 HANDS_OPS = {"hands_home": "home", "hands_motors_off": "motors_off", "hands_move": "move", "hands_heat": "heat",
              "hands_clear": "clear", "hands_clean": "clean", "hands_nozzle": "nozzle", "hands_lower": "lower",
              "hands_done": "done", "hands_keep": "keep"}
+LIGHT_OPS = {"light_on": "on", "light_off": "off", "light_try": "try", "light_pick": "pick"}
+HANDS_MOVES = {"hands_home", "hands_motors_off", "hands_move", "hands_clear", "hands_clean", "hands_lower"}
 
 
 def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentTracker) -> List[tuple]:
@@ -4318,8 +4764,12 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         return [(ActionPlan.ACK_FINISHED, None)]
     if action_id == "cool_down":
         return [(ActionPlan.WARM, {"op": "stop"}), (ActionPlan.HANDS, {"op": "stop"}), (ActionPlan.GCODE, "TURN_OFF_HEATERS")]
+    if action_id in LIGHT_OPS:
+        if tracker.klippy_state != "ready" or not tracker.light_objects:
+            return []
+        return [(ActionPlan.LIGHT, dict(args, op=LIGHT_OPS[action_id]))]
     if action_id in HANDS_OPS:
-        if tracker.hands_why_not():
+        if tracker.hands_why_not() or (action_id in HANDS_MOVES and not tracker.can_move()):
             return []
         return [(ActionPlan.HANDS, dict(args, op=HANDS_OPS[action_id]))]
     if action_id == "warm_up":
@@ -4334,7 +4784,7 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
             return []
         payload = dict(FIRST_LAYER_OPS[action_id])
         return [(ActionPlan.FIRST_LAYER, payload)] if tracker.first_layer_ok(payload) else []
-    if action_id in ("help", "bring_open", "write_own"):   # the screens open these themselves
+    if action_id in ("help", "bring_open", "write_own", "hands_open"):   # the screens open these themselves
         return [(ActionPlan.NONE, None)]
     if action_id == "skip_part":
         # design/skip-objects/: one part stops, the rest carry on. Klipper names have no spaces (Orca's labels).
@@ -4369,6 +4819,10 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         kind = "off" if action_id == "power_off" else "restart"
         heaters = [(ActionPlan.WARM, {"op": "stop"}), (ActionPlan.GCODE, "TURN_OFF_HEATERS")] if tracker.klippy_state == "ready" else []
         return heaters + [(ActionPlan.POWER, {"op": "start", "kind": kind})]
+    if action_id == "outage_keep":
+        return [(ActionPlan.OUTAGE, {"op": "keep"})] if tracker._outage is not None else []
+    if action_id == "lost_dismiss":
+        return [(ActionPlan.LOST, {"op": "dismiss"})] if tracker.lost is not None else []
     if action_id in ("power_keep", "power_now", "power_retry"):
         return [(ActionPlan.POWER, {"op": action_id[len("power_"):]})] if tracker._power is not None else []
     if action_id == "rescan_units":
@@ -4490,8 +4944,9 @@ def plan_print_planned(args: Dict[str, Any], tracker: IntentTracker) -> List[tup
     return [(ActionPlan.COLOUR, {"op": "plan", "filename": filename, "changes": out}), (ActionPlan.START_FILE, filename)]
 
 
-def swap_gcode(payload: Dict[str, Any], cmds: Optional[Any] = None) -> str:
-    """The filament unit's tool change for a swap payload, by its driver (KlipperACE when not given)."""
+def swap_gcode(payload: Dict[str, Any], cmds: Optional[Any] = None) -> Any:
+    """The filament unit's tool change for a swap payload, by its driver (KlipperACE when not given): G-code for
+    KlipperACE, a {"op": "change_tool"} step for our service (cmds.kind says which)."""
     return (cmds or filament_units.DRIVERS["klipperace"]).change_tool(int(payload["to"]), payload.get("purge", True))
 
 

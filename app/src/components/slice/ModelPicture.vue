@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ObjectImage from '@/components/now/ObjectImage.vue'
-import { draw, drawLayers, type LayersPicture } from '@/slice/render'
+import { draw, drawLayers, type LayersPicture, type Run } from '@/slice/render'
 import type { SupportLines } from '@/slice/supports'
 
 // plate: the build plate under it, so which side is down is plain to see (design/orientation/)
@@ -23,8 +23,10 @@ import type { SupportLines } from '@/slice/supports'
 // supports: the slice's supports, solid under a see-through part (design/supports/, A)
 // zoomable also pinches on a touch screen; spin: turns slowly by itself, for showing someone (design/look/)
 // layers: the slice instead of the model, cut at a layer (design/look/, A with C's layers)
+// runs: a color per run of triangles, for a plate of several colors (design/multi-color/)
 const props = defineProps<{ tris: Float32Array | null; color: string; alt: string; plate?: boolean; bed?: number[] | null;
-  turnable?: boolean; zoomable?: boolean; shift?: number; supports?: SupportLines | null; spin?: boolean; layers?: LayersPicture | null }>()
+  turnable?: boolean; zoomable?: boolean; shift?: number; supports?: SupportLines | null; spin?: boolean; layers?: LayersPicture | null;
+  runs?: Run[] | null }>()
 const emit = defineEmits<{ moved: [changed: boolean] }>()
 const box = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -50,7 +52,8 @@ function paint(fast = false) {
     c.style.width = b.clientWidth + 'px'; c.style.height = b.clientHeight + 'px'
   }
   const dpr2 = c.width / Math.max(1, b.clientWidth)
-  const more = { fast, zoom, shift: shiftNow * dpr2, ...(props.supports ? { supports: props.supports, ghost: 0.3 } : {}) }
+  const more = { fast, zoom, shift: shiftNow * dpr2, ...(props.supports ? { supports: props.supports, ghost: 0.3 } : {}),
+    ...(props.runs?.length ? { runs: props.runs } : {}) }
   if (props.layers) drawLayers(c, props.layers, view, 0.1, { fast, zoom, shift: shiftNow * dpr2 })
   else if (props.tris) draw(c, props.tris, props.color, view, 0.1, props.plate ? { plate: true, bed: props.bed, ...more } : more)
 }
@@ -143,7 +146,7 @@ onMounted(() => {
   if (box.value) ro.observe(box.value)
 })
 onBeforeUnmount(() => { ro?.disconnect(); cancelAnimationFrame(spinning); cancelAnimationFrame(frame); cancelAnimationFrame(glide); clearTimeout(settle) })
-watch(() => [props.tris, props.color, props.supports, props.layers], () => requestAnimationFrame(() => paint()))
+watch(() => [props.tris, props.color, props.supports, props.layers, props.runs], () => requestAnimationFrame(() => paint()))
 // the card opened or closed: ease the plate across rather than jump
 watch(() => props.shift ?? 0, (to) => {
   const from = shiftNow, t0 = performance.now(), ms = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 260

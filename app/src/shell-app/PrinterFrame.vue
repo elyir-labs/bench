@@ -43,7 +43,8 @@ import { forgetPrinter, printerById, reach, tryOtherAddress } from './printers'
 import { handoff } from './look'
 import PrinterCover from './PrinterCover.vue'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string; current: boolean }>()
+const emit = defineEmits<{ drop: [] }>()
 const route = useRoute()
 const router = useRouter()
 const frame = ref<HTMLIFrameElement | null>(null)
@@ -88,14 +89,37 @@ watch([base, () => props.id], () => {
 }, { immediate: true })
 
 // a notification for this printer while it's open: move the frame instead of reloading it
-watch(() => route.hash, () => {
+// (switching printers is the `current` watch's to handle)
+watch(() => [route.path, route.hash], ([nowPath], [wasPath]) => {
+  if (props.current && nowPath === wasPath) follow()
+})
+function follow() {
   const want = pathFromHash()
   if (want !== path.value) {
     path.value = want
     frame.value?.contentWindow?.postMessage({ type: 'elyir-bench:navigate', path: want }, new URL(base.value!).origin)
   }
+}
+
+// Kept loaded while another printer or the list is shown. A printer app that can't pause when hidden (an older release)
+// is let go after a while, so its camera doesn't run on unseen.
+const hides = ref(false)
+const DROP_MS = 3 * 60_000
+let dropTimer = 0
+function tellShown() {
+  if (base.value) frame.value?.contentWindow?.postMessage({ type: 'elyir-bench:shown', shown: props.current }, new URL(base.value).origin)
+}
+watch(() => props.current, (now) => {
+  window.clearTimeout(dropTimer)
+  tellShown()
+  if (now) {
+    // back to this printer: a link that names a screen goes there; otherwise the address shows where the frame is
+    if (route.hash) follow()
+    else if (path.value !== '/') router.replace({ path: route.path, hash: '#' + path.value })
+  } else if (!hides.value) {
+    dropTimer = window.setTimeout(() => emit('drop'), DROP_MS)
+  }
 })
-watch(() => props.id, () => { path.value = pathFromHash() })
 
 function onMessage(ev: MessageEvent) {
   const printer = p.value
@@ -108,6 +132,9 @@ function onMessage(ev: MessageEvent) {
     // a deep link that arrived while the frame was still loading: say it again now it listens
     if (path.value !== '/') frame.value.contentWindow!.postMessage({ type: 'elyir-bench:navigate', path: path.value }, ev.origin)
   } else if (ev.data?.type === 'elyir-bench:listening') {
+    hides.value = !!ev.data.hides
+    if (hides.value) window.clearTimeout(dropTimer)
+    tellShown()
     // "Print on Workshop…" from Look at a model: the file goes to this printer's own Print now it listens
     if (handoff.value?.printer === printer.id) frame.value.contentWindow!.postMessage({ type: 'elyir-bench:model', files: [...handoff.value.files] }, ev.origin)
   } else if (ev.data?.type === 'elyir-bench:model-taken') {
@@ -121,7 +148,7 @@ function onMessage(ev: MessageEvent) {
   } else if (ev.data?.type === 'elyir-bench:path' && typeof ev.data.path === 'string') {
     const clean = ev.data.path.replace(/[?&]embed=1\b/, '').replace(/\?$/, '') || '/'
     path.value = clean
-    router.replace({ path: route.path, hash: clean === '/' ? '' : '#' + clean })
+    if (props.current) router.replace({ path: route.path, hash: clean === '/' ? '' : '#' + clean })
   }
 }
 // A printer on an older release doesn't take files from here: say so rather than wait.
@@ -140,7 +167,7 @@ watch(() => [handoff.value?.printer, p.value?.id], () => {
 }, { immediate: true })
 
 onMounted(() => window.addEventListener('message', onMessage))
-onBeforeUnmount(() => { window.removeEventListener('message', onMessage); window.clearTimeout(frameTimer); window.clearTimeout(handoffTimer); window.clearTimeout(liftTimer) })
+onBeforeUnmount(() => { window.removeEventListener('message', onMessage); window.clearTimeout(frameTimer); window.clearTimeout(handoffTimer); window.clearTimeout(liftTimer); window.clearTimeout(dropTimer) })
 
 function retry() {
   if (p.value) reach(p.value.id)

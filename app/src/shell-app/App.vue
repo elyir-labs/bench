@@ -13,7 +13,7 @@ import { MODEL_EXT } from '@/look/read.ts'
 
 const router = useRouter()
 
-// a model dropped anywhere on the app opens on the Look page (design/look/)
+// models dropped anywhere on the app open on the Look page, together (design/look/)
 const files = (e: DragEvent) => e.dataTransfer?.types.includes('Files')
 function dragover(e: DragEvent) {
   if (files(e)) e.preventDefault()
@@ -21,9 +21,9 @@ function dragover(e: DragEvent) {
 function dropped(e: DragEvent) {
   if (!files(e)) return
   e.preventDefault()
-  const f = [...(e.dataTransfer?.files ?? [])].find((x) => MODEL_EXT.test(x.name))
-  if (!f) return
-  pending.value = f
+  const fs = [...(e.dataTransfer?.files ?? [])].filter((x) => MODEL_EXT.test(x.name))
+  if (!fs.length) return
+  pending.value = fs
   if (router.currentRoute.value.path !== '/look') router.push('/look')
 }
 

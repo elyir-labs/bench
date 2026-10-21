@@ -161,6 +161,35 @@ def test_a_colour_that_isnt_loaded_says_so_and_pauses_there():
     assert row["missing_line"] == "There's no green in the unit. I'll pause at layer 56."
 
 
+# ---- by hand, from Bench's own slicer (design/multi-color/, B) -------------------------------------------
+
+def test_a_swap_by_hand_is_marked_and_never_planned_onto_a_spool():
+    lines = [";LAYER_CHANGE"] * 40 + [";COLOR_CHANGE,T3,#F1F1F1", "; elyir: by hand", "M600", ";LAYER_CHANGE", "T1"] \
+        + [";LAYER_CHANGE"] * 3 + [";COLOR_CHANGE,T2,#D9534F", "M600"]
+    assert a.colour_changes_in(lines) == [{"layer": 40, "color": "#F1F1F1", "hand": True}, {"layer": 44, "color": "#D9534F"}]
+    t = tracker()
+    m = {"filament_type": "PLA;PLA;PLA", "filament_colors": ["#D9534F", "#C9A227", "#F1F1F1"], "layer_count": 140,
+         "colour_changes": [{"layer": 40, "color": "#C9A227", "hand": True}]}
+    c = a.check_print(FILE, m, t.spools())
+    # white is loaded, but the gold the person swaps in isn't, and isn't meant to be: nothing's missing
+    assert c["ok"] and not c.get("missing")
+    assert c["colour_changes"] == [{"layer": 40, "color": "#C9A227", "slot": None, "not_loaded": True, "hand": True}]
+    s = c["colour"]
+    assert s["detail"] == "You swap in yellow by hand there. I'll pause and wait for you."
+    assert s["changes"][0]["missing_line"] == "You swap in yellow by hand: I'll pause at layer 40."
+    assert next(u for u in c["uses"] if u["color"] == "#C9A227")["line"] == "Yellow PLA, swapped in by hand"
+
+
+def test_by_hand_and_by_the_unit_together():
+    t = tracker()
+    m = {"filament_type": "PLA", "filament_colors": ["#D9534F", "#F4F4F2", "#C9A227"], "layer_count": 140,
+         "colour_changes": [{"layer": 30, "color": "#C9A227", "hand": True}, {"layer": 60, "color": "#C9A227", "hand": True},
+                            {"layer": 90, "color": "#F4F4F2"}]}
+    s = a.check_print(FILE, m, t.spools())["colour"]
+    assert s["detail"] == "You swap 2 by hand, so I'll pause for those; the unit does the rest."
+    assert [r["slot"] for r in s["changes"]] == [None, None, 1]
+
+
 def test_one_spool_printers_are_unchanged():
     t = tracker()
     t.has_unit = False

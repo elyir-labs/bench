@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-// The boot screen, from the app's side (design/boot/, A′: the eye says hi). Plymouth fills the ring up to
+// The boot screen, from the app's side (design/boot/, E: the Elyir signature becomes the eye). Plymouth fills the ring up to
 // mark.handoff while the Pi boots and index.html shows that same frame while this loads; from here
 // the ring moves only when something real happens, and when the printer is ready the eye blinks and
 // settles into the Now tab, where the same mark lives. Shown only on the panel's first page load

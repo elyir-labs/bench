@@ -28,11 +28,11 @@
             <header class="head">
               <button class="backlink" @click="view = 'jobs'"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>Move and heat</button>
               <span class="grow"></span>
-              <button class="a-btn ghost small" @click="send('hands_motors_off')"><span class="i" v-html="JOB_ICON.motors"></span>Motors off</button>
+              <button v-if="canMove" class="a-btn ghost small" @click="send('hands_motors_off')"><span class="i" v-html="JOB_ICON.motors"></span>Motors off</button>
               <button class="a-btn ghost small" @click="close">Done</button>
             </header>
-            <div class="controls">
-              <div class="move">
+            <div class="controls" :class="{ 'heat-only': !canMove }">
+              <div v-if="canMove" class="move">
                 <div class="padz">
                   <div class="pad">
                     <span></span>
@@ -87,6 +87,11 @@
   <WarmSheet :open="warmOpen" @close="warmOpen = false" />
 </template>
 
+<script lang="ts">
+// the sheet opens where it was left: someone who moves it themselves gets the controls again (design/hands-on-find/)
+let lastView: 'jobs' | 'move' = 'jobs'
+</script>
+
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -104,17 +109,19 @@ const name = computed(() => store.intent?.printer.name ?? 'The printer')
 const nozzle = computed(() => store.intent?.printer.nozzle ?? { temperature: 0, target: 0 })
 const bed = computed(() => store.intent?.printer.bed ?? { temperature: 0, target: 0 })
 const jobList = computed(() => (hands.value ? jobs(hands.value) : []))
+const canMove = computed(() => hands.value?.can_move !== false)
 const heaters = computed(() => [
   { key: 'nozzle' as const, label: 'Nozzle', now: nozzle.value, presets: hands.value?.nozzle_presets ?? [] },
   { key: 'bed' as const, label: 'Bed', now: bed.value, presets: hands.value?.bed_presets ?? [] },
 ])
 
-const view = ref<'jobs' | 'move'>('jobs')
+const view = ref<'jobs' | 'move'>(lastView)
 const step = ref(10)
 const note = ref<string | null>(null)
 const warmOpen = ref(false)
 
-watch(() => props.open, (o) => { if (o) { view.value = 'jobs'; note.value = null } })
+watch(() => props.open, (o) => { if (o) { view.value = lastView; note.value = null } })
+watch(view, (v) => { lastView = v })
 // a print started, or the printer went away: nothing here can be used now
 watch(() => hands.value?.why_not, (why) => { if (why && props.open) close() })
 
@@ -145,7 +152,7 @@ async function pick(j: Job) {
     view.value = 'move'
     return
   }
-  if (!j.action) {   // Heat the bed with nothing in the head: which material?
+  if (!j.action) {   // Heat the bed: warm-up's own question, which material
     warmOpen.value = true
     return
   }
@@ -201,6 +208,7 @@ h2 { font-size: calc(22 * var(--u) + 6px); margin: 0; }
 .backlink { appearance: none; border: 0; background: none; font: inherit; font-weight: 600; font-size: calc(13 * var(--u) + 5px); color: var(--a-accent-text); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 8px 4px; }
 .backlink svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: calc(14 * var(--u) + 6px); margin-top: calc(10 * var(--u) + 4px); }
+.controls.heat-only { grid-template-columns: 1fr; }
 .padz { display: grid; grid-template-columns: 2fr 1fr; gap: calc(8 * var(--u) + 4px); height: calc(170 * var(--u) + 60px); }
 .pad { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 8px; }
 .pad button, .zcol button {

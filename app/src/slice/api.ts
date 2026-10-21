@@ -3,6 +3,7 @@
 
 import { authHeaders } from '@/auth'
 import type { Editable, SliceChange } from './plan'
+import type { ColorsResult, FileColor, Purge } from './colors'
 import { decodeLines } from './supports'
 import { stateFrom, type SlicerInfo, type SlicerState } from './elsewhere'
 import { BASE as ROOT } from '@/base'
@@ -16,6 +17,9 @@ export interface PrinterOption {
   bed: number[] | null
   base: string
   supports?: 'normal' | 'tree'   // the kind its process preset prints: where "your usual" starts
+  unit?: boolean                 // it has a filament unit: colors come from slots (design/multi-color/)
+  purges?: Purge[]               // what Between colors offers, its usual first
+  change_seconds?: number        // one color change by the unit
 }
 export interface SliceOptions { purposes: PurposeOption[]; supports: string[]; printers: PrinterOption[]; models: string[]; editable?: Editable[]; slicer?: SlicerInfo }
 /** A side the model can rest on: the side facing `normal` goes down. contact: what really touches the
@@ -34,6 +38,11 @@ export interface Lying {
 export interface UploadedModel { model: string; name: string; size: number[] | null; lying?: Lying | null; copies?: number }
 /** A 3MF answers with the parts in it, each already its own model (with how many times it's placed). */
 export interface UploadedSet { models: UploadedModel[]; from: string }
+/** A 3MF that brings its own colors stays whole (design/multi-color/): its colors, and pieces to draw it with. */
+export interface UploadedProject extends UploadedModel {
+  colors: { colors: FileColor[]; painted: boolean; heights: { z: number; to: number }[] }
+  pieces: { piece: number; name: string; filament: number }[]
+}
 /** One plate the slicer made (design/plate/): what didn't fit on the first goes on the next. */
 export interface SlicedPlate { plate: number; seconds: number | null; time: string | null; grams: number | null; counts: number[]; gcode: string }
 export interface FitAnswer { part: number; fits: number; others_fit: boolean; at_least: boolean }
@@ -41,12 +50,13 @@ export interface FitAnswer { part: number; fits: number; others_fit: boolean; at
  *  by: who decided; rule: what the rule picks, still known after someone picks another. */
 export type BrimAsk = 'auto' | 'none' | 'ears' | 'all'
 export interface BrimPick { kind: BrimAsk; why: string; by: 'auto' | 'you' | 'kept'; rule?: 'none' | 'ears' | 'all' }
-export interface SlicedPart { model: string; copies: number; scale: number; lay: string; brim?: BrimAsk; brim_pick?: BrimPick }
+export interface SlicedPart { model: string; copies: number; scale: number; lay: string; brim?: BrimAsk; brim_pick?: BrimPick; spool?: number }
 export interface SliceJob {
   id: string
   state: 'queued' | 'slicing' | 'done' | 'failed' | 'cancelled'
   changes: SliceChange[]
-  estimate?: { seconds: number | null; time: string | null; grams: number | null; layers: number | null }
+  estimate?: { seconds: number | null; time: string | null; grams: number | null; layers: number | null; changes_seconds?: number }
+  colors?: ColorsResult              // several colors: each spool's use and every change
   supports_added?: boolean
   gcode?: string
   plates?: SlicedPlate[]
@@ -67,6 +77,7 @@ export interface PartRequest {
   lay?: 'file' | 'flat' | 'side'   // flat: onto its flattest side; side: onto `down`, a side the person picked
   down?: number[]
   brim?: BrimAsk                   // auto (left out): the rule picks; none | ears | all: the person did
+  spool?: number                   // which of the plate's colors, when it has several
 }
 export interface SliceRequest {
   parts: PartRequest[]
@@ -79,6 +90,9 @@ export interface SliceRequest {
   thumbnail?: string | null // PNG, base64
   kept?: Record<string, string>      // the person's own for this purpose
   settings?: Record<string, string>  // the person's, for this print only
+  spools?: { material: string; color: string | null; slot: number | null; hand: boolean }[]   // several colors, slot 1-based
+  purge?: Purge
+  one_after_other?: boolean
 }
 
 const BASE = `${ROOT}/slice`
@@ -121,10 +135,17 @@ export interface SlicerPrinter { id: string; name: string; joined: boolean }
 export const slicerPrinters = () => fetch(`${BASE}/printers`, opts({ cache: 'no-store' })).then(r => json<{ slicer: string; printers: SlicerPrinter[] }>(r))
 export const stopPrinter = (id: string) => fetch(`${BASE}/printers/${encodeURIComponent(id)}`, opts({ method: 'DELETE' })).then(r => json<unknown>(r))
 
-export function uploadModel(file: File): Promise<UploadedModel | UploadedSet> {
+export function uploadModel(file: File): Promise<UploadedModel | UploadedSet | UploadedProject> {
   const f = new FormData()
   f.append('model', file, file.name)
-  return fetch(`${BASE}/models`, opts({ method: 'POST', body: f })).then(r => json<UploadedModel | UploadedSet>(r))
+  return fetch(`${BASE}/models`, opts({ method: 'POST', body: f })).then(r => json<UploadedModel | UploadedSet | UploadedProject>(r))
+}
+
+/** One piece of a 3MF with colors, as an STL to draw. */
+export async function modelPiece(id: string, k: number): Promise<ArrayBuffer> {
+  const r = await fetch(`${BASE}/models/${id}/piece/${k}`, opts())
+  if (!r.ok) throw new Error(`The slicer answered ${r.status}`)
+  return r.arrayBuffer()
 }
 
 export const startSlice = (req: SliceRequest) =>
@@ -144,6 +165,15 @@ export async function modelFile(id: string, name: string): Promise<File> {
   const r = await fetch(`${BASE}/models/${id}/file`, opts())
   if (!r.ok) throw new Error(r.status === 404 ? "That model isn't on the slicer any more (it keeps them a day)." : `The slicer answered ${r.status}`)
   return new File([await r.blob()], name)
+}
+
+/** What's above z of a model as it was printed, as a model of its own (Print the rest, design/power-loss/).
+ * null when nothing of it is above z. */
+export async function cutModel(id: string, ask: { z: number; lay: string; down?: number[] | null; scale: number }): Promise<{ model: string; name: string } | null> {
+  const r = await fetch(`${BASE}/models/${id}/cut`, opts({ method: 'POST', body: JSON.stringify(ask), headers: { 'content-type': 'application/json' } }))
+  if (r.status === 422) return null
+  if (r.status === 404) throw new Error("That model isn't on the slicer any more (it keeps them a day).")
+  return json<{ model: string; name: string }>(r)
 }
 
 export const getSupportLines = (id: string) =>

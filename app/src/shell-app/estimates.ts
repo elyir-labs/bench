@@ -1,10 +1,11 @@
-// How would it print? (design/look/, A): the model on the Look page, sliced for each printer, one after another (they
-// often share one slicer). Nothing is sent: a slice asked for here is never printed, and it's dropped when the page
+// How would it print? (design/look/, A): the model on the Look page, or several on one plate, sliced for each printer,
+// one after another (they often share one slicer). Nothing is sent: a slice asked for here is never printed, and it's dropped when the page
 // asks again or closes.
 // - A printer paired with this phone: at home, through its own /slice.
 // - A Bench Box paired with this phone (design/bench-look/, C): once, through its public name, for every printer on its
 //   bench, with the box's own rules for which filament and which printer (bench-app/shelf.ts), so the phone and the
-//   box's screen say the same. The model goes to the box to look at, off its shelf unless it's kept.
+//   box's screen say the same. The model goes to the box to look at, off its shelf unless it's kept. Several models
+//   are planned together on the box's own shelf (design/bench-several/), so here they're only kept there.
 
 import { reactive } from 'vue'
 import { benches, printers, type LiveBench, type LivePrinter } from './printers'
@@ -28,8 +29,8 @@ export const est = reactive<{ purpose: Purpose; order: string[]; rows: Record<st
 interface Asker { base: string | null; token: string; name: string }
 
 let gen = 0
-let file: File | null = null
-let uploads = new Map<string, UploadedModel[]>()     // per printer, for this file: a new purpose doesn't upload again
+let files: File[] | null = null
+let uploads = new Map<string, UploadedModel[]>()     // per printer, for these files: a new purpose doesn't upload again
 let looks = new Map<string, string>()                 // per Bench Box, the model it was sent to look at
 let running: { who: Asker; path: string } | null = null
 
@@ -96,14 +97,14 @@ export function stopEstimates() {
   drop()
   stacks.clear()
   paths.clear()
-  file = null
+  files = null
   uploads = new Map()
   looks = new Map()
   Object.assign(est, { order: [], rows: {}, info: {}, slicer: null, picked: null, open: false, kept: [] })
 }
 
-export function estimate(f: File, purpose: Purpose = est.purpose) {
-  if (f !== file) { stopEstimates(); file = f }
+export function estimate(fs: File[], purpose: Purpose = est.purpose) {
+  if (fs !== files) { stopEstimates(); files = fs }
   const g = ++gen
   drop()
   const boxes = benches.filter((b) => b.reach !== 'unpaired')
@@ -117,13 +118,13 @@ export function estimate(f: File, purpose: Purpose = est.purpose) {
   void (async () => {
     for (const b of boxes) {
       if (g !== gen) return
-      await fromBench(b, f, purpose, g)
+      await fromBench(b, fs, purpose, g)
     }
     for (const p of own) {
       if (g !== gen) return
       if (p.reach !== 'home' || !p.base) { est.rows[p.id] = rowBefore(p, true); continue }
       est.rows[p.id] = { kind: 'slicing' }
-      const row = await one(p, f, purpose, g).catch((e): Row => ({ kind: 'failed', error: (e as Error).message }))
+      const row = await one(p, fs, purpose, g).catch((e): Row => ({ kind: 'failed', error: (e as Error).message }))
       if (g !== gen) return
       est.rows[p.id] = row
       est.picked ??= firstPick(est.order, est.rows)
@@ -137,7 +138,7 @@ function rowBefore(p: LivePrinter, final = false): Row {
   return p.reach === 'checking' && !final ? { kind: 'queued' } : { kind: 'offline' }
 }
 
-async function one(p: LivePrinter, f: File, purpose: Purpose, g: number): Promise<Row> {
+async function one(p: LivePrinter, fs: File[], purpose: Purpose, g: number): Promise<Row> {
   const r = await fetch(`${p.base}/slice/options`, { cache: 'no-store', headers: headers(p) })
   const body = await r.json().catch(() => null)
   const st = stateFrom(r.status, r.headers.get('content-type') ?? '', body)
@@ -149,9 +150,12 @@ async function one(p: LivePrinter, f: File, purpose: Purpose, g: number): Promis
   est.slicer ??= st.slicer?.name ?? null
   let models = uploads.get(p.id)
   if (!models) {
-    const form = new FormData()
-    form.append('model', f, f.name)
-    models = modelsOf(await call<UploadedModel | UploadedSet>(p, '/slice/models', { method: 'POST', body: form }))
+    models = []
+    for (const f of fs) {
+      const form = new FormData()
+      form.append('model', f, f.name)
+      models.push(...modelsOf(await call<UploadedModel | UploadedSet>(p, '/slice/models', { method: 'POST', body: form })))
+    }
     uploads.set(p.id, models)
   }
   if (g !== gen) return { kind: 'queued' }
@@ -176,10 +180,12 @@ async function follow(who: Asker, at: string, job: SliceJob, id: string, g: numb
 }
 
 /** Every printer on a Bench Box, as its own model page would set it up: the same filament and the same rows. */
-async function fromBench(b: LiveBench, f: File, purpose: Purpose, g: number): Promise<void> {
+async function fromBench(b: LiveBench, fs: File[], purpose: Purpose, g: number): Promise<void> {
   const ids = b.printers.map((x) => `${b.id}/${x.id}`)
   const fail = (error: string) => { for (const id of ids) if (est.rows[id]?.kind !== 'done') est.rows[id] = { kind: 'failed', error } }
   if (!b.base) return fail("Can't reach the Bench Box")
+  if (fs.length > 1) return fail(`Keep them on ${b.name}'s shelf to plan them together there`)
+  const f = fs[0]
   try {
     const [intents, printable, mine] = await Promise.all([
       call<Record<string, Intent | null>>(b, '/bench/intents'), call<Printable>(b, '/bench/printable'),
@@ -217,11 +223,23 @@ async function fromBench(b: LiveBench, f: File, purpose: Purpose, g: number): Pr
   }
 }
 
-/** Keep it on the Bench Box's shelf: the model sent to look at becomes one of the shelf's. */
+/** Keep it on the Bench Box's shelf: the model sent to look at becomes one of the shelf's. Several models go on the
+ *  shelf one by one, for the box's Select to print together. */
 export async function keepOnBench(benchId: string): Promise<boolean> {
   const b = benches.find((x) => x.id === benchId), item = looks.get(benchId)
-  if (!b?.base || !item) return false
-  await call(b, `/bench/shelf/${item}/keep`, { method: 'PUT' })
+  if (!b?.base) return false
+  if (files && files.length > 1) {
+    for (const f of files) {
+      const form = new FormData()
+      form.append('model', f, f.name)
+      const it = await call<{ id: string }>(b, '/bench/look', { method: 'POST', body: form })
+      await call(b, `/bench/shelf/${it.id}/keep`, { method: 'PUT' })
+    }
+  } else if (item) {
+    await call(b, `/bench/shelf/${item}/keep`, { method: 'PUT' })
+  } else {
+    return false
+  }
   if (!est.kept.includes(benchId)) est.kept = [...est.kept, benchId]
   return true
 }

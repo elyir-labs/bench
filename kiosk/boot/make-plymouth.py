@@ -3,9 +3,10 @@
 
     python3 kiosk/boot/make-plymouth.py <out-dir>
 
-Writes elyir-bench.plymouth, elyir-bench.script, cover.json, pupil.png, hi.png, ring-0.png .. ring-100.png (the
-track plus 0% .. 100% of the arc, from twelve o'clock, round caps) and outline-0.png .. outline-50.png (the track alone,
-drawing itself round, for A′). Images are drawn at twice the design
+Writes elyir-bench.plymouth, elyir-bench.script, cover.json, pupil.png, ring-0.png .. ring-100.png (the
+track plus 0% .. 100% of the arc, from twelve o'clock, round caps), outline-0.png .. outline-50.png (the track alone,
+drawing itself round), and for E the Elyir signature: name-0.png .. name-64.png (elyir being written, by length
+along the stroke), dot.png (the i's dot before it lights) and glow.png. Images are drawn at twice the design
 size, so the script scales them down on the 800x480 panel and stays sharp on bigger ones.
 
 No dependencies: the panel's installer and the release build both run this with plain python3.
@@ -16,7 +17,6 @@ import json
 import math
 import pathlib
 import re
-import shutil
 import struct
 import sys
 import zlib
@@ -26,7 +26,9 @@ MARK = HERE.parent.parent / "app" / "src" / "boot" / "mark.json"
 SCALE = 2          # pixels per design unit in the images
 SS = 3             # subsamples per pixel side, for antialiasing
 FRAMES = 100       # ring-0 .. ring-100: one per percent of the arc
-OUTLINE = 50       # outline-0 .. outline-50: the track drawing itself round before the ring fills (A′)
+OUTLINE = 50       # outline-0 .. outline-50: the track drawing itself round before the ring fills
+NAME = 64          # name-0 .. name-64: elyir written, by length along the stroke
+GLOW = 4.2 * 0.68  # the dot's glow reaches this many dot radii, fading out from 0.55 (design/boot/, E)
 
 
 def png(path: pathlib.Path, w: int, h: int, rgba: bytearray) -> None:
@@ -117,11 +119,9 @@ def ring_frames(m: dict, out: pathlib.Path) -> int:
     return size
 
 
-def pupil(m: dict, out: pathlib.Path) -> int:
-    r = m["pupil"]["r"] * SCALE
+def disc(path: pathlib.Path, r: float, rgb, alpha: float = 1.0) -> int:
     size = math.ceil(2 * r) + 4
     c = size / 2
-    accent = hex_rgb(m["colors"]["accent"])
     buf = bytearray(size * size * 4)
     for y in range(size):
         for x in range(size):
@@ -129,9 +129,108 @@ def pupil(m: dict, out: pathlib.Path) -> int:
                       for j in range(SS) for i in range(SS)) / (SS * SS)
             if cov:
                 o = (y * size + x) * 4
-                buf[o:o + 4] = bytes((*accent, round(255 * cov)))
-    png(out / "pupil.png", size, size, buf)
+                buf[o:o + 4] = bytes((*rgb, round(255 * alpha * cov)))
+    png(path, size, size, buf)
     return size
+
+
+def pupil(m: dict, out: pathlib.Path) -> int:
+    return disc(out / "pupil.png", m["pupil"]["r"] * SCALE, hex_rgb(m["colors"]["accent"]))
+
+
+def over_bg(m: dict, rgba) -> tuple[int, int, int]:
+    """A translucent color as the solid color it makes on the boot background, so overlapping strokes don't darken."""
+    bg = hex_rgb(m["colors"]["bg"])
+    return tuple(round(rgba[3] * rgba[i] + (1 - rgba[3]) * bg[i]) for i in range(3))
+
+
+def path_points(d: str, step: float) -> list[tuple[float, float]]:
+    """An SVG path of M and C commands, as points no more than `step` apart in its own units."""
+    nums = [float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", d)]
+    assert re.fullmatch(r"M[-\d. ]+(C[-\d. ]+)+", d), "the signature path is M then C commands only"
+    x, y = nums[0], nums[1]
+    pts = [(x, y)]
+    for i in range(2, len(nums), 6):
+        x1, y1, x2, y2, x3, y3 = nums[i:i + 6]
+        rough = math.dist((x, y), (x1, y1)) + math.dist((x1, y1), (x2, y2)) + math.dist((x2, y2), (x3, y3))
+        n = max(2, math.ceil(rough / step))
+        for k in range(1, n + 1):
+            t = k / n
+            u = 1 - t
+            pts.append((u * u * u * x + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+                        u * u * u * y + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3))
+        x, y = x3, y3
+    return pts
+
+
+def signature(m: dict, out: pathlib.Path) -> dict:
+    """elyir being written, NAME + 1 frames cropped to the name, by length along the stroke, round caps.
+
+    Each subsample remembers the length along the stroke at which the pen first covers it, so a frame is
+    "every subsample covered by this length" and the strokes that cross over themselves draw in order.
+    """
+    g = m["signature"]
+    k = g["scale"] * SCALE                                  # image pixels per path unit
+    half = g["stroke"] * k / 2
+    pts = [((px - g["units"][0]) * k, (py - g["units"][1]) * k) for px, py in path_points(g["d"], 0.5 / k)]
+    x0 = math.floor(min(p[0] for p in pts) - half) - 2
+    y0 = math.floor(min(p[1] for p in pts) - half) - 2
+    w = math.ceil(max(p[0] for p in pts) + half) + 2 - x0
+    h = math.ceil(max(p[1] for p in pts) + half) + 2 - y0
+    sw = w * SS
+    first = [math.inf] * (sw * h * SS)
+    hs = half * SS
+    along = 0.0
+    prev = pts[0]
+    for p in pts:
+        along += math.dist(prev, p)
+        prev = p
+        cx, cy = (p[0] - x0) * SS - 0.5, (p[1] - y0) * SS - 0.5
+        for sy in range(max(0, math.ceil(cy - hs)), min(h * SS - 1, math.floor(cy + hs)) + 1):
+            span = math.sqrt(max(0.0, hs * hs - (sy - cy) ** 2))
+            row = sy * sw
+            for sx in range(max(0, math.ceil(cx - span)), min(sw - 1, math.floor(cx + span)) + 1):
+                if first[row + sx] > along:
+                    first[row + sx] = along
+    inked = {}
+    for y in range(h):
+        for x in range(w):
+            v = sorted(first[(y * SS + j) * sw + x * SS + i] for j in range(SS) for i in range(SS))
+            if v[0] < math.inf:
+                inked[(x, y)] = v
+    ink = over_bg(m, m["colors"]["ink"])
+    n = SS * SS
+    for f in range(NAME + 1):
+        L = along * f / NAME
+        buf = bytearray(w * h * 4)
+        for (x, y), v in (inked.items() if f else ()):
+            cov = bisect.bisect_right(v, L) / n
+            if cov:
+                o = (y * w + x) * 4
+                buf[o:o + 4] = bytes((*ink, round(255 * cov)))
+        png(out / f"name-{f}.png", w, h, buf)
+    ox, oy = g["origin"][0] + x0 / SCALE, g["origin"][1] + y0 / SCALE
+    tx = g["origin"][0] + (g["tittle"][0] - g["units"][0]) * g["scale"]
+    ty = g["origin"][1] + (g["tittle"][1] - g["units"][1]) * g["scale"]
+    return {"name_x": ox, "name_y": oy, "tittle": (tx, ty)}
+
+
+def lamp(m: dict, out: pathlib.Path) -> None:
+    """The i's dot before it lights, and its glow, both at the pupil's full size: the script shrinks them to the dot."""
+    r = m["pupil"]["r"] * SCALE
+    disc(out / "dot.png", r, over_bg(m, m["colors"]["ink"]))
+    R = r * GLOW
+    size = math.ceil(2 * R) + 4
+    c = size / 2
+    accent = hex_rgb(m["colors"]["accent"])
+    buf = bytearray(size * size * 4)
+    for y in range(size):
+        for x in range(size):
+            a = 0.55 * max(0.0, 1 - math.hypot(x + 0.5 - c, y + 0.5 - c) / R)
+            if a > 0:
+                o = (y * size + x) * 4
+                buf[o:o + 4] = bytes((*accent, round(255 * a)))
+    png(out / "glow.png", size, size, buf)
 
 
 def main(out: str) -> None:
@@ -140,14 +239,15 @@ def main(out: str) -> None:
     d.mkdir(parents=True, exist_ok=True)
     ring_frames(m, d)
     pupil(m, d)
-    # A′'s "hi" before the eye. Plymouth on the printers has no text plugin, so it is a picture: drawn once at 2x
-    # from the app's Figtree (500, 192px: 96 at 2x, the hi color) in a headless browser, trimmed to the letters with a 3 px
-    # margin. The eye's center is the letters' center.
-    shutil.copyfile(HERE / "hi.png", d / "hi.png")
+    lamp(m, d)
+    sig = signature(m, d)
     bg = hex_rgb(m["colors"]["bg"])
     values = {
         "@DW@": m["design"][0], "@DH@": m["design"][1], "@CX@": m["center"][0], "@CY@": m["center"][1],
         "@IMG_SCALE@": SCALE, "@FRAMES@": FRAMES, "@OUTLINE@": OUTLINE, "@HANDOFF@": m["handoff"],
+        "@NAME@": NAME, "@NAME_X@": round(sig["name_x"], 2), "@NAME_Y@": round(sig["name_y"], 2),
+        "@TX@": round(sig["tittle"][0], 2), "@TY@": round(sig["tittle"][1], 2),
+        "@DOT0@": round(m["signature"]["dot"] / (2 * m["pupil"]["r"]), 4),
         "@BG_R@": round(bg[0] / 255, 4), "@BG_G@": round(bg[1] / 255, 4), "@BG_B@": round(bg[2] / 255, 4),
     }
     # what cover.py needs to draw the handoff frame under cage until Chromium has a window (no app/ in a release)

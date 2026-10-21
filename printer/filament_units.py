@@ -14,6 +14,7 @@ The shape, from read():
     feed_assist  one bool per slot, or None when the driver doesn't say
     carry_on   the driver's endless-spool switch, or None when it has none
     lists      the colors, materials and temperatures the driver keeps for untagged spools
+    change     our service's tool change, going ({from, to, in_print, step}) or failed ({..., error}); else None
 """
 import asyncio
 import json
@@ -87,6 +88,7 @@ def _elyir(st: Dict[str, Any]) -> Dict[str, Any]:
         "carry_on": bool(st["carry_on"]) if "carry_on" in st else None,
         "lists": {"color": [], "material": [], "temp": []},
         "dryer_max": st.get("dryer_max"),
+        "change": st.get("change") if isinstance(st.get("change"), dict) else None,
     }
 
 
@@ -264,11 +266,14 @@ class KlipperAce:
 
 
 class Elyir:
-    """What our service takes (units/service.py), sent as "unit" steps: {"op", ...}. Tool changes come with the
-    quiet pause (design/ace-driver/, stage 4); until then there are none."""
+    """What our service takes (units/service.py), sent as "unit" steps: {"op", ...}."""
     name = "elyir"
     kind, long_kind = "unit", "unit_macro"
-    change_tool = None
+
+    @staticmethod
+    def change_tool(slot: int, purge: bool = True) -> Dict[str, Any]:
+        """Load a slot into the head; -1 unloads. The service runs the whole change (the quiet pause)."""
+        return {"op": "change_tool", "slot": slot, "purge": purge}
 
     @staticmethod
     def move(slot: int, mm: int) -> Dict[str, Any]:
@@ -293,6 +298,11 @@ class Elyir:
     @staticmethod
     def mark_loaded(slot: int) -> Dict[str, Any]:
         return {"op": "mark_loaded", "slot": slot}
+
+    @staticmethod
+    def purge(mm: int, temp: int) -> Dict[str, Any]:
+        """Push more through, at the printer's purge spot."""
+        return {"op": "purge", "mm": mm, "temp": temp}
 
     @staticmethod
     def set_spool(lists: Dict[str, List[Any]], n: int, slot: int, color: str, material: str,

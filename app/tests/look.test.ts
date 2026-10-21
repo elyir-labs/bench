@@ -7,7 +7,7 @@ import { createRequire } from 'node:module'
 import { deflateRawSync } from 'node:zlib'
 import { entries, readEntry } from '../src/look/zip.ts'
 import { partsOf, read3mf, then } from '../src/look/threemf.ts'
-import { readModel, sizeWords, title, together } from '../src/look/read.ts'
+import { readModel, sideBySide, sizeWords, title, together } from '../src/look/read.ts'
 import { stepParts, type Occt } from '../src/look/step.ts'
 import { sizeOf } from '../src/slice/stl.ts'
 
@@ -112,6 +112,27 @@ test('readModel: STL by its name, nothing that is not a model, no empty files', 
   await assert.rejects(readModel('empty.stl', new TextEncoder().encode('solid e\nendsolid e\n').buffer as ArrayBuffer, none), /no model/)
   assert.equal(title('plate.3mf', [parts[0], parts[0]]), '2 parts')
 })
+
+test('several files on one plate: side by side on the bed, each file keeping its own parts where it put them', () => {
+  const box = (x: number, y: number, z: number, d: number) => new Float32Array([x, y, z, x + d, y, z, x, y + d, z + d])
+  const a = [{ name: 'Lid', tris: box(-5, -5, 0, 10) }]
+  const b = [{ name: 'Left', tris: box(100, 0, 3, 4) }, { name: 'Right', tris: box(120, 0, 3, 4) }]
+  const out = sideBySide([a, b])
+  assert.deepEqual(out.map((p) => p.name), ['Lid', 'Left', 'Right'])
+  const [x0a, , , x1a] = [...span(out[0].tris)], [x0b] = [...span(out[1].tris)]
+  assert.ok(x0b >= x1a + 6, 'the second file starts past the first, 6 mm apart')
+  assert.equal(span(out[1].tris)[2], 0, "a file that floats is set down on the bed")
+  assert.equal(span(out[2].tris)[0] - span(out[1].tris)[0], 20, "a file's own parts keep their spacing")
+  assert.equal(x1a - x0a, 10)
+  assert.equal(sideBySide([a]), a)
+  assert.equal(title('', out, 2), '2 models')
+})
+
+function span(t: Float32Array): [number, number, number, number] {
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity
+  for (let i = 0; i < t.length; i += 3) { x0 = Math.min(x0, t[i]); x1 = Math.max(x1, t[i]); y0 = Math.min(y0, t[i + 1]); z0 = Math.min(z0, t[i + 2]) }
+  return [x0, y0, z0, x1]
+}
 
 test('the STEP reader runs where the CSP forbids eval, once its invoker is patched', async () => {
   const { runInContext, createContext } = await import('node:vm')

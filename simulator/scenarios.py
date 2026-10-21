@@ -669,7 +669,50 @@ async def bring_done(sim, **_) -> None:
     sim.publish(force=True)
 
 
+# ---- power cuts (design/power-loss/, A) ----------------------------------------------------------------------
+
+STAND = "phone_stand_0.2mm_PLA_MK4_1h40m.gcode"
+
+
+def _on_battery(sim, on: bool, charge: float = 70.0) -> None:
+    sim.tracker.set_ups({"on_battery": on, "low": False, "charge": charge, "runtime_s": 3000.0 * charge / 70})
+
+
+async def power_out(sim, **_) -> None:
+    """A print at 44% on a UPS; the power goes, and (the 30 s skipped) it holds where it is."""
+    _printing_at_40(sim, STAND)
+    sim.patch({"print_stats": {"info": {"current_layer": 61, "total_layer": 140}}, "virtual_sdcard": {"progress": 0.44}})
+    await sim.sleep(2)
+    _on_battery(sim, True)
+    sim.drive()
+    sim.tracker._outage["since"] -= 31
+    sim.drive()
+
+
+async def power_back(sim, **_) -> None:
+    """Held on the battery for a few minutes; the power comes back, and after 30 s it heats up and carries on."""
+    await power_out(sim)
+    sim.tracker._outage["since"] -= 6 * 60
+    await sim.sleep(4)
+    _on_battery(sim, False, charge=64)
+    sim.drive()
+
+
+async def power_lost(sim, **_) -> None:
+    """Back on Ready after the power took a print (no battery, or it ran out): the checkpoint it left."""
+    await idle(sim)
+    now = time.time()
+    sim.record_job(STAND, "interrupted", 44 * 60)
+    sim.tracker.restore_checkpoint({"file": STAND, "layer": 61, "layers": 140, "z": 12.2, "height": 28, "progress": 0.44,
+                                    "material": "PLA", "nozzle": 215.0, "bed": 60.0, "slot": 1, "objects": [],
+                                    "at": now - 3 * 3600 - 10 * 60, "outage_since": None, "back": now - 7 * 60})
+    sim.patch({"print_stats": {"state": "standby", "filename": ""}})
+
+
 SCENARIOS = {
+    "power_out": power_out,
+    "power_back": power_back,
+    "power_lost": power_lost,
     "spool_unknown": spool_unknown,
     "spool_told": spool_told,
     "spool_guess": spool_guess,

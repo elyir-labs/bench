@@ -111,6 +111,20 @@ SLICER_DIR = BASE / "slicer"                      # the engine and the service's
 SLICER_WORK = DOOR_STATE / "slicer"               # models and G-code, kept a day
 SLICER_UNIT = "elyir-bench-slicer.service"
 BENCH_UNIT = "elyir-bench-bench.service"           # a Bench Box's own service (bench/bench_service.py, docs/bench.md)
+# Bench's own filament-unit service (units/, design/ace-driver/) in place of KlipperACE, with filament_units: elyir
+UNITS_UNIT = "elyir-units.service"
+UNITS_CFG = "elyir_units.cfg"
+UNITS_INCLUDE = "[include elyir_units.cfg]"
+UNITS_STATE = "elyir-units.json"
+UNITS_TOOLS = 16                                   # T0..T15, as KlipperACE gives four units
+KLIPPERACE_INCLUDES = ("[include ace.cfg]", "[include ace_diagnostics.cfg]")
+UNITS_OFF = "# off while Bench's filament-unit service runs: "
+# elyir-bench.conf keys -> the service's tool change settings (units/toolchange.py DEFAULTS)
+UNITS_SETTINGS = {"units_before_macro": ("before_macro", str), "units_after_macro": ("after_macro", str),
+                  "units_sensor_to_nozzle": ("sensor_to_nozzle", float), "units_park": ("park", float),
+                  "units_temp": ("temp", int), "units_purge_moves": ("purge_moves", str),
+                  "units_push_start": ("push_start", str), "units_push_end": ("push_end", str),
+                  "units_backoff": ("backoff", float)}
 BENCH_PORT = 8096
 SLICER_PORT = 8095
 # A new printer's first Wi-Fi (docs/setup.md, setup/wifi_setup.py): with no network, its own setup Wi-Fi
@@ -859,7 +873,7 @@ def default_settings(facts: dict) -> dict:
     return {"printer_name": name, "panel": panel, "panel_output": "auto", "panel_rotation": "auto",
             "panel_backend": "auto", "panel_render": "auto", "boot_screen": "elyir-bench", "port": "8088",
             "remote": "relay", "slicer": "auto", "slice_for_others": "off", "role": "auto", "start_macro": "off",
-            "network_wait": "off",
+            "network_wait": "off", "filament_units": "klipperace",
             "remote_name": facts.get("public_name") or re.sub(r"[^a-z0-9-]+", "-", facts["host"].split(".")[0].lower()).strip("-")}
 
 
@@ -914,6 +928,9 @@ def save_settings(facts: dict, s: dict) -> Path:
         f"start_macro: {s.get('start_macro', 'off')}\n"
         "# off: the printer starts without waiting for the Wi-Fi (about 6 s sooner to the screen) | on: it waits\n"
         f"network_wait: {s.get('network_wait', 'off')}\n"
+        "# The filament unit's driver (design/ace-driver/): klipperace | elyir (Bench's own service, in KlipperACE's place)\n"
+        f"filament_units: {s.get('filament_units', 'klipperace')}\n"
+        + "".join(f"{k}: {s[k]}\n" for k in (*UNITS_SETTINGS, "units_sensor_pin") if s.get(k))
         # the ones set only by hand (a staging printer's cloud_api and printers_app, docs/cloud.md): kept when present
         + "".join(f"{k}: {s[k]}\n" for k in ("relay_api", "relay_addr", "relay_zone", "acme_ca", "cloud_api", "printers_app",
                                             "printer_id", "remote_former")
@@ -1195,9 +1212,13 @@ def render_klipperscreen_conf(current: str) -> str:
     return (head + "\n\n" if head else "") + KS_MENU + ("\n" + tail if tail else "")
 
 
-def render_kiosk_unit(facts: dict, s: dict, output: str) -> str:
+def panel_rotation(facts: dict, s: dict) -> int:
     r = str(s.get("panel_rotation", "auto"))
-    rotation = facts.get("panel_rotation", 0) if r == "auto" else int(r)
+    return facts.get("panel_rotation", 0) if r == "auto" else int(r)
+
+
+def render_kiosk_unit(facts: dict, s: dict, output: str) -> str:
+    rotation = panel_rotation(facts, s)
     render = kiosk_render(facts, s)
     if kiosk_backend(facts, s) == "x11":
         # X's wrapper (allowed_users=anybody) picks a free VT and takes the display, like KlipperScreen
@@ -1319,14 +1340,29 @@ def boot_dir() -> Path:
     return Path("/boot/firmware") if Path("/boot/firmware/cmdline.txt").exists() else Path("/boot")
 
 
-def render_cmdline(current: str, on: bool, original: str | None = None) -> str:
+def orientation_arg(output: str | None, rotation: int) -> str | None:
+    """The kernel's word for a panel turned upside down, so Plymouth draws the right way up from its first frame:
+    the kiosk only turns the picture (wlr-randr) once cage is up. 90 and 270 aren't passed: no printer has one
+    to check which way round left_side_up and right_side_up land."""
+    if rotation == 180 and output and output != "auto":
+        return f"video={output}:panel_orientation=upside_down"
+    return None
+
+
+def render_cmdline(current: str, on: bool, original: str | None = None, orientation: str | None = None) -> str:
     """The kernel command line with the boot screen on or off: still one line, and every token that
     isn't ours stays where it was. Off takes away only what on added, judged against the copy saved
-    before the first change (cmdline.txt.elyir-bench-orig)."""
+    before the first change (cmdline.txt.elyir-bench-orig). orientation is orientation_arg()'s token, kept
+    only while on and unless the person already set that output's orientation themselves."""
     tokens = current.split()
+    theirs = (original or current).split()
+    ours = lambda t: t.startswith("video=") and ":panel_orientation=" in t and t not in theirs
+    tokens = [t for t in tokens if not ours(t)]
     if on:
         tokens = ["console=tty3" if t == "console=tty1" else t for t in tokens]
         tokens += [a for a in QUIET_ARGS if a not in tokens]
+        if orientation and not any(t.startswith(orientation.split(":")[0] + ":") for t in tokens):
+            tokens.append(orientation)
     else:
         before = original.split() if original else []
         tokens = [t for t in tokens if t in before or t not in QUIET_ARGS]
@@ -1840,6 +1876,253 @@ class StartMacro(Step):
         if start_macro_on(c.s) and not klipper_has(c.facts, START_MACRO_COMMAND):
             raise StepFailed(f"Klipper started again without ELYIR_BENCH_PRINT_START; is {START_MACRO_INCLUDE} "
                              "below a section that stops it being read?")
+
+
+def units_on(s: dict) -> bool:
+    return s.get("filament_units", "klipperace") == "elyir"
+
+
+def render_units_printer_cfg(text: str, on: bool) -> str:
+    """printer.cfg with KlipperACE's includes switched off and ours in (on), or the other way round. The lines are
+    commented out with a mark, never deleted, so switching back puts them back as they were."""
+    lines = text.split("\n")
+    out: list[str] = []
+    for line in lines:
+        bare = line[len(UNITS_OFF):] if line.startswith(UNITS_OFF) else line
+        if line.strip() == UNITS_INCLUDE:
+            continue
+        if bare.strip() in KLIPPERACE_INCLUDES:
+            out.append(UNITS_OFF + bare if on else bare)
+        else:
+            out.append(line)
+    if on:
+        marked = [i for i, line in enumerate(out) if line.startswith(UNITS_OFF)]
+        if marked:
+            at = marked[-1] + 1
+        else:
+            includes = [i for i, line in enumerate(out) if line.startswith("[include ")]
+            at = includes[-1] + 1 if includes else 0
+        out.insert(at, UNITS_INCLUDE)
+    return "\n".join(out)
+
+
+def render_units_moonraker(text: str, on: bool) -> str:
+    """moonraker.conf with KlipperACE's own component ([ace_manager]) switched off and back, the same way."""
+    out: list[str] = []
+    inside = False
+    for line in text.split("\n"):
+        bare = line[len(UNITS_OFF):] if line.startswith(UNITS_OFF) else line
+        if bare.startswith("["):
+            inside = bare.strip() == "[ace_manager]"
+        if inside and bare.strip():
+            out.append(UNITS_OFF + bare if on else bare)
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def render_units_cfg(template: str, pin: str, own_sensor: bool) -> str:
+    tools = "".join(f"\n[gcode_macro T{i}]\ngcode: ELYIR_TOOL T={i}\n" for i in range(UNITS_TOOLS))
+    # KlipperACE makes the head's filament_switch_sensor itself; without it, ours keeps it for the screens
+    head = "" if own_sensor else (f"# The head's filament sensor, which KlipperACE made itself; the screens read it.\n"
+                                  f"[filament_switch_sensor extruder_sensor]\nswitch_pin: {pin}\npause_on_runout: False\n")
+    # [duplicate_pin_override] takes the bare pin; the sections using it carry the pull-up (^) or inversion (!)
+    return template.format(sensor_pin=pin, sensor_bare=pin.lstrip("^~! "), tool_macros=tools, head_sensor=head)
+
+
+def units_own_sensor(facts: dict, folder: Path) -> bool:
+    """A filament_switch_sensor among the sections Klipper loaded from the printer's own files. KlipperACE's never
+    shows there (it makes its sensor itself), and the one our file adds is left out."""
+    try:
+        loaded = http_json(f"{facts['moonraker']['url']}/printer/objects/query?configfile=config",
+                           timeout=4)["result"]["status"]["configfile"]["config"]
+    except Exception:
+        return False
+    ours = "[filament_switch_sensor extruder_sensor]" in read(folder / UNITS_CFG)
+    return any(k.startswith("filament_switch_sensor ") and not (ours and k == "filament_switch_sensor extruder_sensor")
+               for k in loaded)
+
+
+def units_sensor_pin(facts: dict, s: dict | None = None) -> str | None:
+    """The extruder's filament sensor pin: units_sensor_pin in elyir-bench.conf (a pull-up a printer needs, such as
+    ^EBBCan:PB8, that KlipperACE's reported pin doesn't show), else our own button's once switched, else the sensor
+    named for the head in Klipper's config (KlipperACE's own included), else the only one."""
+    if s and s.get("units_sensor_pin"):
+        return s["units_sensor_pin"]
+    try:
+        settings = http_json(f"{facts['moonraker']['url']}/printer/objects/query?configfile=settings",
+                             timeout=4)["result"]["status"]["configfile"]["settings"]
+    except Exception:
+        return None
+    ours = (settings.get("gcode_button elyir_units_sensor") or {}).get("pin")
+    if ours:
+        return ours
+    sensors = {k: v for k, v in settings.items() if k.startswith("filament_switch_sensor ") and v.get("switch_pin")}
+    head = [v for k, v in sensors.items() if any(w in k for w in ("extruder", "toolhead", "head"))]
+    pick = head or (list(sensors.values()) if len(sensors) == 1 else [])
+    return pick[0]["switch_pin"] if pick else None
+
+
+def units_settings(s: dict) -> dict:
+    """The tool change settings for the service, from elyir_bench.conf's units_* keys."""
+    return {name: kind(s[key]) for key, (name, kind) in UNITS_SETTINGS.items() if s.get(key)}
+
+
+def units_seed(facts: dict, s: dict) -> dict:
+    """The service's first state on a printer that ran KlipperACE: the slot in the head and the untagged spools'
+    colors and materials (Klipper's saved variables), and the tool change settings from elyir_bench.conf."""
+    state: dict = {"settings": units_settings(s)}
+    url = facts["moonraker"]["url"]
+    try:
+        st = http_json(f"{url}/printer/objects/query?ace=selected_gate&save_variables", timeout=4)["result"]["status"]
+        sel = (st.get("ace") or {}).get("selected_gate")
+        if isinstance(sel, int) and sel >= 0:
+            state["selected"] = sel
+        var = (st.get("save_variables") or {}).get("variables") or {}
+        colors, mats = var.get("ace_gate_color") or [], var.get("ace_gate_type") or []
+        spools = {}
+        for g in range(max(len(colors), len(mats))):
+            color = str(colors[g]).lstrip("#") if g < len(colors) else ""
+            mat = str(mats[g]) if g < len(mats) else ""
+            if mat:
+                spools[str(g)] = {"color": "#" + color.upper() if re.fullmatch(r"[0-9a-fA-F]{6}", color) else None,
+                                  "material": mat.upper()}
+        if spools:
+            state["spools"] = spools
+    except Exception:
+        pass
+    return state
+
+
+def render_units_unit(facts: dict) -> str:
+    data = Path(facts["printer_data"])
+    return f"""# Managed by elyir-bench (design/ace-driver/): Bench's filament-unit service, in place of KlipperACE
+[Unit]
+Description=Bench's filament-unit service: the ACE Pro units, their slots and tool changes
+After=moonraker.service
+ConditionPathExists={CURRENT}/units/service.py
+
+[Service]
+User={facts['user']}
+ExecStart={DOOR_VENV / 'bin' / 'python'} {CURRENT}/units/service.py --socket {data / 'comms' / 'elyir-units.sock'} --state {data / 'config' / UNITS_STATE} --moonraker ws://127.0.0.1:{facts['moonraker']['url'].rsplit(':', 1)[-1]}/websocket
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+class FilamentUnits(Step):
+    """filament_units: elyir puts Bench's own service in KlipperACE's place (design/ace-driver/, A): its Klipper config
+    (the sensor's push, ELYIR_TOOL, T0..T15) in, KlipperACE's includes and Moonraker component switched off, the
+    service running, and its first state carried over from KlipperACE. klipperace (the default) puts it all back.
+    Klipper restarts to read it, never while printing."""
+    name = "filament units"
+
+    def _want(self, c) -> dict[Path, str | None] | None:
+        folder, on = config_dir(c.facts), units_on(c.s)
+        want: dict[Path, str | None] = {folder / UNITS_CFG: None,
+                                        folder / "printer.cfg": render_units_printer_cfg(read(folder / "printer.cfg"), on),
+                                        Path(c.facts["moonraker"]["conf"]): render_units_moonraker(read(c.facts["moonraker"]["conf"]), on)}
+        if on:
+            src = CURRENT / "units" / "klipper" / UNITS_CFG
+            pin = units_sensor_pin(c.facts, c.s)
+            if not src.is_file() or pin is None:
+                return None
+            want[folder / UNITS_CFG] = render_units_cfg(read(src), pin, units_own_sensor(c.facts, folder))
+        return want
+
+    def _stale_settings(self, c) -> bool:
+        try:
+            have = json.loads(read(config_dir(c.facts) / UNITS_STATE) or "{}").get("settings") or {}
+        except ValueError:
+            return True
+        return have != units_settings(c.s)
+
+    def _todo(self, want: dict[Path, str | None]) -> list[str]:
+        return [p.name for p, text in want.items() if (p.exists() if text is None else (not p.exists() or read(p) != text))]
+
+    def check(self, c):
+        folder, on = config_dir(c.facts), units_on(c.s)
+        if folder is None or not (folder / "printer.cfg").is_file():
+            return (not on, "KlipperACE (no printer.cfg here)" if not on else "no printer.cfg found")
+        want = self._want(c)
+        if want is None:
+            return (False, "no extruder filament sensor found in Klipper's config, or this release has no units/")
+        todo = self._todo(want)
+        running = is_enabled(UNITS_UNIT) or is_active(UNITS_UNIT)
+        if not on:
+            if todo or running:
+                return (False, "to put KlipperACE back: " + ", ".join(todo + (["the service"] if running else [])))
+            return (True, "KlipperACE")
+        if todo:
+            return (False, "to switch from KlipperACE: " + ", ".join(todo))
+        if self._stale_settings(c):
+            return (False, "the service's settings changed in elyir-bench.conf")
+        if read(f"/etc/systemd/system/{UNITS_UNIT}") != render_units_unit(c.facts):
+            return (False, "the service needs writing")
+        if c.switched_from:
+            return (False, "new release: the service restarts on it")
+        if not (is_enabled(UNITS_UNIT) and is_active(UNITS_UNIT)):
+            return (False, "the service isn't running")
+        return (True, "Bench's own service, KlipperACE off")
+
+    def apply(self, c):
+        folder, on = config_dir(c.facts), units_on(c.s)
+        if folder is None or not (folder / "printer.cfg").is_file():
+            if on:
+                raise StepFailed("no printer.cfg, so there's nowhere to switch KlipperACE off")
+            return
+        printing = c.facts.get("print_state") in ("printing", "paused")
+        want = self._want(c)
+        if want is None:
+            raise StepFailed("there's no extruder filament sensor in Klipper's config for the service to watch")
+        todo = self._todo(want)
+        if todo and printing and not c.force:
+            raise StepFailed(f"the printer is {c.facts['print_state']}, and Klipper has to restart for the switch. "
+                             "Try again when it's done (or --force).")
+        state = folder / UNITS_STATE
+        if on and not state.exists():
+            state.write_text(json.dumps(units_seed(c.facts, c.s), indent=1))   # read while KlipperACE still runs
+        elif on and self._stale_settings(c):
+            kept = json.loads(read(state) or "{}")
+            kept["settings"] = units_settings(c.s)
+            state.write_text(json.dumps(kept, indent=1))   # the service reads them as it starts, below
+        if not on and (is_enabled(UNITS_UNIT) or is_active(UNITS_UNIT)):
+            sudo("systemctl", "disable", "--now", UNITS_UNIT, check=False)
+        before = {p: (read(p) if p.exists() else None) for p in want}
+        for p, text in want.items():
+            if text is None:
+                p.unlink(missing_ok=True)
+            elif not p.exists() or read(p) != text:
+                p.write_text(text)
+        moon = Path(c.facts["moonraker"]["conf"])
+        if moon.name in todo:
+            c.restart_moonraker = True
+        # Klipper lets go of the unit's port first: two programs on one serial port would talk over each other
+        if any(p.parent == folder for p in want if p.name in todo) and not printing:
+            klipper_restart(c.facts)
+        if on:
+            unit = f"/etc/systemd/system/{UNITS_UNIT}"
+            if read(unit) != render_units_unit(c.facts):
+                sudo_write(unit, render_units_unit(c.facts))
+                sudo("systemctl", "daemon-reload")
+            sudo("systemctl", "enable", UNITS_UNIT)
+            sudo("systemctl", "restart", UNITS_UNIT)
+
+        def put_back():
+            for p, text in before.items():
+                if text is None:
+                    p.unlink(missing_ok=True)
+                else:
+                    p.write_text(text)
+            if on:
+                sudo("systemctl", "disable", "--now", UNITS_UNIT, check=False)
+            if not printing:
+                klipper_restart(c.facts)
+        if todo:
+            c.undo.append(("filament units", put_back))
 
 
 def render_bench_nginx(facts: dict, s: dict) -> str:
@@ -3413,6 +3696,9 @@ class BootScreen(Step):
         return not model or "Raspberry Pi" in model
     def _on(self, c):
         return boot_screen_wanted(c.facts, c.s)
+    @staticmethod
+    def _orientation(c):
+        return orientation_arg(c.output, panel_rotation(c.facts, c.s))
     def _theme(self):
         src = CURRENT / "kiosk" / "boot" / "plymouth"
         names = sorted(p.name for p in src.iterdir() if p.is_file()) if src.is_dir() else []
@@ -3449,7 +3735,7 @@ class BootScreen(Step):
             if load_state().get("boot_getty_disabled") and not is_enabled("getty@tty1.service"):
                 todo.append("tty1 login prompt")
         cmd = read(b / "cmdline.txt")
-        if cmd and cmd != render_cmdline(cmd, on, read(b / "cmdline.txt.elyir-bench-orig") or None):
+        if cmd and cmd != render_cmdline(cmd, on, read(b / "cmdline.txt.elyir-bench-orig") or None, self._orientation(c)):
             todo.append("kernel command line")
         cfg = read(b / "config.txt")
         if cfg and cfg != render_config_txt(cfg, on):
@@ -3497,7 +3783,7 @@ class BootScreen(Step):
         # The boot files last, once everything they switch on is in place. Each is one tee of the
         # whole file; a first install that fails afterwards puts the old text back.
         cmd = read(cmd_p)
-        new = render_cmdline(cmd, on, read(orig_p) or None)
+        new = render_cmdline(cmd, on, read(orig_p) or None, self._orientation(c))
         if cmd and new != cmd:
             if not orig_p.exists():
                 sudo("cp", "-n", str(cmd_p), str(orig_p))
@@ -3541,7 +3827,8 @@ class NetworkWait(Step):
             st = load_state(); st["network_wait_disabled"] = False; save_state(st)
 
 
-STEPS: list[Step] = [Preflight(), Release(), Legacy(), Component(), MoonrakerConf(), StartMacro(), Web(), Announce(), Panel(),
+STEPS: list[Step] = [Preflight(), Release(), Legacy(), Component(), MoonrakerConf(), StartMacro(), FilamentUnits(), Web(),
+                     Announce(), Panel(),
                      WifiSetup(),
                      KlipperScreenMenu(),
                      DoorRuntime(), DoorBinaries(), RemoteName(), DoorServices(), SlicerEngine(), SlicerService(), BenchService(),

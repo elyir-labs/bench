@@ -535,7 +535,8 @@ class LanUpstream:
                 raise RpcError(400, "That G-code can't be sent over LAN mode")
         if not settings:
             return "ok"
-        if self.info.get("project"):
+        p = self.info.get("project")
+        if p and not stopped(p):   # a stopped job stays in info until someone touches the screen: that Kobra is idle
             self._publish("print", "update", {"taskid": "-1", "settings": settings}, web=True)
             return "ok"
         # Idle, Kobras differ: one ignores a print update to 0 (Kobra 3, fw 2.4.6.7), another ignores a print update at

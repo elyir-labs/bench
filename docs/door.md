@@ -200,6 +200,12 @@ It tries each printer's home name first (about 1.5 s) and falls back to its publ
   phone's pushes with it. It lives only in that phone's record (0600) and goes when the phone is
   removed; a new key replaces the old. Payloads carry `printer` so a tap opens the right one. The
   consequence, stated plainly: any printer a phone is paired with can send that phone any notification.
+- **Kept loaded.** The printers opened lately (3 on a laptop, 2 on a phone) stay loaded behind the one
+  shown and behind the list, so going back to one is instant and it is where it was. Frames stay in
+  the page in the order opened, because moving an iframe reloads it. The shell sends
+  `elyir-bench:shown {shown}`, and the frame then reports itself hidden, so the camera stops while it
+  can't be seen. A printer app that doesn't say `hides: true` with `elyir-bench:listening` (older than
+  this) is unloaded after 3 minutes hidden.
 - **Adding a printer:** `/door/pair/new` also returns `shell_url`, which the panel's QR code shows.
   Printers can also scan that code itself (Add, then Scan the printer's code), which pairs the
   installed app directly; on an iPhone that matters, because the Camera app opens it in Safari.

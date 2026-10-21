@@ -178,3 +178,14 @@ def test_motors_off_forgets_where_it_was():
     assert act(t, "hands_motors_off", now=2.0) == ["M84"]
     t.update_status({"toolhead": {"homed_axes": ""}}, now=2.5)
     assert act(t, "hands_move", now=3.0, axis="z", mm=10) == ["G28"]
+
+
+def test_a_printer_that_reports_no_toolhead_only_heats():
+    # a Kobra over Anycubic's LAN mode: heater settings only (bench/kobra_lan.py)
+    t = tracker()
+    del t.status["toolhead"]
+    assert t.intent(now=1.0)["hands"]["can_move"] is False
+    for action in a.HANDS_MOVES:
+        assert a.plan_action(action, {"axis": "z", "mm": 10}, t) == []
+    assert act(t, "hands_nozzle") == [f"M104 S{a.MATERIAL_TEMPS['PETG']}"]
+    assert act(t, "hands_heat", now=2.0, heater="bed", target=80) == ["M140 S80"]

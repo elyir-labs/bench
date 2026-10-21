@@ -1,10 +1,13 @@
 {
-  "_comment": "The boot eye's geometry, in the 800x480 design frame (design/boot/, A′: the eye says hi). The single source for the app's boot screen (BootScreen.vue), the first frame inlined into index.html (vite.config.ts), the Plymouth theme's images (kiosk/boot/make-plymouth.py) and the boot cover (kiosk/boot/cover.py). Every screen size scales this by min(width/800, height/480) around its center. now_tab is the Now tab's icon (src/shell/AppShell.vue, a 24 box) that the eye lands in.",
+  "_comment": "The boot eye's geometry, in the 800x480 design frame (design/boot/, E: the Elyir signature becomes the eye). The single source for the app's boot screen (BootScreen.vue), the first frame inlined into index.html (vite.config.ts), the Plymouth theme's images (kiosk/boot/make-plymouth.py) and the boot cover (kiosk/boot/cover.py). Every screen size scales this by min(width/800, height/480) around its center. signature is the name as Home Hub writes it when it starts, a path in its own units placed at origin + (point - units) * scale; tittle is the dot of the i and dot its diameter in design units before it grows into the pupil. now_tab is the Now tab's icon (src/shell/AppShell.vue, a 24 box) that the eye lands in.",
   "design": [800, 480],
   "center": [400, 212],
   "ring": { "r": 56, "stroke": 4 },
   "pupil": { "r": 15 },
-  "hi": { "size": 96, "weight": 500 },
+  "signature": {
+    "d": "M68 222C80 216 90 211 100 205C120 195 145 180 145 165C145 150 118 152 110 175C102 200 110 240 140 240C160 240 175 225 185 205C200 170 225 90 225 55C225 25 200 25 195 60C190 100 190 200 200 230C207 245 225 245 240 225C248 210 252 185 255 160C252 195 255 240 280 240C300 240 310 205 312 160C312 230 310 300 295 330C285 350 260 345 268 320C278 290 320 265 345 235C352 215 358 185 362 160C358 195 356 225 368 240C378 250 395 235 405 215C410 195 415 175 420 160C428 168 440 170 448 162C450 190 452 220 458 240C463 228 476 214 494 208",
+    "origin": [188, 88], "units": [10, 10], "scale": 0.8, "stroke": 10, "tittle": [364, 118], "dot": 12.8
+  },
   "now_tab": { "r": 8.5, "stroke": 1.8, "pupil": 3 },
   "handoff": 0.6,
   "name_y": 322,
@@ -14,7 +17,7 @@
     "accent": "#4da3ff",
     "problem": "#f26060",
     "track": [255, 255, 255, 0.26],
-    "hi": [255, 255, 255, 0.86],
+    "ink": [255, 255, 255, 0.86],
     "name": [255, 255, 255, 0.72],
     "line": [255, 255, 255, 0.46]
   }

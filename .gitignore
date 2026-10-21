@@ -3,3 +3,7 @@ __pycache__/
 .DS_Store
 *.pyc
 dist/
+
+# links into the elyir-design repo
+/design
+/hardware

@@ -236,7 +236,8 @@ def _mul(a: List[List[float]], b: List[List[float]]) -> List[List[float]]:
 
 
 def three_mf_parts(path: str) -> List[Dict[str, Any]]:
-    """The parts of a 3MF: [{name, tris, copies}], tris in mm as placed (turned as the designer turned them).
+    """The parts of a 3MF: [{name, tris, copies, filaments}], tris in mm as placed (turned as the designer turned
+    them), filaments each triangle's filament (1-based: what it's painted, else its part's, else its object's, else 1).
     Follows components into other model files (3MF production extension, as Bambu Studio and Orca write)."""
     with zipfile.ZipFile(path) as z:
         names_in = set(z.namelist())
@@ -259,11 +260,16 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
         # Bambu Studio / Orca: object names, and which volumes are modifiers rather than the part
         names: Dict[str, str] = {}
         skip: set = set()
+        filament: Dict[str, int] = {}            # object or part id → its filament
         if "Metadata/model_settings.config" in names_in:
             for obj in ET.fromstring(z.read("Metadata/model_settings.config")).iter("object"):
                 nm = next((m.get("value") for m in obj.findall("metadata") if m.get("key") == "name"), None)
                 if nm:
                     names[obj.get("id")] = nm
+                for el in (obj, *obj.iter("part")):
+                    f = next((m.get("value") for m in el.findall("metadata") if m.get("key") == "extruder"), "")
+                    if f.isdigit() and int(f) > 0:
+                        filament[el.get("id")] = int(f)
                 for part in obj.iter("part"):
                     if part.get("subtype") in NOT_A_PART:
                         skip.add(part.get("id"))
@@ -273,7 +279,7 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
 
         cache: Dict[str, Dict[str, Any]] = {}
 
-        def tris_of(model_path: str, oid: str, m: List[List[float]], depth: int = 0) -> List[List[List[float]]]:
+        def tris_of(model_path: str, oid: str, m: List[List[float]], depth: int = 0, fil: int = 1) -> List[Tuple[List[List[float]], int]]:
             if depth > 8:
                 return []
             if model_path not in cache:
@@ -281,7 +287,8 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
             obj = cache[model_path].get(oid)
             if obj is None:
                 return []
-            out: List[List[List[float]]] = []
+            fil = filament.get(oid, fil)
+            out: List[Tuple[List[List[float]], int]] = []
             mesh = obj.find(f"{pre}mesh")
             if mesh is not None:
                 vs = []
@@ -290,7 +297,8 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
                     vs.append([x * m[0][j] + y * m[1][j] + zz * m[2][j] + m[3][j] for j in range(3)])
                 for t in mesh.iter(f"{pre}triangle"):
                     try:
-                        out.append([vs[int(t.get("v1"))], vs[int(t.get("v2"))], vs[int(t.get("v3"))]])
+                        out.append(([vs[int(t.get("v1"))], vs[int(t.get("v2"))], vs[int(t.get("v3"))]],
+                                    paint_state(t.get("paint_color")) or fil))
                     except (IndexError, TypeError, ValueError):
                         continue
             for c in obj.iter(f"{pre}component"):
@@ -298,7 +306,7 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
                 if cid in skip:
                     continue
                 cpath = next((v for kk, v in c.attrib.items() if kk.endswith("}path")), None) or model_path
-                out += tris_of(cpath.lstrip("/"), cid, _mul(_matrix(c.get("transform")), m), depth + 1)
+                out += tris_of(cpath.lstrip("/"), cid, _mul(_matrix(c.get("transform")), m), depth + 1, fil)
             return out
 
         groups: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
@@ -313,14 +321,15 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
             if key in groups:
                 groups[key]["copies"] += 1
                 continue
-            tris = tris_of(root_path, oid, m)
-            if not tris:
+            pairs = tris_of(root_path, oid, m)
+            if not pairs:
                 continue
+            tris = [t for t, _ in pairs]
             if k != 1.0:
                 tris = [[[c * k for c in v] for v in t] for t in tris]
             obj = cache[root_path].get(oid)
             name = names.get(oid) or (obj.get("name") if obj is not None else None) or f"{Path(path).stem} {len(groups) + 1}"
-            groups[key] = {"name": name, "tris": tris, "copies": 1}
+            groups[key] = {"name": name, "tris": tris, "copies": 1, "filaments": [f for _, f in pairs]}
         parts = list(groups.values())
         if "Metadata/model_settings.config" not in names_in:
             parts = _assemblies(parts, Path(path).stem)
@@ -356,7 +365,8 @@ def _assemblies(parts: List[Dict[str, Any]], stem: str) -> List[Dict[str, Any]]:
             out.append(single[members[0]])
         else:
             out.append({"name": stem if len(together) == 1 else f"{stem} {len(out) + 1}",
-                        "tris": [t for i in members for t in single[i]["tris"]], "copies": 1})
+                        "tris": [t for i in members for t in single[i]["tris"]], "copies": 1,
+                        "filaments": [f for i in members for f in single[i].get("filaments", [])]})
     return out
 
 
@@ -413,6 +423,8 @@ LABELS: Dict[str, str] = {
     "nozzle_temperature": "Nozzle", "filament_retraction_length": "Pull back", "filament_retraction_speed": "Pull-back speed",
     "filament_z_hop_types": "Lift", "reduce_crossing_wall": "Travel",
     "brim_type": "Brim", "ironing_type": "Smooth top", "support_on_build_plate_only": "Supports",
+    "change_filament_gcode": "Color change", "enable_prime_tower": "Tower", "purge_in_prime_tower": "Purge in the tower",
+    "print_sequence": "Order",
 }
 
 
@@ -523,6 +535,9 @@ def cli_preset(kind: str, flat: Dict[str, Any], printer_name: str) -> Dict[str, 
 
 # ── a request, turned into settings ──────────────────────────────────────────
 
+CHANGE_SECONDS = 105                     # the unit's in-print change on the main test printer, 18 October 2026
+
+
 @dataclass
 class Printer:
     id: str
@@ -538,6 +553,12 @@ class Printer:
     presets: List[str] = field(default_factory=list)   # its own preset folders, before the slicer's shared ones
     start_macro: bool = False            # Elyir Bench's start macro is included: its two lines go around the start G-code
     learned: bool = False                # its profile was learned from its own prints (docs/slicer-profile.md)
+    purge: Optional[str] = None          # "chute": it pushes the old color out off the plate at a change (design/multi-color/)
+    change_seconds: int = CHANGE_SECONDS # one color change by its filament unit, start to finish
+
+    @property
+    def unit(self) -> bool:
+        return self.tools > 1
 
     @classmethod
     def from_config(cls, pid: str, d: Dict[str, Any]) -> "Printer":
@@ -545,7 +566,75 @@ class Printer:
                    materials={k.upper(): v for k, v in d["materials"].items()}, plate=d.get("plate"),
                    plate_why=d.get("plate_why"), moonraker=d.get("moonraker"), tools=int(d.get("tools", 1)),
                    skirt_loops=int(d.get("skirt_loops", 0)), presets=list(d.get("presets", [])),
-                   start_macro=d.get("start_macro") is True, learned=isinstance(d.get("learned"), dict))
+                   start_macro=d.get("start_macro") is True, learned=isinstance(d.get("learned"), dict),
+                   purge="chute" if d.get("purge") == "chute" else None,
+                   change_seconds=int(d.get("change_seconds", CHANGE_SECONDS)))
+
+
+# ── several colors (design/multi-color/, B) ──────────────────────────────────
+# A plate prints with one spool per color. Each comes from a slot of the filament unit or is swapped in by
+# hand (the print pauses for it). Orca writes every change as ELYIR_PURGE + T<filament>; assign_spools turns
+# that into the slot's T, or an M600 for a swap by hand.
+
+# chute: the printer pushes the old color out off the plate | tower: a tower beside the model takes it |
+# both: the chute takes it and a thin tower settles the nozzle | swap: pushed through at a swap by hand
+PURGES = ("chute", "tower", "both", "swap")
+MAX_SPOOLS = 16
+CHANGE_GCODE = "ELYIR_PURGE LENGTH=[flush_length] FROM=[previous_extruder] TO=[next_extruder]\nT[next_extruder]"
+
+
+@dataclass
+class Spool:
+    material: str = "PLA"
+    color: Optional[str] = None          # "#RRGGBB"
+    filament: Optional[str] = None       # an Orca filament preset by name, instead of the printer's own for the material
+    slot: Optional[int] = None           # 0-based slot of the filament unit
+    hand: bool = False                   # swapped in by hand: the print pauses for it
+
+    def preset(self, printer: Printer) -> str:
+        return self.filament or printer.materials[self.material.upper()]
+
+
+def purges(printer: Printer) -> List[str]:
+    """What Between colors offers on this printer, its usual first."""
+    if not printer.unit:
+        return ["swap", "tower", "both"]
+    return ["chute", "tower", "both"] if printer.purge == "chute" else ["tower"]
+
+
+def default_purge(printer: Printer) -> str:
+    if not printer.unit:
+        return "swap"
+    return "chute" if printer.purge == "chute" else "tower"
+
+
+def spool_problems(printer: Printer, spools: List["Spool"], purge: Optional[str]) -> List[str]:
+    out: List[str] = []
+    if len(spools) > MAX_SPOOLS:
+        out.append(f"at most {MAX_SPOOLS} colors on one plate")
+    slots: Dict[int, int] = {}
+    for k, sp in enumerate(spools, 1):
+        if sp.material.upper() not in printer.materials and not sp.filament:
+            out.append(f"color {k}: {printer.name} has no settings for {sp.material}; it knows {', '.join(printer.materials)}")
+        if sp.color is not None and not re.fullmatch(r"#[0-9A-Fa-f]{6}", sp.color):
+            out.append(f"color {k}: color must look like #RRGGBB")
+        if sp.slot is not None:
+            if not printer.unit:
+                out.append(f"color {k}: {printer.name} has no filament unit, so no slots")
+            elif not 0 <= sp.slot < printer.tools:
+                out.append(f"color {k}: slot must be 1 to {printer.tools}")
+            elif sp.slot in slots and not sp.hand:
+                out.append(f"colors {slots[sp.slot]} and {k} both come from slot {sp.slot + 1}")
+            else:
+                slots[sp.slot] = k
+    if purge is not None:
+        if purge not in PURGES:
+            out.append(f"purge must be one of {', '.join(PURGES)}")
+        elif purge == "chute" and printer.purge != "chute" or purge == "both" and printer.unit and printer.purge != "chute":
+            out.append(f"{printer.name} has no purge chute")
+        elif purge == "swap" and printer.unit and any(not sp.hand for sp in spools[1:]):
+            out.append("At the swap is for colors swapped by hand; the unit's changes need the chute or a tower")
+    return out
 
 
 @dataclass
@@ -560,6 +649,18 @@ class Request:
     test: Optional[str] = None           # a calibration print instead of a model: "pressure_advance"
     kept: Dict[str, str] = field(default_factory=dict)       # the person's own for this purpose (design/edit-settings/, C)
     settings: Dict[str, str] = field(default_factory=dict)   # the person's, for this print only
+    spools: List[Spool] = field(default_factory=list)        # several colors: one per color, in Orca's filament order
+    purge: Optional[str] = None          # PURGES; None = the printer's usual (default_purge)
+    one_after_other: bool = False        # each part finished before the next starts: one change per part
+
+    def __post_init__(self) -> None:
+        if self.spools:                  # the first color is the plate's material, color and slot as before
+            first = self.spools[0]
+            self.material, self.color, self.filament, self.slot = first.material, first.color, first.filament, first.slot
+
+    @property
+    def colors(self) -> int:
+        return max(1, len(self.spools))
 
     def problems(self, printer: Printer) -> List[str]:
         out = []
@@ -575,6 +676,8 @@ class Request:
             out.append(f"slot must be 1 to {printer.tools}")
         if self.test is not None and self.test not in TESTS:
             out.append(f"test must be one of {', '.join(TESTS)}")
+        if self.spools or self.purge is not None:
+            out += spool_problems(printer, self.spools, self.purge)
         for given in (self.kept, self.settings):
             if not isinstance(given, dict):
                 out.append("settings must be an object of setting and value")
@@ -604,6 +707,12 @@ class Part:
     lying: Optional[Dict[str, Any]] = None   # lying(), when the file could be measured
     down: Optional[List[float]] = None   # lay "side": the outward normal of the side the person put down
     brim: str = "auto"                   # auto: picked from its shape (brim_pick) | none | ears | all (design/brim/, A)
+    spool: int = 0                       # which of the plate's colors it prints in (Request.spools)
+
+    @property
+    def project(self) -> bool:
+        """A 3MF that brings its own colors, sliced as it is (three_mf_colors)."""
+        return self.model.lower().endswith(".3mf")
 
     @property
     def name(self) -> str:
@@ -628,6 +737,10 @@ class Part:
             out.append("only STL and OBJ models can be resized")
         if self.lay in ("flat", "side") and not plain:
             out.append("only STL and OBJ models can be turned")
+        if self.project and self.copies != 1:
+            out.append("a 3MF with its own colors prints once")
+        if self.spool < 0:
+            out.append("spool must be 0 or more")
         return out
 
 
@@ -647,13 +760,18 @@ class Change:
 
 @dataclass
 class Plan:
-    """The three presets Orca gets, and every change made to get there."""
+    """The presets Orca gets, and every change made to get there."""
     machine: Dict[str, Any]
     process: Dict[str, Any]
     filament: Dict[str, Any]
     changes: List[Change] = field(default_factory=list)
     values: Dict[str, str] = field(default_factory=dict)       # every editable setting, as it will print
     before: Dict[str, str] = field(default_factory=dict)       # the same, before the person's own changes
+    more: List[Dict[str, Any]] = field(default_factory=list)   # the second color's filament on, when there are several
+
+    @property
+    def filaments(self) -> List[Dict[str, Any]]:
+        return [self.filament, *self.more]
 
 
 def _set(preset: Dict[str, Any], key: str, value: str, why: str, source: str, changes: List[Change],
@@ -741,24 +859,74 @@ def plan(printer: Printer, req: Request, presets: Presets) -> Plan:
         _set(process, "skirt_loops", str(printer.skirt_loops),
              f"{printer.name} wipes its nozzle on a brush just before printing; a loop around the part gets it flowing again",
              "printer", changes)
-    return Plan(machine=cli_preset("machine", machine, machine.get("name", printer.machine)),
-                process=cli_preset("process", process, machine.get("name", printer.machine)),
-                filament=cli_preset("filament", filament, machine.get("name", printer.machine)),
-                changes=changes, values=edit_values(process), before=before)
+    more = [_spool_filament(printer, sp, k, presets, changes) for k, sp in enumerate(req.spools[1:], 2)]
+    if more:
+        _several_colors(printer, req, machine, process, changes)
+    if req.one_after_other:
+        _set(process, "print_sequence", "by object", "Each part is finished before the next starts, so the color changes "
+             "once per part instead of on every layer they share", "you", changes)
+    name = machine.get("name", printer.machine)
+    return Plan(machine=cli_preset("machine", machine, name), process=cli_preset("process", process, name),
+                filament=cli_preset("filament", filament, name), changes=changes, values=edit_values(process), before=before,
+                more=[cli_preset("filament", f, name) for f in more])
+
+
+PURGE_WHY = {
+    "chute": "The printer pushes the old color out off the plate, so no tower is needed",
+    "tower": "A tower beside the model takes the old color at each change",
+    "both": "The printer pushes the old color out, and a thin tower settles the nozzle before each color",
+    "swap": "The old color is pushed through at each swap by hand, so no tower is needed",
+}
+
+
+def _spool_filament(printer: Printer, sp: Spool, k: int, presets: "Presets", changes: List[Change]) -> Dict[str, Any]:
+    """The filament preset for the k-th color (2 on): its material's own tweaks, its color, and a name of its own
+    (Orca keeps one preset per name)."""
+    f = presets.resolve(sp.preset(printer))
+    for where, key, value, why in ([] if printer.learned else MATERIALS.get(sp.material.upper(), [])):
+        if where == "filament":
+            n = len(changes)
+            _set(f, key, value, why, "spool", changes, per_filament=True)
+            if len(changes) > n:
+                changes[-1].label = f"{LABELS.get(key, key)}, color {k}"
+    f["filament_colour"] = [sp.color.upper() if sp.color else ""]
+    f["name"] = f"{f.get('name') or sp.preset(printer)} ({k})"
+    return f
+
+
+def _several_colors(printer: Printer, req: Request, machine: Dict[str, Any], process: Dict[str, Any],
+                    changes: List[Change]) -> None:
+    mode = req.purge or default_purge(printer)
+    by = "you" if req.purge else "printer"
+    _set(machine, "single_extruder_multi_material", "1", "One nozzle, several filaments", "printer", changes)
+    _set(machine, "change_filament_gcode", CHANGE_GCODE,
+         "Each color change names its spool, so the filament unit or a pause does it", "printer", changes)
+    tower = mode in ("tower", "both")
+    _set(process, "enable_prime_tower", "1" if tower else "0", PURGE_WHY[mode], by, changes)
+    if tower:
+        # Orca's flush length still goes to the printer with the tower's purge off: the chute takes it (design/multi-color/)
+        _set(machine, "purge_in_prime_tower", "0" if mode == "both" else "1", PURGE_WHY[mode], by, changes)
 
 
 PLATES_3MF = "plates.3mf"
 
 
+def filament_files(workdir: str, n: int = 1) -> str:
+    """Orca's --load-filaments: filament.json, then filament_2.json... for a plate of several colors."""
+    return ";".join(f"{workdir}/filament.json" if k == 1 else f"{workdir}/filament_{k}.json" for k in range(1, n + 1))
+
+
 def orca_command(orca: List[str], workdir: str, models, outdir: str, orient: bool,
-                 slice_it: bool = True) -> List[str]:
+                 slice_it: bool = True, filaments: int = 1, ids: Optional[List[int]] = None) -> List[str]:
     """One run for the whole plate: every model, a copy repeated as many times as it's wanted (Orca
     arranges them and puts what doesn't fit on plate 2, 3...). The 3MF says which plate each landed on
-    and where (read_plates). slice_it=False only arranges: how many fit, without slicing (fit)."""
+    and where (read_plates). slice_it=False only arranges: how many fit, without slicing (fit). ids: each model's
+    color, 1-based, when the plate has several."""
     models = [models] if isinstance(models, str) else list(models)
     return [*orca, *(["--slice", "0"] if slice_it else []), "--arrange", "1", "--orient", "1" if orient else "0",
             "--load-settings", f"{workdir}/machine.json;{workdir}/process.json",
-            "--load-filaments", f"{workdir}/filament.json",
+            "--load-filaments", filament_files(workdir, filaments),
+            *(["--load-filament-ids", ",".join(str(i) for i in ids)] if ids else []),
             "--outputdir", outdir, "--export-3mf", PLATES_3MF, *models]
 
 
@@ -913,10 +1081,11 @@ def set_brims(src: str, dst: str, brims: List[str]) -> None:
             zo.writestr(item, data)
 
 
-def orca_slice_3mf(orca: List[str], workdir: str, three_mf: str, outdir: str) -> List[str]:
-    """Slice every plate of an arranged 3MF as it is (no arranging again), with the printer's presets on top."""
+def orca_slice_3mf(orca: List[str], workdir: str, three_mf: str, outdir: str, filaments: int = 1) -> List[str]:
+    """Slice every plate of an arranged 3MF as it is (no arranging again), with the printer's presets on top.
+    Each object keeps the color the arranging gave it (its "extruder" in model_settings.config)."""
     return [*orca, "--slice", "0", "--load-settings", f"{workdir}/machine.json;{workdir}/process.json",
-            "--load-filaments", f"{workdir}/filament.json", "--outputdir", outdir, three_mf]
+            "--load-filaments", filament_files(workdir, filaments), "--outputdir", outdir, three_mf]
 
 
 def counts(placed: List[Dict[str, Any]], parts: int) -> List[int]:
@@ -930,6 +1099,9 @@ def counts(placed: List[Dict[str, Any]], parts: int) -> List[int]:
 def write_plan(p: Plan, workdir: str) -> None:
     for kind, preset in (("machine", p.machine), ("process", p.process), ("filament", p.filament)):
         with open(os.path.join(workdir, f"{kind}.json"), "w") as f:
+            json.dump(preset, f, indent=1)
+    for k, preset in enumerate(p.more, 2):
+        with open(os.path.join(workdir, f"filament_{k}.json"), "w") as f:
             json.dump(preset, f, indent=1)
 
 
@@ -954,7 +1126,7 @@ def short_duration(seconds: int) -> str:
 def read_result(gcode: str) -> Dict[str, Any]:
     """Estimates from Orca's comments, and whether any supports were printed. One pass, no slurp:
     a long print is tens of megabytes."""
-    out: Dict[str, Any] = {"seconds": None, "grams": None, "layers": None, "supports": False}
+    out: Dict[str, Any] = {"seconds": None, "grams": None, "layers": None, "supports": False, "grams_each": []}
     with open(gcode, errors="replace") as f:
         for line in f:
             if line[0] != ";":
@@ -970,6 +1142,11 @@ def read_result(gcode: str) -> Dict[str, Any]:
                     pass
             elif line.startswith("; total layer number:") and out["layers"] is None:
                 out["layers"] = int(line.split(":", 1)[1])
+            elif line.startswith("; filament used [g] ="):
+                try:
+                    out["grams_each"] = [round(float(g), 1) for g in line.split("=", 1)[1].split(",")]
+                except ValueError:
+                    pass
     return out
 
 
@@ -1161,21 +1338,195 @@ def layer_paths(gcode: str, start: int, end: Optional[int], state: Tuple[float, 
 _TOOL = re.compile(r"(\bTOOL=)0\b")
 
 
-def use_slot(gcode: str, slot: int) -> bool:
-    """A one-filament slice always uses tool 0. Point it at the chosen slot instead: the start macro
-    loads TOOL=n from the filament unit. Rewrites the first PRINT_START only; nothing else names a tool."""
-    if slot == 0:
+def use_slot(gcode: str, slot: int, load: bool = False) -> bool:
+    """A one-filament slice always uses tool 0. Point it at the chosen slot instead: TOOL=n on the first
+    PRINT_START, for a start macro that loads it, and with load (a printer with a filament unit) T<slot> just
+    after it too, since not every start macro does (the filament-unit service's doesn't): when the slot is
+    already in the head, that T only resumes. Says whether the slot is asked for at all."""
+    if slot == 0 and not load:
         return True
     tmp = gcode + ".tmp"
-    done = False
+    done = found = False
     with open(gcode, errors="replace") as src, open(tmp, "w") as dst:
         for line in src:
-            if not done and line.startswith("PRINT_START") and _TOOL.search(line):
-                line = _TOOL.sub(rf"\g<1>{slot}", line, count=1)
+            if not done and line.startswith("PRINT_START"):
                 done = True
+                if _TOOL.search(line):
+                    line = _TOOL.sub(rf"\g<1>{slot}", line, count=1)
+                    found = True
+                dst.write(line)
+                if load:
+                    dst.write(f"T{slot}\n")
+                continue
             dst.write(line)
     os.replace(tmp, gcode)
-    return done
+    return found or (done and load)
+
+
+_ELYIR_PURGE = re.compile(r"^ELYIR_PURGE LENGTH=(-?[\d.]+) FROM=(-?\d+) TO=(\d+)")
+_T_LINE = re.compile(r"^T(\d+)\s*$")
+_M73_R = re.compile(r"^M73 .*\bR(\d+)")
+_START_TOOL = re.compile(r"(\bTOOL=)(\d+)\b")
+
+
+def assign_spools(gcode: str, spools: List[Spool], printer: Printer, purge: str) -> Dict[str, Any]:
+    """A slice of several colors, pointed at where each comes from. Orca writes every change as
+    ELYIR_PURGE LENGTH= FROM= TO= then T<color>. A color from a slot becomes T<slot>, with the purge length
+    first when the chute takes it (ELYIR_PURGE LENGTH=); one swapped by hand, or any change on a printer
+    without a unit, becomes an M600 with the color beside it (;COLOR_CHANGE, read by the printer's color-change
+    sheet) and a "by hand" mark so a printer with a unit doesn't plan it onto a spool itself. The first color
+    (Orca's choice: with parts one after the other, not always the first spool) needs a slot on a printer with a
+    unit: PRINT_START gets TOOL=<slot>, and Orca's first change stays as the slot's T, because not every start
+    macro loads TOOL= (the filament-unit service's doesn't; found on the main test printer, 21 October 2026).
+    Says what changes when: [{layer, at (seconds into the print, the changes before it included), to, hand,
+    purge (mm)}]. ValueError when a color with no slot is used on a printer with a unit."""
+    chute = purge in ("chute", "both")
+    tmp = gcode + ".tmp"
+    changes: List[Dict[str, Any]] = []
+    first: Optional[int] = None
+    layer, start_min, now_min = 0, None, 0
+    pending: Optional[Tuple[float, int]] = None
+    with open(gcode, errors="replace") as src, open(tmp, "w") as dst:
+        for line in src:
+            if line.startswith(";LAYER_CHANGE"):
+                layer += 1
+            elif line.startswith("M73"):
+                m = _M73_R.match(line)
+                if m:
+                    now_min = int(m.group(1))
+                    start_min = now_min if start_min is None else start_min
+            elif line.startswith("PRINT_START") and first is None:
+                m = _START_TOOL.search(line)
+                k = int(m.group(2)) if m else -1
+                if 0 <= k < len(spools) and printer.unit:
+                    if spools[k].slot is None:
+                        raise ValueError(f"Color {k + 1} prints first, so it needs a slot: it's loaded before the print starts.")
+                    line = _START_TOOL.sub(rf"\g<1>{spools[k].slot}", line, count=1)
+            elif line.startswith("ELYIR_PURGE"):
+                m = _ELYIR_PURGE.match(line)
+                if m:
+                    pending = (float(m.group(1)), int(m.group(2)))
+                    continue
+            elif pending is not None or (first is not None and line[0] == "T"):
+                m = _T_LINE.match(line)
+                if m:
+                    to = int(m.group(1))
+                    length, frm = pending or (0.0, -1)
+                    pending = None
+                    if first is None:
+                        first = to
+                        if not printer.unit or to >= len(spools):
+                            continue             # what's in the printer
+                        if spools[to].slot is None:
+                            raise ValueError(f"Color {to + 1} prints first, so it needs a slot: it's loaded before the print starts.")
+                        dst.write(f"T{spools[to].slot}\n")
+                        continue
+                    if to >= len(spools):
+                        raise ValueError(f"The slice asks for color {to + 1}, and the plate has {len(spools)}.")
+                    sp = spools[to]
+                    hand = sp.hand or not printer.unit
+                    at = (start_min - now_min) * 60 if start_min is not None else 0
+                    changes.append({"layer": layer, "at": int(at + len(changes) * printer.change_seconds), "to": to,
+                                    "hand": hand, "purge": round(length, 1)})
+                    if hand:
+                        line = f";COLOR_CHANGE,T{to},{sp.color or ''}\n; elyir: by hand\nM600\n"
+                    elif sp.slot is None:
+                        raise ValueError(f"Color {to + 1} has no slot to come from.")
+                    else:
+                        line = (f"ELYIR_PURGE LENGTH={round(length, 1)}\n" if chute else "") + f"T{sp.slot}\n"
+            dst.write(line)
+    os.replace(tmp, gcode)
+    return {"first": first or 0, "changes": changes}
+
+
+def paint_state(code: Optional[str]) -> int:
+    """The filament a triangle is painted (Bambu Studio / Orca paint_color), 0 when it isn't. A triangle split by the
+    brush is a tree; for a picture, its first leaf stands for it. Hex digits are read from the end: the low two
+    bits say how many children, the high two the state, and 3 means the next digit adds to it."""
+    if not code:
+        return 0
+    try:
+        digits = [int(c, 16) for c in reversed(code.strip())]
+    except ValueError:
+        return 0
+    i = 0
+    while i < len(digits):
+        d = digits[i]
+        i += 1
+        if d & 0b11:
+            continue                             # split: its first child follows
+        state = d >> 2
+        if state == 3 and i < len(digits):
+            state = digits[i] + 3
+        return state
+    return 0
+
+
+def pieces(parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A 3MF with colors in pieces to draw: each part's triangles split by filament. [{name, tris, filament}]"""
+    out = []
+    for p in parts:
+        fils = p.get("filaments") or [1] * len(p["tris"])
+        for f in sorted(set(fils)):
+            out.append({"name": p["name"], "filament": f, "tris": [t for t, g in zip(p["tris"], fils) if g == f]})
+    return out
+
+
+def size_of_tris(parts: List[Dict[str, Any]]) -> Optional[List[float]]:
+    """Width, depth and height in mm of three_mf_parts' parts together, as placed."""
+    lo, hi = [float("inf")] * 3, [float("-inf")] * 3
+    for v in (v for p in parts for t in p["tris"] for v in t):
+        for i in range(3):
+            lo[i], hi[i] = min(lo[i], v[i]), max(hi[i], v[i])
+    return [round(hi[i] - lo[i], 2) for i in range(3)] if lo[0] != float("inf") else None
+
+
+def three_mf_colors(path: str) -> Optional[Dict[str, Any]]:
+    """What a 3MF from Bambu Studio or Orca says about colors: each filament's color and material, which are
+    used (by an object or part, a change at a height, or painting), whether it's painted, and its changes at a
+    height. None when it prints in one color: then it's read as its parts (three_mf_parts)."""
+    with zipfile.ZipFile(path) as z:
+        names = set(z.namelist())
+        try:
+            cfg = json.loads(z.read("Metadata/project_settings.config")) if "Metadata/project_settings.config" in names else {}
+        except ValueError:
+            cfg = {}
+        colors = [c if isinstance(c, str) else None for c in (cfg.get("filament_colour") or [])]
+        types = [t if isinstance(t, str) else None for t in (cfg.get("filament_type") or [])]
+        used: set = set()
+
+        def extruder(el) -> Optional[int]:
+            for m in el.findall("metadata"):
+                v = m.get("value") or ""
+                if m.get("key") == "extruder" and v.isdigit() and int(v) > 0:
+                    return int(v)
+            return None
+
+        objects = (ET.fromstring(z.read("Metadata/model_settings.config")).findall("object")
+                   if "Metadata/model_settings.config" in names else [])
+        for obj in objects:                      # an object without its own filament prints in the first
+            own = extruder(obj) or 1
+            used.add(own)
+            used |= {extruder(part) or own for part in obj.findall("part")}
+        if not objects:
+            used.add(1)
+        heights = []
+        if "Metadata/custom_gcode_per_layer.xml" in names:
+            for el in ET.fromstring(z.read("Metadata/custom_gcode_per_layer.xml")).iter("layer"):
+                if el.get("type") == "2" and (el.get("extruder") or "").isdigit():
+                    heights.append({"z": float(el.get("top_z") or 0), "to": int(el.get("extruder"))})
+                    used.add(int(el.get("extruder")))
+        painted = any(n.endswith(".model") and b"paint_color=" in z.read(n) for n in names)
+    count = max([len(colors), *used, 1])
+    if painted:
+        used |= set(range(1, count + 1))
+    used = used or {1}
+    if len(used) < 2:
+        return None
+    pad = lambda xs: (xs + [None] * count)[:count]
+    return {"colors": [{"color": c.upper() if c and re.fullmatch(r"#[0-9A-Fa-f]{6}", c[:7]) else None, "material": t,
+                        "used": k in used} for k, (c, t) in enumerate(zip(pad(colors), pad(types)), 1)],
+            "painted": painted, "heights": heights}
 
 
 def gcode_name(model: str, material: str, seconds: Optional[int], how_many: Optional[List[int]] = None,
@@ -1269,7 +1620,8 @@ def options(printers: Dict[str, Printer], beds: Optional[Dict[str, Optional[List
         "supports": list(SUPPORTS),
         "editable": [{"key": k, "label": LABELS.get(k, k), **spec} for k, spec in EDITABLE.items()],
         "printers": [{"id": p.id, "name": p.name, "materials": sorted(p.materials), "slots": p.tools,
-                      "bed": beds.get(p.id), "base": p.process, "supports": kinds.get(p.id, "normal")}
+                      "bed": beds.get(p.id), "base": p.process, "supports": kinds.get(p.id, "normal"),
+                      "unit": p.unit, "purges": purges(p), "change_seconds": p.change_seconds}
                      for p in printers.values()],
         "models": sorted(MODEL_TYPES),
     }
@@ -1472,6 +1824,62 @@ def lay_flat(src: str, dst: str, normal: List[float]) -> None:
     """A copy of the model turned so the side facing `normal` lies on the plate. Written as binary STL."""
     r = down_rotation(normal)
     write_stl(dst, [[[sum(r[i][j] * v[j] for j in range(3)) for i in range(3)] for v in t] for t in _triangles(src)])
+
+
+def cut_above(src: str, dst: str, z: float) -> bool:
+    """The part of the model above z, set down on the plate, written as binary STL (Print the rest,
+    design/power-loss/). z counts from the model's own bottom, as a print does. The cut is closed with a fan per
+    loop: it lies in the bed's plane, which no layer crosses, so its exact shape doesn't matter to the slicer.
+    False when nothing is above z."""
+    tris = _triangles(src)
+    if not tris:
+        return False
+    z = min(v[2] for t in tris for v in t) + z + 1e-4
+    kept, segs = [], []
+    for t in tris:
+        up = [v[2] > z for v in t]
+        if all(up):
+            kept.append([list(v) for v in t])
+            continue
+        if not any(up):
+            continue
+        poly, leave, enter = [], None, None
+        for i in range(3):
+            a, b = t[i], t[(i + 1) % 3]
+            if up[i]:
+                poly.append(list(a))
+            if up[i] != up[(i + 1) % 3]:
+                f = (z - a[2]) / (b[2] - a[2])
+                p = [a[k] + f * (b[k] - a[k]) for k in range(3)]
+                p[2] = z
+                poly.append(p)
+                if up[i]:
+                    leave = p
+                else:
+                    enter = p
+        kept += [[poly[0], poly[k], poly[k + 1]] for k in range(1, len(poly) - 1)]
+        segs.append((leave, enter))   # every triangle's cut edge the same way round, so they chain into loops
+    if not kept:
+        return False
+    key = lambda p: (round(p[0], 4), round(p[1], 4))
+    starts = {}
+    for s in segs:
+        starts.setdefault(key(s[0]), []).append(s)
+    used = set()
+    for s in segs:
+        if id(s) in used:
+            continue
+        loop, cur = [], s
+        while cur is not None and id(cur) not in used:
+            used.add(id(cur))
+            loop.append(cur[0])
+            cur = next((n for n in starts.get(key(cur[1]), []) if id(n) not in used), None)
+        for k in range(1, len(loop) - 1):
+            tri = [loop[0], loop[k], loop[k + 1]]
+            n, _ = _normal_area(tri)
+            kept.append(tri if not n or n[2] <= 0 else [tri[0], tri[2], tri[1]])
+    write_stl(dst, [[[v[0], v[1], v[2] - z] for v in t] for t in kept])
+    return True
 
 
 def size_laid_flat(path: str, normal: List[float]) -> Optional[List[float]]:

@@ -116,5 +116,6 @@ export function preparingWord(i: Partial<Pick<Intent, 'change' | 'phase'>> | nul
   if (i?.phase === 'colour_resuming') return 'Printing'
   if (i?.phase === 'turning_off') return 'Turning off'   // design/power/
   if (i?.phase === 'restarting') return 'Restarting'
+  if (i?.phase === 'power_back') return "Power's back"   // design/power-loss/
   return i?.phase === 'carrying_on' ? 'Carrying on' : 'Getting ready'
 }

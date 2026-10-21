@@ -594,6 +594,9 @@ class Standin:
         elif kind == P.WARM:
             self.tracker.warm_input(payload)
             self._drive()
+        elif kind == P.HANDS:   # Move and heat (design/hands-on/): over LAN mode the engine offers heat only
+            self.tracker.hands_input(payload)
+            self._drive()
         elif kind == P.REMEMBER_SPOOL:
             self.tracker.remember_spool(payload.get("color"), payload.get("material"))
             await self._save_spool()

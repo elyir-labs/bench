@@ -77,6 +77,7 @@ import importlib.util
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -122,11 +123,13 @@ PUBLISH_INTERVAL = 1.0   # seconds between pushes while numbers tick
 EVENTS_KEPT = 50         # recent notification events, for consumers catching up
 PHONES_CHECK_TICKS = 30  # re-read the subscribed-phone count every 30 s
 UNITS_CHECK_TICKS = 5    # count filament units on USB every 5 s
+CHANGE_TIMEOUT = 900     # s: a tool change by the filament-unit service, heating and purging included
 SETUP_FILES_TICKS = 5    # re-read what the installer says about the board and the screen every 5 s
 RESYNC_TICKS = 30        # re-read everything subscribed every 30 s
 RESYNC_AFTER_READY = 5.0  # ...and once the other components have subscribed after a restart
 ACE_USB_IDS = {("28e9", "018a")}   # Anycubic ACE Pro
 COLOUR_CACHE_KEPT = 50   # files whose colour changes are remembered
+UPS_CHECK_TICKS = 5      # ask NUT about the UPS every 5 s (design/power-loss/)
 
 # Care > Printer screen: which app the printer's own screen shows. The installer does the switch
 # (services, elyir-bench.conf), and KlipperScreen's menu gets an Elyir Bench entry to come back.
@@ -249,6 +252,18 @@ def units_on_usb(root: str = "/sys/bus/usb/devices") -> Optional[Dict[str, int]]
     return out
 
 
+def parse_upsc(text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """`upsc <ups>` as {on_battery, low, charge, runtime_s}; None when it didn't answer."""
+    if not text:
+        return None
+    v = dict(line.split(": ", 1) for line in text.splitlines() if ": " in line)
+    status = v.get("ups.status", "").split()
+    if not status:
+        return None
+    num = lambda k: float(v[k]) if re.fullmatch(r"[\d.]+", v.get(k, "")) else None
+    return {"on_battery": "OB" in status, "low": "LB" in status, "charge": num("battery.charge"), "runtime_s": num("battery.runtime")}
+
+
 def who_sent(web_request, source: str) -> str:
     """'panel (elyir-bench, 127.0.0.1, Chrome on CrOS)': the screen the app says it is, then what Moonraker
     knows about the connection. Never raises: a log line must not stop an action."""
@@ -336,6 +351,13 @@ class PrinterIntent:
         self._cloud_said_at = 0.0
         self._cloud_saying = False
         self._bring_sent: Optional[str] = None
+        # A UPS, through NUT (design/power-loss/): its name in NUT ("" finds the first); None once upsc turns out
+        # not to be installed, so it isn't asked again
+        self.ups_name: Optional[str] = config.get("ups", "")
+        # The chamber light (design/chamber-light/, A): `light: output_pin case_light` names it; without, the one
+        # found, or the one picked when Bench asked (elyir-bench/light)
+        self.light_setting: str = config.get("light", "").strip()
+        self._ups_reading = False
 
         self.server.register_notification("printer_intent:update", "intent_update")
         self.server.register_notification("printer_intent:event", "elyir_bench_event")
@@ -387,6 +409,7 @@ class PrinterIntent:
         # error before ready still has to reach the screens.
         await self._restore_spool()
         await self._restore_colour_plan()
+        await self._restore_checkpoint()
         await self._restore_setup()
         await self._restore_profile()
         self._restore_bring()
@@ -433,6 +456,16 @@ class PrinterIntent:
             self.tracker.head_sensor = head
             if head:
                 subs[head] = ["filament_detected"]
+            lights = engine.light_candidates(list(objects or []))
+            self.tracker.light_objects = lights
+            for o in lights:
+                if o.startswith("output_pin "):
+                    subs[o] = ["value"]
+            if any(not o.startswith("output_pin ") for o in lights):
+                for o in objects or []:
+                    if o.startswith("led_effect "):
+                        subs[o] = ["enabled"]   # the status effects a strip gets back when its light goes off
+            await self._restore_light()
         except Exception:
             pass
         try:
@@ -444,6 +477,7 @@ class PrinterIntent:
         self._subscribed = True
         self.eventloop.delay_callback(RESYNC_AFTER_READY, self._resync)
         await self._read_dryer_max()
+        await self._read_idle_timeout()
         await self._read_axis_max()
         await self._maybe_load_metadata()
         await self._refresh_spoolman()
@@ -473,7 +507,8 @@ class PrinterIntent:
     async def _run_unit_step(self, payload: Dict[str, Any]) -> None:
         """A step of the change routine that takes a while, run on the service until the unit is still."""
         try:
-            await self.units_link.call(dict(payload, wait=True) if payload.get("op") == "move" else payload)
+            await self.units_link.call(dict(payload, wait=True) if payload.get("op") == "move" else payload,
+                                       timeout=CHANGE_TIMEOUT)
             self.tracker.change_done(None)
         except Exception as e:
             logging.info("intent: changing filament stopped: %s", e)
@@ -492,6 +527,69 @@ class PrinterIntent:
                 self.tracker.dryer_max = float(ace["max_dryer_temperature"])
         except Exception:
             logging.exception("intent: reading the dryer limit failed")
+
+    async def _read_idle_timeout(self) -> None:
+        """[idle_timeout] timeout: what a held print's idle timeout goes back to (design/power-loss/)."""
+        try:
+            res = await self.klippy_apis.query_objects({"configfile": ["settings"]})
+            idle = ((res.get("configfile") or {}).get("settings") or {}).get("idle_timeout") or {}
+            if isinstance(idle.get("timeout"), (int, float)):
+                self.tracker.idle_timeout_s = float(idle["timeout"])
+        except Exception:
+            logging.exception("intent: reading the idle timeout failed")
+
+    async def _read_ups(self) -> None:
+        try:
+            if not self.ups_name:
+                found = await self._upsc("-l")
+                self.ups_name = found.split()[0] if found and found.split() else ""
+            self.tracker.set_ups(parse_upsc(await self._upsc(self.ups_name)) if self.ups_name else None)
+        except FileNotFoundError:
+            self.ups_name = None
+            self.tracker.set_ups(None)
+        except Exception:
+            self.tracker.set_ups(None)
+        finally:
+            self._ups_reading = False
+
+    async def _upsc(self, arg: str) -> Optional[str]:
+        proc = await asyncio.create_subprocess_exec("upsc", arg, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(proc.communicate(), 5)
+        return out.decode(errors="replace") if proc.returncode == 0 else None
+
+    async def _restore_light(self) -> None:
+        if self.light_setting:
+            self.tracker.light_choice = self.light_setting
+            return
+        try:
+            db = self.server.lookup_component("database")
+            self.tracker.light_choice = await db.get_item("elyir-bench", "light", None)
+        except Exception:
+            logging.exception("intent: reading the light failed")
+
+    async def _save_light(self) -> None:
+        self.tracker.light_choice_dirty = False
+        try:
+            db = self.server.lookup_component("database")
+            await db.insert_item("elyir-bench", "light", self.tracker.light_choice)
+        except Exception:
+            logging.exception("intent: saving the light failed")
+
+    async def _restore_checkpoint(self) -> None:
+        try:
+            db = self.server.lookup_component("database")
+            self.tracker.restore_checkpoint(await db.get_item("elyir-bench", "checkpoint", None))
+        except Exception:
+            logging.exception("intent: reading the checkpoint failed")
+
+    async def _save_checkpoint(self) -> None:
+        self.tracker.checkpoint_dirty = False
+        try:
+            db = self.server.lookup_component("database")
+            await db.insert_item("elyir-bench", "checkpoint", self.tracker.checkpoint_record())
+        except Exception:
+            self.tracker.checkpoint_dirty = True
+            logging.exception("intent: saving the checkpoint failed")
 
     async def _resync(self) -> None:
         """Read the subscribed objects afresh. Moonraker shares one subscription among its
@@ -615,6 +713,11 @@ class PrinterIntent:
                 self.eventloop.create_task(self._save_spool())
             if self.tracker.colour_plan_dirty:
                 self.eventloop.create_task(self._save_colour_plan())
+            if self.tracker.checkpoint_dirty:
+                self.eventloop.create_task(self._save_checkpoint())
+            if self._ticks % UPS_CHECK_TICKS == 0 and self.ups_name is not None and not self._ups_reading:
+                self._ups_reading = True
+                self.eventloop.create_task(self._read_ups())
             if self._ticks % UNITS_CHECK_TICKS == 0:
                 self.tracker.observe_usb_units(units_on_usb())
                 if self.units_link.due():
@@ -1730,7 +1833,12 @@ class PrinterIntent:
 
     async def _run_swap(self, payload: Dict[str, Any]) -> None:
         try:
-            await self.klippy_apis.run_gcode(engine.swap_gcode(payload, self.tracker.unit_commands()))
+            cmds = self.tracker.unit_commands()
+            step = engine.swap_gcode(payload, cmds)
+            if cmds is not None and cmds.kind == "unit":
+                await self.units_link.call(step, timeout=CHANGE_TIMEOUT)
+            else:
+                await self.klippy_apis.run_gcode(step)
             await _swap_done(self, None)
         except Exception as e:
             logging.info("intent: spool change failed: %s", e)
@@ -1794,7 +1902,7 @@ class PrinterIntent:
         elif kind == P.GCODE:
             await self.klippy_apis.run_gcode(str(payload))
         elif kind == P.UNIT:
-            await self.units_link.call(payload)
+            await self.units_link.call(payload, timeout=CHANGE_TIMEOUT if payload.get("op") == "change_tool" else 150)
         elif kind == P.EMERGENCY_STOP:
             self.tracker.begin_stop()
             self._publish(force=True)
@@ -1826,6 +1934,10 @@ class PrinterIntent:
         elif kind == P.CHANGE:
             self.tracker.change_input(payload)
             self._drive()
+        elif kind == P.OUTAGE:
+            self.tracker.outage_input(payload)
+        elif kind == P.LOST:
+            self.tracker.lost_input(payload)
         elif kind == P.POWER:
             self.tracker.power_input(payload)
         elif kind == P.WARM:
@@ -1833,6 +1945,11 @@ class PrinterIntent:
             self._drive()
         elif kind == P.HANDS:
             self.tracker.hands_input(payload)
+            self._drive()
+        elif kind == P.LIGHT:
+            self.tracker.light_input(payload)
+            if self.tracker.light_choice_dirty:
+                await self._save_light()
             self._drive()
         elif kind == P.FIRST_LAYER:
             self.tracker.first_layer_input(payload)

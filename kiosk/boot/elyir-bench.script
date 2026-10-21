@@ -1,8 +1,9 @@
-# The Elyir Bench eye, drawn while the Pi boots, reboots or shuts down (design/boot/, A′: the eye says hi).
+# The Elyir Bench eye, drawn while the Pi boots, reboots or shuts down (design/boot/, E: the Elyir signature).
 # Template: make-plymouth.py fills in the placeholders from app/src/boot/mark.json and draws the images.
 #
-# Booting: a big "hi" fades in and out, the pupil grows from a point, a thin track draws itself round
-# from twelve o'clock, and then the ring fills with Plymouth's own boot progress (timed against the previous
+# Booting: elyir is written by hand, as Home Hub starts; the dot of the i lights in the accent, the name
+# fades, and the dot glides down and grows into the eye's pupil while a thin track draws itself round
+# from twelve o'clock. Then the ring fills with Plymouth's own boot progress (timed against the previous
 # boot) up to @HANDOFF@ of a turn. The kiosk quits Plymouth keeping this last frame on screen
 # (plymouth quit --retain-splash), and the app's boot screen, drawn from the same geometry, carries the
 # ring the rest of the way.
@@ -19,6 +20,8 @@ s = Math.Min(W / @DW@, H / @DH@);
 k = s / @IMG_SCALE@;
 cx = Window.GetX() + W / 2 + (@CX@ - @DW@ / 2) * s;
 cy = Window.GetY() + H / 2 + (@CY@ - @DH@ / 2) * s;
+fun at_x(x) { return Window.GetX() + global.W / 2 + (x - @DW@ / 2) * global.s; }
+fun at_y(y) { return Window.GetY() + global.H / 2 + (y - @DH@ / 2) * global.s; }
 
 fun scaled(name) {
   img = Image(name);
@@ -39,9 +42,8 @@ fun ease_out(x) {
 
 pupil_image = scaled("pupil.png");
 pupil = Sprite(pupil_image);
-center_on(pupil, pupil_image, 2);
+center_on(pupil, pupil_image, 3);
 pupil.SetOpacity(0);
-pupil_size = 1;
 
 # Ring frames are loaded the first time they are needed: a boot only ever shows a few dozen.
 frames[0] = scaled("ring-0.png");
@@ -77,10 +79,46 @@ target = 0;     # boot progress, in ring frames
 arc = 0;        # what the ring shows, easing toward it
 
 if (mode == "boot") {
-  hi_image = scaled("hi.png");
-  hi = Sprite(hi_image);
-  center_on(hi, hi_image, 3);
-  hi.SetOpacity(0);
+  name = Sprite();
+  name.SetPosition(at_x(@NAME_X@), at_y(@NAME_Y@), 1);
+  named = -1;
+  dot_image = scaled("dot.png");
+  dot = Sprite(dot_image);
+  dot.SetOpacity(0);
+  glow_image = scaled("glow.png");
+  glow = Sprite(glow_image);
+  glow.SetOpacity(0);
+  tx = at_x(@TX@);
+  ty = at_y(@TY@);
+  dot_size = -1;
+}
+
+fun write(f) {
+  f = Math.Clamp(Math.Int(f + 0.5), 0, @NAME@);
+  if (f != global.named) {
+    global.name.SetImage(scaled("name-" + f + ".png"));
+    global.named = f;
+  }
+}
+
+# The i's dot at a fraction g of the pupil's size, centered on x, y: the unlit dot, the lit one (the pupil
+# itself) over it, and the glow under both.
+fun place_dot(g, x, y) {
+  size = Math.Max(1, Math.Int(global.pupil_image.GetWidth() * g + 0.5));
+  if (size != global.dot_size) {
+    global.lit_image = global.pupil_image.Scale(size, size);
+    global.pupil.SetImage(global.lit_image);
+    global.unlit_image = global.dot_image.Scale(size, size);
+    global.dot.SetImage(global.unlit_image);
+    gs = Math.Max(1, Math.Int(global.glow_image.GetWidth() * g + 0.5));
+    global.glowing = global.glow_image.Scale(gs, gs);
+    global.glow.SetImage(global.glowing);
+    global.dot_size = size;
+  }
+  global.pupil.SetPosition(x - size / 2, y - size / 2, 3);
+  global.dot.SetPosition(x - size / 2, y - size / 2, 2);
+  gw = global.glowing.GetWidth();
+  global.glow.SetPosition(x - gw / 2, y - gw / 2, 1);
 }
 
 # Called about 50 times a second: these times are in ticks of 20 ms.
@@ -88,25 +126,27 @@ fun refresh() {
   t = global.ticks;
   global.ticks = t + 1;
   if (global.mode == "boot") {
-    # hi: in over 0.6 s, held, out by 1.7 s
-    global.hi.SetOpacity(Math.Clamp((t - 5) / 30, 0, 1) * (1 - Math.Clamp((t - 60) / 25, 0, 1)));
-    # the pupil grows from a point
-    if (t >= 75 && t <= 116) {
-      g = ease_out(Math.Clamp((t - 75) / 40, 0, 1));
-      size = Math.Max(1, Math.Int(global.pupil_image.GetWidth() * g + 0.5));
-      if (size != global.pupil_size) {
-        img = global.pupil_image.Scale(size, size);
-        global.pupil.SetImage(img);
-        center_on(global.pupil, img, 2);
-        global.pupil_size = size;
-      }
-      global.pupil.SetOpacity(Math.Clamp((t - 75) / 10, 0, 1));
+    # elyir, written over 2.6 s, held, and gone by 5.7 s
+    if (t >= 10 && t <= 290) {
+      write(ease(Math.Clamp((t - 10) / 130, 0, 1)) * @NAME@);
+      global.name.SetOpacity(1 - ease(Math.Clamp((t - 240) / 45, 0, 1)));
+    }
+    # the dot of the i: there at 2.9 s, lit by 4.1 s, then it glides into the eye and is its pupil from 6.1 s
+    if (t >= 145 && t <= 306) {
+      move = ease(Math.Clamp((t - 245) / 60, 0, 1));
+      lit = ease(Math.Clamp((t - 165) / 40, 0, 1));
+      shown = Math.Clamp((t - 145) / 15, 0, 1);
+      place_dot(@DOT0@ + (1 - @DOT0@) * move, global.tx + (global.cx - global.tx) * move, global.ty + (global.cy - global.ty) * move);
+      if (t < 305) global.dot.SetOpacity(shown);
+      else global.dot.SetOpacity(0);
+      global.pupil.SetOpacity(shown * lit);
+      global.glow.SetOpacity(lit * (1 - move));
     }
     # the track draws itself round, then the ring fills toward the boot's progress
-    if (t >= 100 && t < 155) {
+    if (t >= 290 && t < 345) {
       global.ring.SetOpacity(1);
-      outline(ease(Math.Clamp((t - 100) / 55, 0, 1)) * @OUTLINE@);
-    } else if (t >= 155) {
+      outline(ease(Math.Clamp((t - 290) / 55, 0, 1)) * @OUTLINE@);
+    } else if (t >= 345) {
       global.arc = global.arc + (global.target - global.arc) * 0.1;
       show(global.arc);
     }

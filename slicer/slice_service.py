@@ -14,6 +14,8 @@ See docs/slicer.md.
                                  part null: how many of each part plate 1 holds, as they are
   POST /slice/test               JSON {printer, test: "pressure_advance", material, color, slot}: a calibration print
   GET  /slice/models/{id}/file   the model as uploaded (to slice a skipped part again: design/skip-objects/)
+  POST /slice/models/{id}/cut    JSON {z, lay, down, scale}: what's above z of it as printed, as a new model
+                                 (Print the rest after a power cut: design/power-loss/)
   GET  /slice/{id}               queued | slicing | done | failed, the changes, the estimate, every plate
   GET  /slice/{id}/gcode         the file (the first plate)
   POST /slice/{id}/send          upload it to the printer ({"print": true} starts it as well), and any
@@ -86,6 +88,7 @@ class Job:
         self.values: Dict[str, str] = {}                  # every editable setting as it prints (design/edit-settings/)
         self.before: Dict[str, str] = {}                  # the same before the person's own changes
         self.brims: List[Dict[str, str]] = []             # each part's brim as sliced: sl.brim_pick (design/brim/)
+        self.colors: Optional[Dict[str, Any]] = None      # several colors: each spool's use and every change (design/multi-color/)
 
     @property
     def model(self) -> str:
@@ -97,8 +100,12 @@ class Job:
             "id": self.id, "state": self.state, "model": self.parts[0].name,
             "printer": self.printer.id,
             "request": {"purpose": r.purpose, "supports": r.supports, "material": r.material.upper(),
-                        "color": r.color, "slot": r.slot, "orient": r.orient},
-            "parts": [{"model": p.name, "copies": p.copies, "scale": p.scale, "lay": p.lay, "brim": p.brim,
+                        "color": r.color, "slot": r.slot, "orient": r.orient,
+                        **({"spools": [{"material": s.material.upper(), "color": s.color, "slot": s.slot, "hand": s.hand}
+                                       for s in r.spools],
+                            "purge": r.purge or sl.default_purge(self.printer)} if r.spools else {}),
+                        **({"one_after_other": True} if r.one_after_other else {})},
+            "parts": [{"model": p.name, "copies": p.copies, "scale": p.scale, "lay": p.lay, "brim": p.brim, "spool": p.spool,
                        **({"down": p.down} if p.lay == "side" else {}),
                        **({"brim_pick": self.brims[i]} if i < len(self.brims) else {})} for i, p in enumerate(self.parts)],
             "changes": [c.as_dict() for c in self.changes],
@@ -111,6 +118,9 @@ class Job:
             secs = self.result.get("seconds")
             out["estimate"] = {"seconds": secs, "time": sl.short_duration(secs) if secs else None,
                                "grams": self.result.get("grams"), "layers": self.result.get("layers")}
+            if self.colors:
+                out["colors"] = self.colors
+                out["estimate"]["changes_seconds"] = self.colors["changes_seconds"]
             out["supports_added"] = self.result.get("supports")
             out["gcode"] = os.path.basename(self.gcode or "")
             out["sent"] = self.sent
@@ -500,6 +510,8 @@ class Service:
         app.router.add_post("/slice/fit", self.post_fit)
         app.router.add_post("/slice/test", self.post_test)
         app.router.add_get("/slice/models/{id}/file", self.get_model_file)
+        app.router.add_get("/slice/models/{id}/piece/{k}", self.get_model_piece)
+        app.router.add_post("/slice/models/{id}/cut", self.post_cut)
         app.router.add_get("/slice/{id}", self.get_job)
         app.router.add_get("/slice/{id}/gcode", self.get_gcode)
         app.router.add_get("/slice/{id}/supports", self.get_supports)
@@ -570,13 +582,24 @@ class Service:
             return _bad(str(e))
 
     async def _three_mf(self, path: Path, folder: Path, caller: Optional[str]) -> web.Response:
-        """A 3MF read as its parts: each kept as an STL of its own, as if uploaded on its own (design/plate/)."""
+        """A 3MF read as its parts: each kept as an STL of its own, as if uploaded on its own (design/plate/).
+        One that brings its own colors is kept whole, to be sliced as it is (design/multi-color/)."""
         try:
+            colors = await asyncio.to_thread(sl.three_mf_colors, str(path))
             parts = await asyncio.to_thread(sl.three_mf_parts, str(path))
         except (zipfile.BadZipFile, KeyError, ET.ParseError, ValueError) as e:
-            raise ValueError(f"{path.name} couldn't be read as a 3MF ({type(e).__name__})")
-        finally:
             shutil.rmtree(folder, ignore_errors=True)
+            raise ValueError(f"{path.name} couldn't be read as a 3MF ({type(e).__name__})")
+        if colors and parts:
+            mid = folder.name
+            size = sl.size_of_tris(parts)
+            drawn = await asyncio.to_thread(_write_pieces, folder, parts)
+            _own(folder, caller)
+            self.models[mid] = {"id": mid, "name": path.name, "path": str(path), "size": size, "lying": None,
+                                "colors": colors, "pieces": drawn, "created": time.time(), "printer": caller}
+            return web.json_response({"model": mid, "name": path.name, "size": size, "lying": None, "colors": colors,
+                                      "pieces": drawn}, status=201)
+        shutil.rmtree(folder, ignore_errors=True)
         if not parts:
             raise ValueError(f"There's nothing to print in {path.name}.")
         if len(parts) > 50:
@@ -634,8 +657,11 @@ class Service:
                 orient=str(fields.get("orient", "")).lower() in ("1", "true", "yes"),
                 kept=fields.get("kept") or {},
                 settings=fields.get("settings") or {},
+                spools=_spools(fields.get("spools")),
+                purge=str(fields["purge"]) if fields.get("purge") else None,
+                one_after_other=fields.get("one_after_other") is True,
             )
-            problems = req.problems(printer) + [q for p in parts for q in p.problems()]
+            problems = req.problems(printer) + [q for p in parts for q in p.problems()] + self._plate_problems(req, parts)
             if problems:
                 return _bad("; ".join(problems))
             thumb = None
@@ -656,6 +682,19 @@ class Service:
         finally:
             if not queued:
                 shutil.rmtree(workdir, ignore_errors=True)
+
+    def _plate_problems(self, req: sl.Request, parts: List[sl.Part]) -> List[str]:
+        out = [f"part {i + 1}: spool must be one of the plate's {req.colors} colors"
+               for i, p in enumerate(parts) if p.spool >= req.colors]
+        project = next((p for p in parts if p.project), None)
+        if project:
+            if len(parts) > 1:
+                out.append("a 3MF with its own colors goes on a plate of its own")
+            m = self._model(_model_id(project.model) or "", None)
+            n = len((m or {}).get("colors", {}).get("colors", []))
+            if n and len(req.spools) != n:
+                out.append(f"{project.name} has {n} colors: send a spool for each, in its order")
+        return out
 
     def _filament(self, printer: sl.Printer, name: Any) -> Optional[str]:
         """A filament preset asked for by name: one of Orca's library, or one the printer's own presets have."""
@@ -701,22 +740,70 @@ class Service:
             folder = self.work / "models" / mid
             if not re.fullmatch(r"[0-9a-f]{12}", mid) or not folder.is_dir():
                 return None
-            files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in sl.MODEL_TYPES]
+            files = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in sl.UPLOAD_TYPES]
             if len(files) != 1:
                 return None
             path = files[0]
             owner = (folder / OWNER).read_text().strip() if (folder / OWNER).exists() else None
-            m = self.models[mid] = {"id": mid, "name": path.name, "path": str(path), "size": sl.model_size(str(path)),
-                                    "lying": sl.lying(str(path)), "created": path.stat().st_mtime, "printer": owner}
+            if path.suffix.lower() == ".3mf":
+                colors = sl.three_mf_colors(str(path))
+                if not colors:
+                    return None
+                m = self.models[mid] = {"id": mid, "name": path.name, "path": str(path),
+                                        "size": sl.size_of_tris(sl.three_mf_parts(str(path))), "lying": None, "colors": colors,
+                                        "created": path.stat().st_mtime, "printer": owner}
+            else:
+                m = self.models[mid] = {"id": mid, "name": path.name, "path": str(path), "size": sl.model_size(str(path)),
+                                        "lying": sl.lying(str(path)), "created": path.stat().st_mtime, "printer": owner}
         if caller and m.get("printer") != caller:
             return None
         return m
+
+    async def get_model_piece(self, request: web.Request) -> web.StreamResponse:
+        """One piece of a 3MF with colors, as an STL to draw (its filament is in the upload's answer)."""
+        m = await asyncio.to_thread(self._model, request.match_info["id"], self._caller(request))
+        k = request.match_info["k"]
+        f = Path(m["path"]).parent / PIECES / f"{k}.stl" if m else None
+        if f is None or not k.isdigit() or not f.is_file():
+            raise web.HTTPNotFound(text="no such piece")
+        return web.FileResponse(f)
 
     async def get_model_file(self, request: web.Request) -> web.StreamResponse:
         m = await asyncio.to_thread(self._model, request.match_info["id"], self._caller(request))
         if m is None:
             raise web.HTTPNotFound(text="no such model: it's kept for a day")
         return web.FileResponse(m["path"], headers={"Content-Disposition": f'attachment; filename="{m["name"]}"'})
+
+    async def post_cut(self, request: web.Request) -> web.Response:
+        """{z, lay, down, scale}: what's above z of a model laid and sized as it was printed, as a model of its own
+        (Print the rest, design/power-loss/). 404 when the model is gone, 422 when nothing is above z."""
+        caller = self._caller(request)
+        m = await asyncio.to_thread(self._model, request.match_info["id"], caller)
+        if m is None:
+            raise web.HTTPNotFound(text="no such model: it's kept for a day")
+        try:
+            body = await request.json()
+            z = float(body["z"])
+        except (ValueError, KeyError, TypeError):
+            return _bad("send {z}: the height it stopped at, in mm")
+        mid = secrets.token_hex(6)
+        folder = self.work / "models" / mid
+        stem = re.sub(r"\.(stl|obj)$", "", m["name"], flags=re.I)
+        dest = folder / f"{stem}_rest.stl"
+        part = _part(m["path"], {"lay": body.get("lay"), "down": body.get("down"), "scale": body.get("scale")}, m.get("lying"))
+        try:
+            laid = await asyncio.to_thread(_prepare, [part], str(folder / "laid"))
+            cut = await asyncio.to_thread(sl.cut_above, laid[0], str(dest), z)
+        finally:
+            shutil.rmtree(folder / "laid", ignore_errors=True)
+        if not cut:
+            shutil.rmtree(folder, ignore_errors=True)
+            return web.json_response({"error": "nothing above that height"}, status=422)
+        _own(folder, caller)
+        size = await asyncio.to_thread(sl.model_size, str(dest))
+        self.models[mid] = {"id": mid, "name": dest.name, "path": str(dest), "size": size, "lying": None,
+                            "created": time.time(), "printer": caller}
+        return web.json_response({"model": mid, "name": dest.name, "size": size, "lying": None}, status=201)
 
     async def post_fit(self, request: web.Request) -> web.Response:
         """How many of one part fit on a plate with the others as they are: "Fill the plate" on its sheet.
@@ -966,14 +1053,19 @@ class Service:
         files = await asyncio.to_thread(_prepare, job.parts, os.path.join(job.workdir, "parts"))
         models = _repeat(files, job.parts)
         three_mf = os.path.join(out, sl.PLATES_3MF)
+        n = job.req.colors
+        # each model's color (a 3MF that brings its own keeps them)
+        ids = [p.spool + 1 for p in job.parts for _ in range(p.copies)] if n > 1 and not job.parts[0].project else None
         if mixed:
-            code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient, slice_it=False))
+            code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient, slice_it=False,
+                                                         filaments=n, ids=ids))
             if code == 0 and os.path.exists(three_mf) and job.state != "cancelled":
                 own = os.path.join(job.workdir, "brims.3mf")
                 await asyncio.to_thread(sl.set_brims, three_mf, own, orca_brims)
-                code = await self._orca(job, sl.orca_slice_3mf(self.orca, job.workdir, own, out))
+                code = await self._orca(job, sl.orca_slice_3mf(self.orca, job.workdir, own, out, filaments=n))
         else:
-            code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient))
+            code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient,
+                                                         filaments=n, ids=ids))
         if job.state == "cancelled":
             return
         gcodes = sorted(Path(out).glob("plate_*.gcode"), key=lambda g: int(re.sub(r"\D", "", g.stem) or 0))
@@ -988,11 +1080,22 @@ class Service:
         with contextlib.suppress(OSError):
             os.remove(three_mf)                          # it carries every plate's G-code again
         n = len(job.parts)
+        purge = job.req.purge or sl.default_purge(job.printer)
         for k, g in enumerate(gcodes, 1):
             placed = where.get(k, [])
             how = sl.counts(placed, n) if where else ([p.copies for p in job.parts] if k == 1 else [0] * n)
+            if job.parts[0].project:
+                how = [1] if k == 1 else [0]     # its objects are named by the file, not p0__
             await asyncio.to_thread(sl.mark_ours, str(g))   # the printer never learns how to slice from its own files
-            if job.req.slot is not None and not await asyncio.to_thread(sl.use_slot, str(g), job.req.slot):
+            if job.req.colors > 1:
+                try:
+                    assigned = await asyncio.to_thread(sl.assign_spools, str(g), job.req.spools, job.printer, purge)
+                except ValueError as e:
+                    job.state, job.error = "failed", str(e)
+                    return
+                if k == 1:
+                    job.colors = _colors(job, assigned)
+            elif job.req.slot is not None and not await asyncio.to_thread(sl.use_slot, str(g), job.req.slot, job.printer.unit):
                 if not job.warnings:
                     job.warnings.append(f"{job.printer.name}'s start G-code doesn't say which slot to use, so this "
                                         "prints from whichever is loaded, not slot {}.".format(job.req.slot + 1))
@@ -1009,6 +1112,8 @@ class Service:
             job.plates.append({"gcode": dest, "result": result, "counts": how,
                                "placed": [x for x in placed if "x" in x]})
         job.result, job.gcode = job.plates[0]["result"], job.plates[0]["gcode"]
+        if job.colors:
+            job.colors["grams"] = job.result.get("grams_each") or []
         job.state = "done"
         log.info("slice %s: %s in %.1fs", job.id, os.path.basename(job.gcode), time.time() - job.started)
 
@@ -1093,7 +1198,50 @@ def _part(path: str, g: Dict[str, Any], lying: Optional[Dict[str, Any]] = None) 
     down = g.get("down")
     return sl.Part(model=path, copies=int(g.get("copies", 1)), scale=float(g.get("scale") or 1),
                    lay=str(g.get("lay") or "file"), lying=lying, down=down if isinstance(down, list) else None,
-                   brim=str(g.get("brim") or "auto"))
+                   brim=str(g.get("brim") or "auto"), spool=int(g.get("spool") or 0))
+
+
+PIECES = "pieces"
+
+
+def _write_pieces(folder: Path, parts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """A 3MF with colors in pieces for the app to draw, one STL each: [{piece, name, filament}]."""
+    out = []
+    (folder / PIECES).mkdir(exist_ok=True)
+    for k, p in enumerate(sl.pieces(parts)[:200]):
+        sl.write_stl(str(folder / PIECES / f"{k}.stl"), p["tris"])
+        out.append({"piece": k, "name": p["name"], "filament": p["filament"]})
+    return out
+
+
+def _spools(given: Any) -> List[sl.Spool]:
+    """The plate's colors from a request: [{material, color, filament, slot (1-based), hand}]."""
+    if given in (None, []):
+        return []
+    if not isinstance(given, list) or not all(isinstance(s, dict) for s in given):
+        raise ValueError("spools must be a list of {material, color, slot, hand}")
+    out = []
+    for s in given:
+        slot = s.get("slot")
+        out.append(sl.Spool(material=str(s.get("material") or "PLA"), color=s.get("color") or None,
+                            filament=str(s["filament"]) if s.get("filament") else None,
+                            slot=int(slot) - 1 if slot not in (None, "") else None, hand=s.get("hand") is True))
+    return out
+
+
+def _colors(job: "Job", assigned: Dict[str, Any]) -> Dict[str, Any]:
+    """What the Colors card shows (design/multi-color/, B): which parts use each spool, every change, the swaps by
+    hand and when, and the time the changes add (the unit's, and a swap's taken as the same)."""
+    changes = assigned["changes"]
+    spools = []
+    for k, sp in enumerate(job.req.spools):
+        spools.append({"spool": k, "parts": [i for i, p in enumerate(job.parts) if p.spool == k and not p.project],
+                       "first": assigned["first"] == k,
+                       "swaps": [c["at"] for c in changes if c["to"] == k and c["hand"]],
+                       "changes": sum(1 for c in changes if c["to"] == k)})
+    return {"spools": spools, "changes": changes, "hand_swaps": sum(1 for c in changes if c["hand"]),
+            "unit_changes": sum(1 for c in changes if not c["hand"]),
+            "changes_seconds": len(changes) * job.printer.change_seconds, "grams": []}
 
 
 def _prepare(parts: List[sl.Part], folder: str) -> List[str]:

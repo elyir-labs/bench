@@ -2,6 +2,12 @@
   <section class="care">
     <h1 class="a-display title">Care</h1>
     <BusyBanner then="run a care routine" />
+    <!-- Move and heat first (design/hands-on-find/, B): the jobs, then the controls (design/hands-on/, C) -->
+    <div class="screen hands" v-if="intent?.hands" :class="{ off: !handsOk }">
+      <div class="screen-text"><span class="name">Move and heat</span><span class="when">{{ rowLine(intent.hands, door.away) }}</span></div>
+      <button v-if="!door.away" class="a-btn ghost back" :disabled="!handsOk" @click="handsOpen = true">Open</button>
+    </div>
+    <h2 class="group" v-if="intent?.hands">Maintenance</h2>
     <p class="sub">Small things, now and then, that keep prints looking good. The printer counts its own hours and asks when one is due.</p>
     <ul class="list" v-if="care && care.items.length">
       <li v-for="c in care.items" :key="c.id" :class="{ due: c.due }">
@@ -23,15 +29,8 @@
     <p class="sub tiny" v-else-if="intent">{{ care ? 'Nothing to look after yet.' : 'The printer starts counting once its software is updated.' }}</p>
     <p class="sub tiny err" v-if="careError">{{ careError }}</p>
     <!-- Printer › First layer (design/first-layer/, B): what's kept, and the way back -->
-    <template v-if="intent?.first_layer || intent?.hands">
-      <h2 class="group">Printer</h2>
-      <!-- Printer › Move and heat (design/hands-on/, C): the jobs, then the controls -->
-      <div class="screen hands" v-if="intent.hands" :class="{ off: !handsOk }">
-        <div class="screen-text"><span class="name">Move and heat</span><span class="when">{{ rowLine(intent.hands, door.away) }}</span></div>
-        <button v-if="!door.away" class="a-btn ghost back" :disabled="!handsOk" @click="handsOpen = true">Open</button>
-      </div>
-    </template>
     <template v-if="intent?.first_layer">
+      <h2 class="group">Printer</h2>
       <div class="screen wrap first-layer">
         <div class="screen-text">
           <span class="name">First layer</span>

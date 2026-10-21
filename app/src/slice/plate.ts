@@ -50,6 +50,24 @@ export function provisional(parts: PlatePart[], bed: number[] | null | undefined
   return out.map(p => ({ ...p, x: p.x + dx, y: p.y + dy }))
 }
 
+/** The plate's colors as runs of triangles, in the order compose() lays them out: each copy of a part gets its
+ *  part's runs (counts of triangles and their colors: one run for a part in one color, one per piece for a 3MF
+ *  with its own colors). For render's `runs`. */
+export function plateRuns(parts: (PlatePart & { runs: { count: number; color: string }[] })[], placed: Placed[]): { end: number; color: string }[] {
+  const out: { end: number; color: string }[] = []
+  let end = 0
+  for (const at of placed) {
+    const p = parts[at.part]
+    if (!p?.tris) continue
+    for (const r of p.runs) {
+      end += r.count
+      if (out.length && out[out.length - 1].color === r.color) out[out.length - 1].end = end
+      else out.push({ end, color: r.color })
+    }
+  }
+  return out
+}
+
 /** One set of triangles for the whole plate. Parts that can't be read here (STEP) are left out. */
 export function compose(parts: PlatePart[], placed: Placed[]): Float32Array {
   const shapes = parts.map(p => (p.tris ? centred(p.tris, p.scale) : null))

@@ -12,6 +12,8 @@
   </section>
 
   <section v-else-if="intent" class="now" :class="['is-' + state, 'now-' + lay, { 'has-cam': showCam }]">
+    <!-- the light's switch where there's no camera and no top bar: inside the Printers app (design/chamber-light/, A) -->
+    <LightButton v-if="lightWhere === 'now'" variant="pill" class="now-light" />
     <!-- Ready: calm idle -->
     <div v-if="state === 'ready'" class="body ready" :class="{ 'has-actions': actions.length }">
       <div class="left">
@@ -36,23 +38,27 @@
         </div>
         <SpoolRow v-if="!warmOn && !firstLayerCard" :spools="intent.spools" hide-empty class="spools" />
         <!-- off the panel, the space under the spools: what's next (design/ready-phone/, C) -->
+        <LostCard v-if="lost && lay !== 'panel'" :lost="lost" :thumb="lostThumb" compact :disabled="busy !== null" @rest="openRest" @again="onStartOver" />
         <UpNext v-if="upRows.length" :rows="upRows" class="up-next" @pick="onUpNext" />
       </div>
-      <button class="right hint" @click="door.away ? router.push('/print') : onPrintAgain()">
+      <LostCard v-if="lost && lay === 'panel'" :lost="lost" :thumb="lostThumb" class="right" :disabled="busy !== null" @rest="openRest" @again="onStartOver" />
+      <button v-else class="right hint" @click="door.away ? router.push('/print') : onPrintAgain()">
         <ObjectImage :src="lastThumb" :alt="lastName" class="hint-img" />
         <span class="hint-text">
           <span class="a-display">{{ lastJob ? 'Print again' : 'Print' }}</span>
           <span class="sub">{{ door.away ? 'Start prints at the printer' : (lastJob ? lastName : 'Recent prints') }}</span>
         </span>
       </button>
+      <!-- off the panel, the camera leads Now in Ready too: is the bed clear? (design/camera-anytime/, A) -->
+      <NowCamera v-if="showCam" :camera="camera!" :idle="camWay === 'idle'" class="hero" @failed="camFailed = true" />
     </div>
 
     <!-- Preparing: checklist beside the object -->
     <div v-else-if="state === 'preparing'" class="body two">
       <div class="left">
         <p v-if="camDown" class="camchip"><span>Camera isn't answering</span><button class="link" @click="camFailed = false">Try again</button></p>
-        <h1 class="headline a-display">{{ intent.job && !change && !carrying && !powerWait ? 'Getting ready' : intent.headline }}</h1>
-        <div v-if="intent.job && !change && !carrying && !powerWait" class="chip">
+        <h1 class="headline a-display">{{ intent.job && !change && !carrying && !powerWait && !outage ? 'Getting ready' : intent.headline }}</h1>
+        <div v-if="intent.job && !change && !carrying && !powerWait && !outage" class="chip">
           <ObjectImage :src="thumbUrl" :alt="intent.job.name" class="chip-img" />
           <span class="chip-name">{{ intent.job.name }}</span>
           <span class="chip-meta a-num"><template v-if="intent.job.estimated_s">about {{ human(intent.job.estimated_s) }}</template><template v-if="matchedShort"> · {{ matchedShort }}</template></span>
@@ -72,6 +78,8 @@
         <template #face><svg class="nozzle-glyph" viewBox="-14 -12 52 52" aria-hidden="true"><path d="M6 2h12v8l-3 4h-6l-3-4z" /><path d="M9 14v4l3 6 3-6v-4" /></svg></template>
         {{ Math.round(intent.printer.nozzle.temperature) }}°
       </Ring>
+      <!-- the power is back (design/power-loss/, A): the wait for it to settle, then the nozzle warming -->
+      <Ring v-else-if="outageRing" :value="outageRing.value" :label="outageRing.label" :color="'var(--a-accent)'" class="ring">{{ outageRing.text }}</Ring>
       <Ring v-else-if="change" :value="prepProgress" label="" :color="'var(--a-accent)'" class="ring">
         <template #face><UnitArt v-if="unitArt" :art="change.art" :slot="change.slot ?? 0" :color="change.out?.color" /><HeadArt v-else :art="(change.art as any)" :out="change.out?.color" :in="change.in?.color" /></template>
         {{ changePill }}
@@ -158,10 +166,15 @@
           <button class="choice plain" :disabled="busy !== null || !allowedHere('change_what')" @click="picking = true">Something else</button>
         </div>
         <p v-if="change && holdLabel && (change.kind !== 'colour' || change.step === 'put')" class="hold">{{ holdLabel }}</p>
-        <SpoolRow v-if="!change && !colourPause" :spools="intent.spools" :note="holdLabel" class="spools" />
+        <!-- holding on a battery (design/power-loss/, A) -->
+        <ul v-if="outage" class="hold-facts">
+          <li v-for="f in holdFacts(outage)" :key="f">{{ f }}</li>
+        </ul>
+        <SpoolRow v-else-if="!change && !colourPause" :spools="intent.spools" :note="holdLabel" class="spools" />
         <PartsRow v-if="intent.parts && !change && lay !== 'panel'" :parts="intent.parts" @open="partsOpen = true" />
       </div>
       <NowCamera v-if="showCam" :camera="camera!" tone="amber" class="hero" @failed="camFailed = true" />
+      <Ring v-else-if="outageRing" :value="outageRing.value" :label="outageRing.label" :color="'var(--a-amber)'" class="ring">{{ outageRing.text }}</Ring>
       <Ring v-else-if="change" :value="prepProgress" label="" :color="'var(--a-amber)'" :ink="'var(--a-amber-ink)'" class="ring">
         <template #face><UnitArt v-if="unitArt" :art="change.art" :slot="change.slot ?? 0" :color="change.in?.color" you /><HeadArt v-else :art="(change.art as any)" :out="change.out?.color" :in="change.in?.color" you /></template>
         {{ changePill }}
@@ -241,8 +254,11 @@
     <FileSheet v-if="lib" :item="opened" :check="opened ? lib.checks.value[opened.filename] : null" :printer="intent?.printer.name || 'the printer'"
                @close="opened = null" @refused="c => (refusal = c)" />
     <PrintCheckSheet :check="refusal" @close="refusal = null" />
+    <PrintRestSheet v-if="lost" :open="restOpen" :lost="lost" :thumb="lostThumb" :printer="intent.printer.name" :why="restWhy"
+                    :busy="restBusy" :error="restError" @close="restOpen = false" @rest="onRest" @again="onStartOver" />
     <ChangeWhatSheet :open="picking" @close="picking = false" />
     <WarmSheet :open="warmPicking" @close="warmPicking = false" />
+    <HandsSheet :open="handsOpen" @close="handsOpen = false" />
     <TellSheet :open="telling" :context="tellContext" :printer-name="intent?.printer.name" @close="telling = false" />
     <FirstLayerSheet :open="checking" @close="checking = false" />
     <PartsSheet v-if="intent?.parts" :open="partsOpen" :parts="intent.parts" :printer="intent.printer.name" :busy="busy === 'skip_part'"
@@ -266,6 +282,9 @@ import StateGlyph from '@/components/now/StateGlyph.vue'
 import PrintCheckSheet from '@/components/print/PrintCheckSheet.vue'
 import FileSheet from '@/components/print/FileSheet.vue'
 import UpNext from '@/components/now/UpNext.vue'
+import LostCard from '@/components/now/LostCard.vue'
+import PrintRestSheet from '@/components/now/PrintRestSheet.vue'
+import { holdFacts, holdRing } from '@/intent/lost'
 import { useLibrary } from '@/print/useLibrary'
 import { upNext, type UpRow } from '@/print/upnext'
 import type { Item } from '@/print/library'
@@ -279,6 +298,7 @@ import BuildArt from '@/components/now/BuildArt.vue'
 import ChangeWhatSheet from '@/components/now/ChangeWhatSheet.vue'
 import WarmMeters from '@/components/warm/WarmMeters.vue'
 import WarmSheet from '@/components/warm/WarmSheet.vue'
+import HandsSheet from '@/components/hands/HandsSheet.vue'
 import TellSheet from '@/components/report/TellSheet.vue'
 import { contextOf, type ReportContext } from '@/report/words'
 import FirstLayerSheet from '@/components/now/FirstLayerSheet.vue'
@@ -287,7 +307,7 @@ import PartsRow from '@/components/now/PartsRow.vue'
 import PartsSheet from '@/components/now/PartsSheet.vue'
 import ColourPick from '@/components/now/ColourPick.vue'
 import { needsSheet, offered, pauseStep, tileOf } from '@/intent/colour'
-import { canPrintAgain, printAgain } from '@/slice/again'
+import { canPrintAgain, canPrintRest, printAgain, printRest } from '@/slice/again'
 import { checkShown } from '@/intent/firstLayer'
 import { prettyName } from '@/intent/jobs'
 import NowCamera from '@/components/now/NowCamera.vue'
@@ -296,7 +316,10 @@ import SetupCard from '@/components/setup/SetupCard.vue'
 import { layout as currentLayout } from '@/shell/useLayout'
 import type { Layout } from '@/shell/layout'
 import { useCameras } from '@/camera/useCameras'
-import { cameraShownFor } from '@/camera/cameras'
+import { nowCamera } from '@/camera/cameras'
+import LightButton from '@/components/light/LightButton.vue'
+import { lightPlace, nowCameraShown } from '@/intent/light'
+import { embedded } from '@/auth'
 
 // The shell passes the arrangement for the Now pane; as a route (panel, phone) it follows the window.
 const props = defineProps<{ layout?: Layout }>()
@@ -327,7 +350,11 @@ watch(camFailed, (f) => { if (f) camRetry = window.setTimeout(() => (camFailed.v
 onBeforeUnmount(() => window.clearTimeout(camRetry))
 // Turning off or restarting (design/power/): the wait for the nozzle, drawn as a ring; no camera for it
 const powerWait = computed(() => intent.value?.phase === 'turning_off' || intent.value?.phase === 'restarting')
-const showCam = computed(() => lay.value !== 'panel' && !!camera.value && !camFailed.value && cameraShownFor(state.value) && !powerWait.value)
+const camWay = computed(() => nowCamera(intent.value?.state, { warming: warmOn.value }))
+const showCam = computed(() => lay.value !== 'panel' && !!camera.value && !camFailed.value && !!camWay.value && !powerWait.value)
+watch(showCam, (v) => { nowCameraShown.value = v }, { immediate: true })
+onBeforeUnmount(() => { nowCameraShown.value = false })
+const lightWhere = computed(() => lightPlace({ light: !!intent.value?.light, cameraOnNow: showCam.value, embedded }))
 
 const thumbUrl = computed(() => store.fileUrl(intent.value?.job?.thumbnail))
 // Without a camera (or with it off), the ring shows what the printer is doing (design/now-illustrated/, A).
@@ -418,6 +445,7 @@ const carriedColor = computed(() => intent.value?.spools.find((s) => s.slot === 
 const warmOn = computed(() => !!intent.value?.warm?.active)
 const handsChip = computed(() => heldChip(intent.value?.hands?.held ?? null, intent.value?.printer.nozzle.temperature ?? 0))
 const warmPicking = ref(false)
+const handsOpen = ref(false)
 watch(() => change.value?.ask, (ask) => { if (!ask) picking.value = false })
 // First layer (design/first-layer/, B): the button, its sheet, and the questions after
 const firstLayer = computed(() => intent.value?.first_layer ?? null)
@@ -434,6 +462,45 @@ const actions = computed(() => {
     : pstep.value.label ? [{ ...a, label: pstep.value.label, args: pstep.value.send?.args ?? a.args }] : []))
 })
 const heldBack = computed(() => (intent.value?.actions.length ?? 0) > actions.value.length)
+
+// A power cut (design/power-loss/, A): held on a battery, carrying on once it's back, or a print it took
+const outage = computed(() => intent.value?.outage ?? null)
+const outageRing = computed(() => (outage.value ? holdRing(outage.value, intent.value?.printer.nozzle.temperature ?? 0) : null))
+const lost = computed(() => (state.value === 'ready' ? intent.value?.lost ?? null : null))
+const lostThumb = computed(() => (lost.value && lastJob.value?.filename === lost.value.file ? lastThumb.value : null))
+const restOpen = ref(false)
+const restBusy = ref(false)
+const restError = ref('')
+const restWhy = ref<string | null>(null)
+async function openRest() {
+  if (!lost.value) return
+  restError.value = ''
+  restWhy.value = isPanel ? 'It\'s sliced on a phone or laptop: Print the rest is on Now there.'
+    : door.away ? 'It\'s sliced at home: Print the rest from a phone or laptop on the same Wi-Fi.'
+    : (await canPrintRest(store.call, lost.value.file)) ? null : 'It wasn\'t sliced here, so there\'s no model to cut.'
+  restOpen.value = true
+}
+async function onRest() {
+  const i = intent.value
+  if (!lost.value || !i) return
+  restBusy.value = true
+  restError.value = ''
+  try {
+    await printRest(store.call, lost.value, (i.spools ?? []) as any, i.printer.name)
+    restOpen.value = false
+    router.push('/print/model')
+  } catch (e) {
+    restError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    restBusy.value = false
+  }
+}
+async function onStartOver() {
+  if (!lost.value) return
+  restOpen.value = false
+  const check = await store.requestPrint(lost.value.file)
+  if (needsSheet(check)) refusal.value = check
+}
 
 async function onPrintAgain() {
   if (!lastJob.value) return router.push('/print')
@@ -544,6 +611,10 @@ async function onAction(a: IntentAction) {
     showRaw.value = !showRaw.value
     return
   }
+  if (a.id === 'hands_open') {
+    handsOpen.value = true
+    return
+  }
   if (a.id === 'warm_choose') {
     warmPicking.value = true
     return
@@ -642,6 +713,10 @@ async function onAction(a: IntentAction) {
 .hint-text { display: flex; flex-direction: column; padding: calc(12 * var(--u) + 4px) calc(16 * var(--u) + 6px) calc(14 * var(--u) + 5px); }
 .hint .a-display { font-size: calc(22 * var(--u) + 7px); }
 .hint .sub { color: var(--a-ink-3); font-size: calc(13 * var(--u) + 4px); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.hold-facts { margin: calc(10 * var(--u) + 4px) 0 0; padding: 0; list-style: none; display: grid; gap: calc(4 * var(--u) + 3px); max-width: 40ch; }
+.hold-facts li { position: relative; padding-left: 18px; color: var(--a-ink-2); font-size: calc(13 * var(--u) + 5px); line-height: 1.3; }
+.hold-facts li::before { content: ''; position: absolute; left: 2px; top: .5em; width: 7px; height: 7px; border-radius: 50%; background: var(--a-amber); }
 
 .chip {
   display: inline-flex; align-items: center; gap: calc(10 * var(--u) + 4px);
@@ -803,6 +878,8 @@ async function onAction(a: IntentAction) {
 .now-compact .spools { display: flex; flex-direction: column; align-items: center; }
 .now-compact.has-cam .left, .now-split .left { text-align: left; }
 .now-compact.has-cam .spools { align-items: flex-start; }
+.now-compact.has-cam .warm-meters { margin-inline: 0; }
+.now-compact.has-cam .inline-actions { justify-content: flex-start; }
 .now-compact .chip { max-width: 100%; }
 .now-compact .steps { align-items: center; }
 .now-compact.has-cam .steps { align-items: flex-start; }
@@ -821,6 +898,7 @@ async function onAction(a: IntentAction) {
 /* the phone: Up next under the spools instead of the panel's card (design/ready-phone/, C) */
 .up-next { margin-top: 28px; }
 .now-stacked.is-ready .left { grid-column: 1 / -1; }
+.now-stacked.is-ready.has-cam .left { grid-column: 2; }
 .tiles { flex: none; }
 /* the setup card: 16 px from the phone's edges as drawn, so out past Now's own padding */
 .setup { flex: none; margin: 12px calc(16px - (28 * var(--u) + 8px)) 0; }
@@ -854,6 +932,8 @@ async function onAction(a: IntentAction) {
 
 .headline > .inline-glyph { display: inline-grid; vertical-align: -0.12em; margin-right: 12px; --size: 1.1em; }
 .hero { min-width: 0; }
+.now { position: relative; }
+.now-light { position: absolute; top: 12px; right: calc(28 * var(--u) + 8px); z-index: 2; }
 
 /* Phone: stack */
 @media (max-width: 640px) {

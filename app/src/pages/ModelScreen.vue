@@ -6,9 +6,11 @@
          "Add a model" last, a sheet per part; spool, purpose and supports are the whole plate's.
          ?view=settings is "Every setting": each change, what it replaced and why.
          On a wide pane (design/ready-wide/, A + C, picked 3 October 2026) the plate is the stage, filling the
-         pane, and the page is a card over its right that collapses to a bar with the time and Print. -->
+         pane, and the page is a card over its right that collapses to a bar with the time and Print.
+         Several colors (design/multi-color/, B, picked 21 October 2026): a Colors card between the parts and the
+         plate's rows, one row per color with where it comes from, the cost of the changes and where the old color goes. -->
     <div v-if="stage && session.stage !== 'error'" class="stagepic">
-      <ModelPicture ref="big" :tris="plate" :color="colour" :alt="label" plate :bed="printer?.bed" turnable zoomable
+      <ModelPicture ref="big" :tris="plate" :color="colour" :runs="runs" :alt="label" plate :bed="printer?.bed" turnable zoomable
                     :shift="collapsed ? 0 : -cardRoom / 2" class="fill" @moved="m => (moved = m)" />
       <div class="zoom" role="group" aria-label="Zoom">
         <button type="button" aria-label="Closer" @click="big?.zoomBy(1.25)">+</button>
@@ -104,7 +106,7 @@
       </div>
       <template v-else>
         <!-- The plate where Orca put things; drag to look round it -->
-        <ModelPicture v-if="!stage" :tris="plate" :color="colour" :alt="label" plate :bed="printer?.bed" turnable class="pic">
+        <ModelPicture v-if="!stage" :tris="plate" :color="colour" :runs="runs" :alt="label" plate :bed="printer?.bed" turnable class="pic">
           <span v-if="picNote" class="picnote">{{ picNote }}</span>
         </ModelPicture>
         <h1 class="a-display head">{{ headline }}</h1>
@@ -124,12 +126,14 @@
         <div class="plist">
           <div v-for="(p, i) in session.parts" :key="p.key" class="pl">
             <button class="pl-open" :aria-label="`${partName(p)}: size, which way down`" @click="openPart(i)">
-              <ModelPicture :tris="p.tris" :color="colour" alt="" class="thumb" />
-              <span class="t"><b>{{ partName(p) }}</b><span :class="{ you: subOf(p, i).amber }">{{ subOf(p, i).text }}</span></span>
+              <ModelPicture :tris="p.tris" :color="partColor(p)" :runs="p.project ? ownRuns(p) : null" alt="" class="thumb" />
+              <span class="t"><b>{{ partName(p) }}</b>
+                <span v-if="p.project" class="pcol"><span class="dots"><i v-for="(c, k) in fileDots(p)" :key="k" :style="{ '--c': c }"></i></span>{{ fileDots(p).length }} colors from the file</span>
+                <span v-else :class="{ you: subOf(p, i).amber, pcol: multi }"><i v-if="multi" class="dot sm" :style="{ '--c': partColor(p) }"></i>{{ multi ? `${plateSpools[p.spool]?.color ? colorWord(plateSpools[p.spool]?.color) : plateSpools[p.spool]?.material ?? ''} · ` : '' }}{{ subOf(p, i).text }}</span></span>
             </button>
-            <Stepper :value="p.copies" :label="`How many of ${partName(p)}`" :bin="session.parts.length > 1" @change="n => setCopies(i, n)" @remove="removePart(i)" />
+            <Stepper v-if="!p.project" :value="p.copies" :label="`How many of ${partName(p)}`" :bin="session.parts.length > 1" @change="n => setCopies(i, n)" @remove="removePart(i)" />
           </div>
-          <label class="addl" :class="{ busy: session.adding > 0 }">
+          <label v-if="!hasProject" class="addl" :class="{ busy: session.adding > 0 }">
             <input type="file" multiple accept=".stl,.obj,.step,.stp,.3mf" class="file-input" :disabled="session.adding > 0" @change="add" />
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             {{ session.adding ? 'Adding…' : 'Add a model' }}
@@ -141,6 +145,36 @@
         </p>
         <p v-if="addError" class="bad small">{{ addError }}</p>
 
+        <!-- Colors (design/multi-color/, B): one row per color, where it comes from, then the cost and the purge -->
+        <template v-if="multi">
+          <h3 class="grp">Colors<span class="grp-n">{{ plateSpools.length }} spools</span></h3>
+          <div class="ccard">
+            <button v-for="(s, k) in plateSpools" :key="k" class="cr" @click="openColor(k)">
+              <i class="dot big" :class="{ hand: handOf(s, k), miss: unsortedColors.includes(k) }" :style="{ '--c': s.color || 'transparent' }"></i>
+              <span class="t"><b>{{ colorName(s, k) }}<i v-if="handOf(s, k) && !unsortedColors.includes(k)" class="tag">By hand</i></b>
+                <span :class="{ you: lineOf(s, k).amber }">{{ lineOf(s, k).text }}</span></span>
+              <span class="g a-num">{{ gramsFor(k) }}</span>
+              <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+            </button>
+            <div class="cost">
+              <div v-if="many" class="toomany">
+                <p><b>{{ many.count }} swaps by hand,</b> {{ tooManyWords(many) }}. That's too many to stand by.</p>
+                <div class="acts">
+                  <button v-if="session.parts.length > 1 && !session.oneAfterOther" class="a-btn accent" @click="setOneAfterOther(true)">Print one after the other</button>
+                  <button v-if="!hasProject" class="a-btn ghost" @click="oneColor()">One color</button>
+                </div>
+              </div>
+              <p v-if="colorsNow"><b>{{ cost!.strong }}</b> {{ cost!.rest }}</p>
+              <p v-else>Working out the changes…</p>
+              <p v-if="session.oneAfterOther" class="aside">One part after the other, so the color changes once per part.
+                <button class="every" @click="setOneAfterOther(false)">Print them together</button></p>
+              <div v-if="purgeChoices.length > 1" class="seg" role="radiogroup" aria-label="Between colors">
+                <button v-for="pg in purgeChoices" :key="pg" role="radio" :aria-checked="pg === purgeNow" :class="{ on: pg === purgeNow }" @click="setPurge(pg)">{{ PURGE_WORDS[pg].label }}</button>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <h3 class="grp">For the whole plate</h3>
         <div class="rows">
           <button class="row" @click="open = 'purpose'">
@@ -148,7 +182,7 @@
             <span class="v">{{ purposeLabel }}<small>{{ keptHere ? `Yours: ${keptWords}` : purposeSummary }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
           </button>
-          <button class="row" @click="open = 'spool'">
+          <button v-if="!multi" class="row" @click="open = 'spool'">
             <span class="k">Spool</span>
             <span class="v"><span class="one"><i class="dot" :style="{ '--c': spool?.color || 'transparent' }"></i>{{ spool?.name }}</span><small>{{ spoolNote }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
@@ -223,6 +257,12 @@
           </button>
         </div>
         <div class="rows">
+          <button v-if="!editing.project" class="row" @click="open = 'partColor'">
+            <span class="k">Color</span>
+            <span class="v"><span class="one"><i class="dot" :style="{ '--c': partColor(editing) }"></i>{{ colorName(plateSpools[editing.spool], editing.spool) }}</span>
+              <small>{{ multi ? lineOf(plateSpools[editing.spool], editing.spool).text : spoolNote }}</small></span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
           <button class="row" @click="open = 'size'">
             <span class="k">Size</span>
             <span class="v a-num">{{ pct(editing.scale) }}<small>{{ sizeAt(editing, editing.scale) }}</small></span>
@@ -292,6 +332,49 @@
       <div class="chips">
         <button v-for="m in printer?.materials ?? []" :key="m" class="chip" :class="{ on: spool?.slot == null && !spool?.color && spool?.material === m }" @click="pickMaterial(m)">{{ m }}</button>
       </div>
+    </SliceSheet>
+
+    <!-- A part's color (design/multi-color/, B): the plate's colors, a loaded spool, or one swapped in by hand -->
+    <SliceSheet :open="open === 'partColor' && !!editing" :title="editing ? `${partName(editing)} prints in` : ''"
+                sub="A color another part uses is shared, with no extra change." @close="open = null">
+      <div v-if="editing" class="opts">
+        <button v-for="(s, k) in plateSpools" :key="'p' + k" class="opt" :class="{ on: editing.spool === k }" @click="pickPartSpool(s)">
+          <i class="dot big" :class="{ hand: handOf(s, k) }" :style="{ '--c': s.color || 'transparent' }"></i>
+          <span class="t"><b>{{ colorName(s, k) }}</b><span>{{ lineOf(s, k).text }}</span></span>
+        </button>
+        <button v-for="s in offPlate" :key="'s' + s.slot" class="opt" @click="pickLoaded(s, 'part')">
+          <i class="dot big" :style="{ '--c': s.color || 'transparent' }"></i>
+          <span class="t"><b>{{ s.name || s.material }}</b><span>Slot {{ s.slot + 1 }}<template v-if="s.grams"> · {{ s.grams }} g left</template></span></span>
+        </button>
+      </div>
+      <p class="sub2">Or a color you'll swap in by hand: the print waits for it.</p>
+      <div class="chips swatches">
+        <button v-for="c in COLORS" :key="c.hex" class="sw" :style="{ '--c': c.hex }" :aria-label="c.name" @click="pickHand(c.hex, 'part')"></button>
+      </div>
+    </SliceSheet>
+
+    <!-- One of the plate's colors: which spool, or by hand -->
+    <SliceSheet :open="open === 'color' && !!colorAt" :title="colorAt ? colorTitle : ''" :sub="colorSub" @close="open = null">
+      <div v-if="colorAt" class="opts">
+        <button v-if="loadSlot != null" class="opt" @click="pickLoad()">
+          <i class="dot big" :style="{ '--c': colorAt.s.color || 'transparent' }"></i>
+          <span class="t"><b>Load it in slot {{ loadSlot + 1 }}</b><span>Slot {{ loadSlot + 1 }} is empty. Then the unit does it, and nobody needs to be here.</span></span>
+        </button>
+        <button v-if="colorAt.k > 0" class="opt" :class="{ on: handOf(colorAt.s, colorAt.k) && !unsortedColors.includes(colorAt.k) }" @click="pickHand(colorAt.s.color, 'color')">
+          <i class="dot big hand" :style="{ '--c': colorAt.s.color || 'transparent' }"></i>
+          <span class="t"><b>Swap it by hand</b><span>{{ handLine }}</span></span>
+        </button>
+        <button v-for="s in usable" :key="s.slot" class="opt" :class="{ on: !colorAt.s.hand && colorAt.s.slot === (s.direct ? null : s.slot) && colorAt.s.color === s.color }" @click="pickLoaded(s, 'color')">
+          <i class="dot big" :style="{ '--c': s.color || 'transparent' }"></i>
+          <span class="t"><b>{{ s.name || s.material }}</b><span>{{ s.direct ? 'Loaded' : `Slot ${s.slot + 1}` }}<template v-if="otherMaterial(s)"> · another material, may not stick</template><template v-else-if="s.grams"> · {{ s.grams }} g left</template></span></span>
+        </button>
+      </div>
+      <template v-if="colorAt && colorAt.k > 0 && !unitHere">
+        <p class="sub2">Which color will you swap in?</p>
+        <div class="chips swatches">
+          <button v-for="c in COLORS" :key="c.hex" class="sw" :class="{ on: colorAt.s.color === c.hex }" :style="{ '--c': c.hex }" :aria-label="c.name" @click="pickHand(c.hex, 'color')"></button>
+        </div>
+      </template>
     </SliceSheet>
 
     <!-- Supports -->
@@ -375,7 +458,9 @@ import {
   session, current, only, plate, tooBig, addFiles, askFill, downOf, followSpools, onlyWhatFits, removePart, reset, send,
   setCopies, setPurpose, setScale, setSide, setSpool, setSupports, askKinds, kindJob, loadLines, makeUsual, plateOf, type Part,
   setSetting, setScope, resetPurpose, wanted, isKept, undoRemove, openPicker, pick, closePicker, setBrim, retry,
+  multi, plateSpools, runs, partRuns, unsortedColors, setPartSpool, setPlateSpool, setPurge, setOneAfterOther, oneColor,
 } from '@/slice/session'
+import { colorWord, costLine, footColors, PURGE_WORDS, spoolLine, tooMany, tooManyWords, type PlateSpool, type Purge } from '@/slice/colors'
 import { offTitle, readyNote, waitWords } from '@/slice/elsewhere'
 import { footprint, roomFor, type BrimKind } from '@/slice/footprint'
 import { fileCounts } from '@/slice/plate'
@@ -402,7 +487,7 @@ const router = useRouter()
 
 const view = computed(() => (route.query.view === 'settings' ? 'settings' : 'ready'))
 const orcaNames = ref(false)
-const open = ref<null | 'purpose' | 'spool' | 'supports' | 'size' | 'bed' | 'lay' | 'part' | 'edit' | 'brim'>(null)
+const open = ref<null | 'purpose' | 'spool' | 'supports' | 'size' | 'bed' | 'lay' | 'part' | 'edit' | 'brim' | 'color' | 'partColor'>(null)
 const editAt = ref(0)
 const working = ref(false)
 const actionError = ref('')
@@ -438,7 +523,9 @@ const picNote = computed(() => {
   if (o && o.copies === 1) return o.lay === 'flat' && o.layAuto ? 'Laid flat for you' : ''
   return 'Drag to look around'
 })
-const time = computed(() => humanDuration(job.value?.estimate?.seconds))
+const total = (j: { estimate?: { seconds: number | null; changes_seconds?: number } } | null | undefined) =>
+  j?.estimate?.seconds == null ? null : j.estimate.seconds + (j.estimate.changes_seconds ?? 0)
+const time = computed(() => humanDuration(total(job.value)))
 const grams = computed(() => (job.value?.estimate?.grams != null ? `${Math.round(job.value.estimate.grams)} g` : ''))
 const sup = computed(() => supportsWords(session.supports, job.value?.state === 'done' ? job.value.supports_added : null, session.usual))
 // the Supports sheet: each kind's plate as its slice placed it, its supports, time and weight
@@ -462,7 +549,7 @@ const spoolNote = computed(() => {
 })
 const ready = computed(() => store.intent?.state === 'ready')
 // Whether the spool is really loaded is the printer's own check (check_print), after the bed question.
-const canPrint = computed(() => job.value?.state === 'done' && ready.value && !working.value)
+const canPrint = computed(() => job.value?.state === 'done' && ready.value && !working.value && !unsortedColors.value.length)
 const copies = computed(() => session.parts.reduce((a, p) => a + p.copies, 0))
 // sliced on another machine (design/slicing-elsewhere/, A): who, and what a slice waits behind there
 const slicer = computed(() => session.options?.slicer ?? null)
@@ -473,6 +560,9 @@ const baseNote = computed(() => {
   if (door.away) return 'Start it at the printer, where you can check the bed is clear.'
   if (!ready.value && store.intent) return `${printerName.value} is busy. Send it now and start it when it's free.`
   if (job.value?.state !== 'done') return 'Tap a row to change it'
+  const first = unsortedColors.value[0]
+  if (first != null) return `Pick a spool for ${colorWord(plateSpools.value[first]?.color)} first`
+  if (colorsNow.value) return footColors(colorsNow.value, plateSpools.value.length)
   if (plates.value.length > 1) {
     const rest = plates.value.slice(1).reduce((a, p) => a + (p.seconds ?? 0), 0)
     return `Plate 1 of ${plates.value.length} · then about ${humanDuration(rest)}`
@@ -542,6 +632,84 @@ const priceDelta = computed(() => {
 })
 
 function partName(p: Part) { return modelName(p.name) }
+
+// ── several colors (design/multi-color/, B) ──
+const hasProject = computed(() => session.parts.some(p => p.project))
+const unitHere = computed(() => printer.value?.unit ?? (printer.value?.slots ?? 1) > 1)
+const colorsNow = computed(() => (job.value?.state === 'done' ? job.value.colors ?? null : null))
+const purgeChoices = computed<Purge[]>(() => printer.value?.purges ?? [])
+const purgeNow = computed<Purge>(() => session.purge ?? purgeChoices.value[0] ?? 'tower')
+const cost = computed(() => (colorsNow.value ? costLine(colorsNow.value, purgeNow.value, unitHere.value) : null))
+const many = computed(() => tooMany(colorsNow.value))
+function partColor(p: Part) { return plateSpools.value[p.spool]?.color || colour.value }
+function ownRuns(p: Part) { let end = 0; return partRuns(p).map(r => ({ end: (end += r.count), color: r.color })) }
+function fileDots(p: Part) { return (p.project?.colors ?? []).filter(c => c.used).map((c, k) => plateSpools.value[k]?.color || c.color || '#8A8D91') }
+const handOf = (s: PlateSpool | undefined, k: number) => !!s && k > 0 && (s.hand || !unitHere.value || s.slot == null)
+function colorName(s: PlateSpool | undefined, k: number) {
+  if (!s) return ''
+  if (unsortedColors.value.includes(k)) return `${colorWord(s.color)} isn't loaded`
+  return s.hand || !unitHere.value && k > 0 ? `${colorWord(s.color)} ${s.material}` : s.name
+}
+function usesOf(k: number) {
+  if (hasProject.value) return ''
+  const names = session.parts.filter(p => p.spool === k).map(partName)
+  return names.length > 2 ? `${names.length} parts` : names.join(', ')
+}
+function lineOf(s: PlateSpool | undefined, k: number) {
+  return s ? spoolLine(s, k, colorsNow.value, unitHere.value, usesOf(k)) : { text: '', amber: false }
+}
+function gramsFor(k: number) {
+  const g = colorsNow.value?.grams?.[k]
+  return g == null ? '' : `${g < 1 ? g.toFixed(1) : Math.round(g)} g`
+}
+// a spool loaded in the unit, not one of the plate's colors yet: a part can take it
+const offPlate = computed(() => (unitHere.value ? usable.value.filter(u => !u.direct && !plateSpools.value.some(s => !s.hand && s.slot === u.slot)) : []))
+const colorK = ref(0)
+const colorAt = computed(() => (plateSpools.value[colorK.value] ? { k: colorK.value, s: plateSpools.value[colorK.value] } : null))
+const colorTitle = computed(() => {
+  const c = colorAt.value
+  if (!c) return ''
+  const uses = usesOf(c.k)
+  return `${colorWord(c.s.color)}${uses ? `, for ${uses}` : ''}`
+})
+const colorSub = computed(() => {
+  const c = colorAt.value
+  if (!c) return ''
+  const g = gramsFor(c.k)
+  if (unsortedColors.value.includes(c.k)) return `${printerName.value} has no ${colorWord(c.s.color).toLowerCase()} spool.${g ? ` ${g}.` : ''}`
+  return 'Where this color comes from. Every part in it follows.'
+})
+const emptySlots = computed(() => ((store.intent?.spools ?? []) as IntentSpool[]).filter(s => s.status === 'empty' && !s.direct).map(s => s.slot))
+const loadSlot = computed(() => (unitHere.value && colorAt.value && unsortedColors.value.includes(colorAt.value.k) ? emptySlots.value[0] ?? null : null))
+const handLine = computed(() => {
+  const at = colorAt.value ? colorsNow.value?.spools[colorAt.value.k]?.swaps ?? [] : []
+  return at.length ? `The print waits at about ${at.length > 1 ? `${Math.round(at[0] / 60)} min, ${at.length} times` : `${Math.round(at[0] / 60)} min`} and asks for it. Resume carries on.`
+    : 'The print waits and asks for it. Resume carries on.'
+})
+function otherMaterial(s: IntentSpool) { const c = colorAt.value; return !!c && !!s.material && s.material.toUpperCase() !== c.s.material }
+function openColor(k: number) { colorK.value = k; open.value = 'color' }
+function loaded(s: IntentSpool): PlateSpool {
+  return { slot: s.direct ? null : s.slot, material: (s.material ?? 'PLA').toUpperCase(), color: s.color, name: s.name || s.material || '', hand: false }
+}
+function pickPartSpool(s: PlateSpool) { setPartSpool(editAt.value, s); open.value = null }
+function pickLoaded(s: IntentSpool, to: 'part' | 'color') {
+  if (to === 'part') setPartSpool(editAt.value, loaded(s))
+  else setPlateSpool(colorK.value, loaded(s))
+  open.value = null
+}
+function pickHand(hex: string | null, to: 'part' | 'color') {
+  const material = (to === 'color' ? colorAt.value?.s.material : plateSpools.value[0]?.material) ?? 'PLA'
+  const s: PlateSpool = { slot: null, material, color: hex, name: `${colorWord(hex)} ${material}`, hand: true }
+  if (to === 'part') setPartSpool(editAt.value, s)
+  else setPlateSpool(colorK.value, s)
+  open.value = null
+}
+function pickLoad() {
+  const c = colorAt.value, n = loadSlot.value
+  if (!c || n == null) return
+  setPlateSpool(c.k, { slot: n, material: c.s.material, color: c.s.color, name: `${colorWord(c.s.color)} ${c.s.material}`, hand: false })
+  open.value = null
+}
 function pct(k: number) { return `${Math.round(k * 100)}%` }
 function sizeAt(p: Part, k: number) {
   const s = p.size
@@ -597,21 +765,13 @@ function pickBrim(k: BrimKind) {
 }
 function timeOf(p: string) {
   const j = session.jobs[p as Purpose]
-  return j?.state === 'done' ? humanDuration(j.estimate?.seconds) : j?.state === 'failed' ? '—' : '…'
+  return j?.state === 'done' ? humanDuration(total(j)) : j?.state === 'failed' ? '—' : '…'
 }
 function gramsOf(p: string) {
   const j = session.jobs[p as Purpose]
   return j?.state === 'done' && j.estimate?.grams != null ? `${Math.round(j.estimate.grams)} g` : ''
 }
-function colourWord(hex: string) {
-  const near = COLORS.reduce((best, c) => (dist(c.hex, hex) < dist(best.hex, hex) ? c : best), COLORS[0])
-  return near.name
-}
-function dist(a: string, b: string) {
-  const p = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
-  const [x, y] = [p(a), p(b)]
-  return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2
-}
+const colourWord = colorWord
 
 function openPart(i: number) {
   editAt.value = i
@@ -902,5 +1062,40 @@ const ICONS: Record<string, string> = {
 .chips.qty .chip { height: 38px; padding: 0 14px; }
 .chip[disabled] { opacity: 0.5; cursor: default; }
 .opt .t b .tag { white-space: nowrap; display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-accent-text); margin-left: 8px; vertical-align: 2px; }
+/* several colors (design/multi-color/, B) */
+.grp-n { float: right; letter-spacing: 0; text-transform: none; font-size: 13.5px; font-weight: 600; color: var(--a-accent-text); }
+.ccard { background: var(--a-surface); border-radius: 18px; box-shadow: var(--a-card-shadow); overflow: hidden; }
+.cr { appearance: none; border: 0; border-top: 1px solid var(--a-line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; display: flex; align-items: center; gap: 11px; padding: 10px 12px; }
+.cr:first-child { border-top: 0; }
+.cr:focus-visible { outline: 2px solid var(--a-accent); outline-offset: -2px; }
+.cr .t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.cr .t b { font-size: 16px; }
+.cr .t span { font-size: 13px; color: var(--a-ink-3); line-height: 1.3; }
+.cr .t span.you { color: var(--a-amber-text); font-weight: 600; }
+.cr .g { font-size: 13px; color: var(--a-ink-3); flex: none; }
+.cr .tag, .opt .t b .tag { white-space: nowrap; display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-accent-text); margin-left: 8px; vertical-align: 2px; }
+.dot.big.hand { border: 3px dashed var(--a-ink-2); }
+.dot.big.miss { border: 3px dashed var(--a-amber); }
+.dot.sm { width: 12px; height: 12px; border-width: 1.5px; vertical-align: -1px; margin-right: 5px; }
+.pl .t .pcol { display: flex; align-items: center; gap: 0; }
+.dots { display: inline-flex; padding-left: 5px; margin-right: 6px; }
+.dots i { width: 14px; height: 14px; border-radius: 50%; background: var(--c); margin-left: -5px; border: 2px solid var(--a-surface); box-shadow: 0 0 0 1px var(--a-swatch-edge); }
+.cost { border-top: 1px solid var(--a-line); padding: 11px 14px 13px; display: grid; gap: 9px; background: color-mix(in srgb, var(--a-surface-2) 35%, var(--a-surface)); }
+.cost p { margin: 0; font-size: 14px; color: var(--a-ink-2); line-height: 1.35; }
+.cost p b { color: var(--a-ink); }
+.cost .aside { font-size: 13px; color: var(--a-ink-3); }
+.cost .aside .every { padding: 0; font-size: 13px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--a-surface-2); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { appearance: none; border: 0; background: none; font: inherit; cursor: pointer; font-size: 14px; font-weight: 600; padding: 8px 4px; border-radius: 9px; color: var(--a-ink-2); }
+.seg button.on { background: var(--a-surface); color: var(--a-ink); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.14); }
+.seg button:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 1px; }
+.toomany { background: color-mix(in srgb, var(--a-amber) 22%, var(--a-surface)); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; }
+.toomany p { color: var(--a-amber-text); }
+.toomany .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.toomany .a-btn { height: 38px; font-size: 14.5px; padding: 0 14px; border-radius: 12px; }
+.swatches { gap: 10px; }
+.sw { appearance: none; cursor: pointer; width: 38px; height: 38px; border-radius: 50%; background: var(--c); border: 2px solid var(--a-swatch-edge); padding: 0; }
+.sw.on { box-shadow: 0 0 0 3px var(--a-accent); }
+.sw:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
 .takeoff { appearance: none; border: 0; background: none; font: inherit; cursor: pointer; padding: 16px 2px 2px; font-size: 16px; font-weight: 600; color: var(--a-red-text); }
 </style>

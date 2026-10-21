@@ -66,6 +66,7 @@ Wi-Fi and the panel's two ways in, and setup worked from there. The first card's
   are proven on a flashed card: [os-slots.md](os-slots.md).)
 - Klipper has no `printer.cfg`, so after setup the printer shows its Problem screen. Printer profiles (or bringing a
   config over) are phase 4 of [installer.md](installer.md).
-- A Pi 5 image, the image in CI (GitHub Actions), and listing it in Raspberry Pi Imager.
+- A Pi 5 image, and listing it in Raspberry Pi Imager. (The Pi 4 card is built by the public repository's OS
+  image workflow in GitHub Actions; a maintainer signs it before it goes live.)
 - The first boot shows the console until `apply` has started the kiosk (a minute or two); the boot screen from the
   first frame needs the theme baked in at build time.

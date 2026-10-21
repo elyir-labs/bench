@@ -538,3 +538,12 @@ def test_a_kobras_profile_follows_the_boxs_template_unless_someone_wrote_their_o
     (folder / "printer.json").write_text(json.dumps({"machine": "mine"}))                     # someone's own
     bench._profile("k", "kobra-3")
     assert json.loads((folder / "printer.json").read_text())["machine"] == "mine"
+
+
+async def test_move_and_heat_goes_to_the_kobra_as_gcode(rig):
+    # through Rinkhals the whole sheet works (design/hands-on/): the first move only finds home
+    await until(lambda: (rig.s.intent().get("hands") or {}).get("can_move") is True)
+    p = await page(rig)
+    out = await p.call("printer.intent.action", {"action": "hands_move", "args": {"axis": "z", "mm": 10}})
+    assert out["ok"]
+    await until(lambda: ("printer.gcode.script", {"script": "G28"}) in rig.kobra.calls)

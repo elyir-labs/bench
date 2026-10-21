@@ -72,6 +72,15 @@ fi
 # cage runs this script a second time as its one client: switch off any output that
 # isn't the panel (a stray dtoverlay can add a phantom DSI that cage would extend onto)
 if [ "${1:-}" != "--in-cage" ]; then
+  # A panel is touched, not pointed at, but cage draws its arrow in the middle of the screen anyway. Its cursor
+  # theme is one in which every cursor is a single transparent pixel (an Xcursor file: header, one table entry,
+  # one 1x1 image). It has to be the theme called "default": cage asks for that one by name and ignores
+  # XCURSOR_THEME; only XCURSOR_PATH says where to look. Chromium inherits it too.
+  cursors="${XDG_RUNTIME_DIR:-/tmp}/elyir-bench-cursor/default/cursors"
+  mkdir -p "$cursors"
+  printf 'Xcur\x10\0\0\0\0\0\x01\0\x01\0\0\0\x02\0\xfd\xff\x18\0\0\0\x1c\0\0\0\x24\0\0\0\x02\0\xfd\xff\x18\0\0\0\x01\0\0\0\x01\0\0\0\x01\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0' > "$cursors/default"
+  for c in left_ptr arrow pointer hand1 hand2 text xterm grab grabbing not-allowed wait progress; do ln -sf default "$cursors/$c"; done
+  export XCURSOR_PATH="${cursors%/default/cursors}" XCURSOR_THEME=default XCURSOR_SIZE=24
   exec cage -- "$0" --in-cage
 fi
 if [ -n "${ELYIR_BENCH_OUTPUT:-}" ] && command -v wlr-randr >/dev/null; then
@@ -79,10 +88,14 @@ if [ -n "${ELYIR_BENCH_OUTPUT:-}" ] && command -v wlr-randr >/dev/null; then
     [ "$o" = "$ELYIR_BENCH_OUTPUT" ] || wlr-randr --output "$o" --off
   done
   # panels mounted upside down or sideways; touch is flipped by the panel's dtoverlay
-  # (invx/invy), since wlroots doesn't rotate touch along with the picture
-  case "${ELYIR_BENCH_ROTATION:-0}" in
-    90|180|270) wlr-randr --output "$ELYIR_BENCH_OUTPUT" --transform "$ELYIR_BENCH_ROTATION" ;;
-  esac
+  # (invx/invy), since wlroots doesn't rotate touch along with the picture.
+  # When the kernel already has the panel's orientation (the boot screen puts it in cmdline.txt so
+  # Plymouth draws upright), Raspberry Pi's cage turns the picture itself and ours would undo it.
+  if ! grep -q "video=$ELYIR_BENCH_OUTPUT:panel_orientation=" /proc/cmdline 2>/dev/null; then
+    case "${ELYIR_BENCH_ROTATION:-0}" in
+      90|180|270) wlr-randr --output "$ELYIR_BENCH_OUTPUT" --transform "$ELYIR_BENCH_ROTATION" ;;
+    esac
+  fi
 fi
 
 # cage shows black until its first window has a picture, which takes a cold Chromium seconds. The

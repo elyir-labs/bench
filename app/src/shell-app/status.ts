@@ -14,8 +14,8 @@ export function statusOf(p: LivePrinter, homeOnly = false): { word: string; tone
   const pct = Math.floor((i.job?.progress ?? 0) * 100)
   switch (i.state) {
     case 'printing': return { word: `Printing · ${pct}%`, tone: 'busy', line: i.job?.eta_clock ? `${i.job.name} · done at about ${i.job.eta_clock}` : (i.job?.name ?? '') }
-    case 'preparing': return { word: i.change ? (i.change.kind === 'slot' ? 'Swapping a spool' : 'Changing filament') : (i.phase === 'carrying_on' ? 'Carrying on' : 'Getting ready'), tone: 'busy', line: i.headline }
-    case 'needs_you': return { word: 'Needs you', tone: 'amber', line: i.headline }
+    case 'preparing': return { word: i.change ? (i.change.kind === 'slot' ? 'Swapping a spool' : 'Changing filament') : (i.phase === 'carrying_on' ? 'Carrying on' : i.phase === 'power_back' ? "Power's back" : 'Getting ready'), tone: 'busy', line: i.headline }
+    case 'needs_you': return { word: i.phase === 'power_hold' ? 'On battery' : 'Needs you', tone: 'amber', line: i.headline }
     case 'finished': return { word: 'Finished', tone: 'green', line: i.detail || i.headline }
     case 'problem': return { word: 'Stopped', tone: 'red', line: i.headline }
     default: return { word: 'Ready', tone: 'calm', line: i.detail }

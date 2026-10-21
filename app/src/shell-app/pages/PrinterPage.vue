@@ -52,7 +52,7 @@
       </div>
     </div>
 
-    <PrinterFrame :id="id" />
+    <PrinterFrame v-for="k in kept" :key="k" v-show="k === id" :id="k" :current="k === id" @drop="emit('drop', k)" />
   </div>
 </template>
 
@@ -65,11 +65,12 @@ import { chipsOf, grouped } from '../home'
 import PrinterFrame from '../PrinterFrame.vue'
 import YouLink from '../YouLink.vue'
 
-defineProps<{ wide?: boolean }>()
+defineProps<{ wide?: boolean; kept: string[] }>()
+const emit = defineEmits<{ drop: [id: string] }>()
 const route = useRoute()
 const menu = ref(false)
-const id = computed(() => String(route.params.id))
-const p = computed(() => printerById(id.value))
+const id = computed(() => (route.params.id ? String(route.params.id) : null))
+const p = computed(() => (id.value ? printerById(id.value) : undefined))
 watch(id, () => { menu.value = false })
 
 const single = computed(() => printers.length === 1 && benches.length === 0)

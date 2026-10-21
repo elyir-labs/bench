@@ -18,7 +18,7 @@
     <div v-if="failed" class="waiting">The camera isn't answering.</div>
 
     <span v-if="badge" class="live" :class="{ still: mode === 'stills' }">
-      <i aria-hidden="true"></i>{{ mode === 'live' ? 'Live' : 'Every 2 s' }}<template v-if="showName"> · {{ camera.name }}</template>
+      <i aria-hidden="true"></i>{{ mode === 'live' ? 'Live' : `Every ${every} s` }}<template v-if="showName"> · {{ camera.name }}</template>
     </span>
     <button v-if="expandable" class="expand" aria-label="Show the camera bigger" @click.stop="emit('expand')">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -33,7 +33,7 @@
 // Nothing is fetched while the picture is off screen or the page is hidden: dropping the src
 // closes the MJPEG connection, so a tab in the background costs nothing.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { cameraMode, type Camera } from '@/camera/cameras'
+import { cameraMode, stillEvery, type Camera } from '@/camera/cameras'
 import { saveData } from '@/camera/useCameras'
 
 const props = withDefaults(defineProps<{
@@ -47,7 +47,11 @@ const props = withDefaults(defineProps<{
   showName?: boolean
   /** the Live / Every 2 s label; the full-screen viewer says it in its own corner */
   badge?: boolean
-}>(), { watching: false, fit: 'cover', tone: 'none', progress: null, expandable: false, showName: false, badge: true })
+  /** an idle printer: a still now and then, live once someone asks to watch */
+  idle?: boolean
+  /** a new still soon after this changes: the light was switched, so the picture shows it at once */
+  refresh?: unknown
+}>(), { watching: false, fit: 'cover', tone: 'none', progress: null, expandable: false, showName: false, badge: true, idle: false })
 const emit = defineEmits<{ expand: []; failed: [] }>()
 
 const root = ref<HTMLElement | null>(null)
@@ -57,7 +61,8 @@ const failed = ref(false)
 const loaded = ref(false)
 const still = ref<string | null>(null)
 
-const mode = computed(() => cameraMode(props.camera, { saveData: saveData(), watching: props.watching }))
+const mode = computed(() => cameraMode(props.camera, { saveData: saveData(), watching: props.watching, idle: props.idle }))
+const every = computed(() => stillEvery(props.idle))
 const active = computed(() => onScreen.value && pageVisible.value)
 
 const src = computed(() => {
@@ -84,9 +89,14 @@ function runStills() {
   window.clearInterval(timer)
   if (mode.value !== 'stills' || !active.value || failed.value) return
   nextStill()
-  timer = window.setInterval(nextStill, 2000)
+  timer = window.setInterval(nextStill, every.value * 1000)
 }
-watch([mode, active, () => props.camera.snapshot], runStills)
+watch([mode, active, every, () => props.camera.snapshot], runStills)
+let soon = 0
+watch(() => props.refresh, () => {
+  window.clearTimeout(soon)
+  if (mode.value === 'stills' && active.value && !failed.value) soon = window.setTimeout(runStills, 700)
+})
 
 // A camera that stops answering gets another chance every 30 s; the parent shows the ring meanwhile.
 let retry = 0
@@ -96,6 +106,7 @@ function onError() {
   loaded.value = false
   emit('failed')
   window.clearInterval(timer)
+  window.clearTimeout(soon)
   retry = window.setTimeout(() => { failed.value = false; runStills() }, 30000)
 }
 watch(() => props.camera.stream, () => { failed.value = false; loaded.value = false })
@@ -115,6 +126,7 @@ onBeforeUnmount(() => {
   io?.disconnect()
   window.clearInterval(timer)
   window.clearTimeout(retry)
+  window.clearTimeout(soon)
 })
 </script>
 

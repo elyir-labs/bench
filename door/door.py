@@ -63,7 +63,9 @@ AWAY_ACTIONS = {"pause", "resume", "cancel", "stop_now", "cool_down", "swap_slot
                 "colour_choose", "change_good", "change_more",
                 # Turn off and Restart (design/power/, A; 5 October 2026): from away too, told that only someone
                 # at the printer can switch it on again. It waits for the nozzle to cool either way.
-                "power_off", "power_restart", "power_keep", "power_now", "power_retry"}
+                "power_off", "power_restart", "power_keep", "power_now", "power_retry",
+                # The chamber light (design/chamber-light/, A): from away it's how the camera shows anything at night.
+                "light_on", "light_off", "light_try", "light_pick"}
 
 
 def colour_choose_away(args: Any) -> str | None:

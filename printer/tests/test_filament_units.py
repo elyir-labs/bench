@@ -158,10 +158,48 @@ def test_slot_features_become_steps_for_the_service():
     assert a.plan_spool_move("mark_loaded", {"slot": 2}, t) == [(P.UNIT, {"op": "mark_loaded", "slot": 2})]
 
 
-def test_until_the_service_does_tool_changes_nothing_that_needs_one_is_offered():
+def test_load_and_unload_on_the_service_are_one_change_tool_step():
     t = service_tracker()
-    assert a.plan_spool_move("load_spool", {"slot": 0}, t) == []
-    assert a.plan_spool_move("unload_spool", {}, t) == []
-    assert a.plan_action("swap_slot", {"slot": 0}, t) == []
-    assert a.plan_slot("swap_start", {"slot": 1}, t) == []          # the spool in the head
-    assert a.plan_slot("swap_start", {"slot": 2}, t) == [(P.SLOT, {"op": "swap", "slot": 2})]
+    assert a.plan_spool_move("load_spool", {"slot": 0}, t) == [(P.SWAP, {"to": 0, "from": 1, "purge": True})]
+    assert a.plan_spool_move("unload_spool", {}, t) == [(P.SWAP, {"to": -1, "from": 1, "purge": False})]
+    assert a.swap_gcode({"to": 0, "from": 1, "purge": True}, t.unit_commands()) == {"op": "change_tool", "slot": 0, "purge": True}
+    assert a.swap_gcode({"to": 0, "from": 1, "purge": False}) == "ACE_CHANGE_TOOL TOOL=0 PURGE=0"
+    assert a.plan_action("swap_slot", {"slot": 0}, t) == [(P.UNIT, {"op": "change_tool", "slot": 0, "purge": True}),
+                                                          (P.RESUME, None)]
+    assert a.plan_slot("swap_start", {"slot": 1}, t) == [(P.SLOT, {"op": "swap", "slot": 1})]
+
+
+def paused_for_a_change(change):
+    t = service_tracker()
+    t.update_status({"print_stats": {"state": "printing", "filename": "two.gcode"}, "virtual_sdcard": {"progress": 0.4}})
+    t.update_status({"print_stats": {"state": "paused"}, "pause_resume": {"is_paused": True},
+                     "elyir_units": dict(SERVICE, change=change)})
+    return t.intent(now=10)
+
+
+def test_a_change_the_print_asked_for_says_so_and_nobody_is_needed():
+    i = paused_for_a_change({"from": 1, "to": 0, "in_print": True, "step": "in", "error": None})
+    assert (i["state"], i["phase"], i["headline"]) == ("preparing", "tool_change", "Switching to Green PLA")
+    assert i["detail"] == "The file asks for it here. Nobody's needed."
+    assert [x["id"] for x in i["actions"]] == ["cancel"]
+
+
+def test_a_change_that_failed_leaves_the_print_paused_with_try_again():
+    i = paused_for_a_change({"from": 1, "to": 0, "in_print": True, "error": "The filament didn't reach the toolhead."})
+    assert (i["state"], i["phase"], i["headline"]) == ("problem", "tool_change_failed", "Switching to Green PLA didn't finish.")
+    assert "tube between the unit and the head" in i["detail"]
+    assert [(x["id"], x.get("args", {}).get("slot")) for x in i["actions"]][0] == ("swap_slot", 0)
+    assert a.plan_action("swap_slot", {"slot": 0}, service_tracker())[-1] == (P.RESUME, None)
+
+
+def test_push_more_through_on_the_service_goes_to_it_and_on_klipperace_stays_gcode():
+    t = service_tracker()
+    t._change = {"mid": False, "temp": 0}
+    t._load_temp = lambda: 250
+    assert t._purge_step(30) == ("unit_macro", {"op": "purge", "mm": 30, "temp": 250})
+    k = kobra_tracker()
+    k.update_status({"ace": TWO_UNITS, "mmu": None})
+    k._change = {"mid": False, "temp": 0}
+    k._load_temp = lambda: 240
+    kind, script = k._purge_step(30)
+    assert kind == "macro" and "G1 E30 F150" in script

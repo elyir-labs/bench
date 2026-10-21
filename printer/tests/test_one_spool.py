@@ -290,7 +290,7 @@ def test_the_ready_line_says_what_is_loaded():
     t.remember_spool("#222222", "PETG")
     i = t.intent(now=100.0)
     assert (i["detail"], i["phase"]) == ("Black PETG loaded.", "idle")
-    assert [x["label"] for x in i["actions"]] == ["Warm up for PETG", "Something else"]   # test_warm_up.py
+    assert [x["label"] for x in i["actions"]] == ["Warm up for PETG", "Move and heat"]   # test_warm_up.py
     t.update_status({SENSOR: {"filament_detected": False}}, now=200.0)
     assert t.intent(now=200.0)["detail"] == "No filament loaded."
     assert tracker(sensor=False).intent(now=100.0)["detail"] == ""

@@ -6,11 +6,14 @@
       :camera="camera"
       :tone="tone"
       :progress="progress"
+      :idle="idle"
+      :refresh="store.intent?.light?.on"
       expandable
       @expand="cameraOpen = true"
       @failed="emit('failed')"
       @click="cameraOpen = true"
     >
+      <LightButton />
       <span v-if="pill" class="chip a-num">
         <ObjectImage v-if="thumb !== undefined" :src="thumb" :alt="alt" round class="chip-img" />
         <span>{{ pill }}</span>
@@ -22,6 +25,8 @@
 <script setup lang="ts">
 import CameraView from '@/components/camera/CameraView.vue'
 import ObjectImage from './ObjectImage.vue'
+import LightButton from '@/components/light/LightButton.vue'
+import { useIntentStore } from '@/intent/store'
 import { cameraOpen } from '@/camera/viewer'
 import type { Camera } from '@/camera/cameras'
 
@@ -32,8 +37,10 @@ withDefaults(defineProps<{
   thumb?: string | null
   alt?: string
   pill?: string
-}>(), { tone: 'none', progress: null, pill: '' })
+  idle?: boolean
+}>(), { tone: 'none', progress: null, pill: '', idle: false })
 const emit = defineEmits<{ failed: [] }>()
+const store = useIntentStore()
 </script>
 
 <style scoped>

@@ -1,6 +1,6 @@
 <template>
   <!-- Look at a model (design/look/, A with C's layers, picked 9 October 2026). A file from this phone or
-       computer, read here: turn it, zoom it, see its parts, show someone, send a picture. Nothing is
+       computer, or several on one plate, read here: turn it, zoom it, see its parts, show someone, send a picture. Nothing is
        uploaded to look. "How would it print?" asks each paired printer's own slicer, at home, for the slice Ready
        would start with, and sends nothing; "Print on Workshop…" opens Workshop's own Print with the file. Once a printer
        is picked, Layers shows its slice cut at a layer: the walls below, the layer's own paths by kind. -->
@@ -8,16 +8,16 @@
     <template v-if="!parts">
       <header class="bar"><button type="button" class="round" aria-label="Printers" @click="leave">‹</button></header>
       <h1 class="a-display">Look at a model</h1>
-      <p class="lead">An STL, 3MF, STEP or OBJ file, from Files or Downloads. It's read on this {{ device }} and stays here.</p>
+      <p class="lead">An STL, 3MF, STEP or OBJ file, or several to see on one plate, from Files or Downloads. They're read on this {{ device }} and stay here.</p>
       <label class="a-btn accent open" :class="{ busy: !!reading }">
         Open a model
-        <input type="file" :accept="ACCEPT" :disabled="!!reading" @change="picked" />
+        <input type="file" :accept="ACCEPT" multiple :disabled="!!reading" @change="picked" />
       </label>
       <p v-if="reading" class="reading" role="status">
         Reading {{ reading }}…<template v-if="readingStep"> The STEP reader comes first the first time, about 7 MB.</template>
       </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-if="!touch" class="drop">Or drop a file anywhere on Printers.</p>
+      <p v-if="!touch" class="drop">Or drop files anywhere on Printers.</p>
 
       <section v-if="kept.length" class="recent">
         <h2 class="grp">Looked at lately</h2>
@@ -109,13 +109,14 @@
             </div>
           </template>
           <button v-for="b in keepable" :key="b.id" type="button" class="a-btn how-btn" :disabled="est.kept.includes(b.id)" @click="keepOnBench(b.id)">
-            {{ est.kept.includes(b.id) ? `On ${b.name}'s shelf` : `Keep it on ${b.name}'s shelf` }}
+            {{ est.kept.includes(b.id) ? `On ${b.name}'s shelf` : `Keep ${several ? 'them' : 'it'} on ${b.name}'s shelf` }}
           </button>
           <button type="button" class="a-btn accent how-btn" :disabled="!est.picked" @click="printOn">
             {{ !est.picked ? 'Print on…' : est.info[est.picked]?.bench ? `Open on ${benchName(est.picked)} for ${nameOf(est.picked)}…` : `Print on ${nameOf(est.picked)}…` }}
           </button>
+          <p v-if="several && keepable.length" class="note">On the shelf, Select puts them on one bed, or spreads them over free printers.</p>
           <p v-if="est.picked" class="note">
-            {{ est.info[est.picked]?.bench ? `${benchName(est.picked)} sets it up for ${nameOf(est.picked)} and asks if its bed is clear.` : `Opens ${nameOf(est.picked)}'s own Print with this file.` }}
+            {{ est.info[est.picked]?.bench ? `${benchName(est.picked)} sets it up for ${nameOf(est.picked)} and asks if its bed is clear.` : `Opens ${nameOf(est.picked)}'s own Print with ${several ? 'these files' : 'this file'}.` }}
             <button type="button" class="link" @click="seeLayers">See the layers</button>
           </p>
         </section>
@@ -131,7 +132,7 @@ import ModelPicture from '@/components/slice/ModelPicture.vue'
 import { draw } from '@/slice/render'
 import { isStep, sizeWords, title, together, type Part } from '@/look/read.ts'
 import { modelName } from '@/slice/plan.ts'
-import { ACCEPT, forget, handoff, keep, looked, pending, read, recent, takeShared, type Looked } from '../look'
+import { ACCEPT, filesOf, forget, handoff, keep, looked, pending, readAll, recent, takeShared, type Looked } from '../look'
 import { est, estimate, keepOnBench, lineFor, openOnBench, stopEstimates } from '../estimates'
 import { benches, printers } from '../printers'
 import { rowWords } from '@/look/estimate.ts'
@@ -151,7 +152,9 @@ const touch = matchMedia('(pointer: coarse)').matches
 const device = /iPad|Tablet/i.test(navigator.userAgent) ? 'tablet' : touch ? 'phone' : 'computer'
 
 const parts = shallowRef<Part[] | null>(null)
-const fileName = ref('')
+const names = ref<string[]>([])
+const several = computed(() => names.value.length > 1)
+const fileName = computed(() => (several.value ? `${names.value.length} files` : names.value[0] ?? ''))
 const thumbs = ref<string[]>([])
 const alone = ref<number | null>(null)
 const reading = ref('')
@@ -167,13 +170,13 @@ const stack = shallowRef<LayerStack | null>(null)
 const paths = shallowRef<LayerPaths | null>(null)
 const upTo = ref(0)
 const layersNote = ref('')
-const current = shallowRef<File | null>(null)
+const current = shallowRef<File[] | null>(null)
 
 const all = computed(() => (parts.value ? together(parts.value) : null))
 const shownTris = computed(() => (alone.value !== null && parts.value ? parts.value[alone.value].tris : all.value))
 const heading = computed(() => {
   if (!parts.value) return ''
-  return alone.value !== null ? parts.value[alone.value].name : title(fileName.value, parts.value)
+  return alone.value !== null ? parts.value[alone.value].name : title(fileName.value, parts.value, names.value.length)
 })
 const sizeLine = computed(() => {
   if (!parts.value || !shownTris.value) return ''
@@ -189,21 +192,24 @@ function thumbOf(tris: Float32Array, px = 112): string {
   return c.toDataURL('image/png')
 }
 
-async function open(file: Blob, name: string, keptId?: string) {
+async function open(files: File[], keptId?: string) {
+  if (!files.length) return
+  const label = files.length > 1 ? `${files.length} files` : files[0].name
   error.value = ''
-  reading.value = name
-  readingStep.value = isStep(name)
+  reading.value = label
+  readingStep.value = files.some((f) => isStep(f.name))
   try {
-    const got = await read(file, name)
-    fileName.value = name
+    const got = await readAll(files)
+    names.value = files.map((f) => f.name)
     stopEstimates()
-    current.value = file instanceof File && file.name === name ? file : new File([file], name)
+    current.value = files
     thumbs.value = got.length > 1 ? got.slice(0, SHOWN_PARTS).map((p) => thumbOf(p.tris)) : []
     alone.value = null
     parts.value = got
-    await keep(file, name, got.length, got.length > 1 ? thumbOf(together(got)) : thumbOf(got[0].tris), keptId)
+    const name = files.length > 1 ? title('', got, files.length) : files[0].name
+    await keep(files, name, got.length, got.length > 1 ? thumbOf(together(got)) : thumbOf(got[0].tris), keptId)
   } catch (e) {
-    error.value = (e as Error).message || `${name} couldn't be read.`
+    error.value = (e as Error).message || `${label} couldn't be read.`
   } finally {
     reading.value = ''
     readingStep.value = false
@@ -212,14 +218,14 @@ async function open(file: Blob, name: string, keptId?: string) {
 
 function picked(e: Event) {
   const input = e.target as HTMLInputElement
-  const f = input.files?.[0]
+  const fs = [...(input.files ?? [])]
   input.value = ''
-  if (f) open(f, f.name)
+  open(fs)
 }
 
 async function openKept(id: string) {
   const k = await looked(id)
-  if (k) open(k.file, k.name, k.id)
+  if (k) open(filesOf(k), k.id)
   else refresh()
 }
 async function drop(id: string) {
@@ -235,6 +241,7 @@ function keptLine(k: Looked): string {
   const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   const ago = Math.round((day(now) - day(d)) / 86400000)
   const when = ago === 0 ? 'today' : ago === 1 ? 'yesterday' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  if (k.files) return `${k.files.map((f) => modelName(f.name)).join(', ')} · ${when}`
   return k.parts > 1 ? `${k.parts} parts · ${when}` : when[0].toUpperCase() + when.slice(1)
 }
 
@@ -250,11 +257,11 @@ const groups = computed(() => {
     const b = est.info[id]?.bench ?? ''
     const last = out[out.length - 1]
     if (last?.key === b) last.ids.push(id)
-    else out.push({ key: b, title: b ? `On ${benchName(id)}` : (out.length ? 'On their own' : parts.value && parts.value.length > 1 ? `${parts.value.length} parts, as the file has them` : 'On each printer'), ids: [id] })
+    else out.push({ key: b, title: b ? `On ${benchName(id)}` : (out.length ? 'On their own' : several.value ? `${names.value.length} models on one plate` : parts.value && parts.value.length > 1 ? `${parts.value.length} parts, as the file has them` : 'On each printer'), ids: [id] })
   }
   return out
 })
-const keepable = computed(() => benches.filter((b) => est.order.some((id) => est.info[id]?.bench === b.id && est.rows[id]?.kind === 'done')))
+const keepable = computed(() => benches.filter((b) => est.order.some((id) => est.info[id]?.bench === b.id && (several.value ? !!b.base : est.rows[id]?.kind === 'done'))))
 function dotOf(id: string): string {
   const r = est.rows[id]
   return r?.kind === 'done' ? (r.spool.color ?? 'var(--a-ink-3)') : 'var(--a-line)'
@@ -309,7 +316,7 @@ function printOn() {
   const id = est.picked
   if (!id || !current.value) return
   if (est.info[id]?.bench) { void openOnBench(id); return }
-  handoff.value = { printer: id, files: [current.value] }
+  handoff.value = { printer: id, files: [...current.value] }
   stopEstimates()
   router.push(`/p/${encodeURIComponent(id)}`)
 }
@@ -341,7 +348,7 @@ const onFullscreen = () => { if (!document.fullscreenElement) showing.value = fa
 async function send() {
   const blob = await pic.value?.picture()
   if (!blob) return
-  const f = new File([blob], `${modelName(fileName.value)}.png`, { type: 'image/png' })
+  const f = new File([blob], `${several.value ? 'Models' : modelName(fileName.value)}.png`, { type: 'image/png' })
   if (navigator.canShare?.({ files: [f] })) {
     try {
       await navigator.share({ files: [f], title: heading.value })
@@ -358,11 +365,11 @@ async function send() {
   sentNote.value = `Saved ${f.name} to your downloads.`
 }
 
-watch(pending, (f) => {
-  if (!f) return
+watch(pending, (fs) => {
+  if (!fs) return
   pending.value = null
   stopShowing()
-  open(f, f.name)
+  open(fs)
 }, { immediate: true })
 
 onMounted(async () => {
@@ -370,7 +377,7 @@ onMounted(async () => {
   refresh()
   if (route.query.shared) {
     const f = await takeShared()
-    if (f) open(f, f.name)
+    if (f) open([f])
   } else if (typeof route.query.r === 'string') {
     openKept(route.query.r)
   }

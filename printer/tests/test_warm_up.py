@@ -1,5 +1,5 @@
 """Warming up before a print (design/warm-up/, direction D): Ready offers one tap for the spool
-in the head and "Something else" for the rest; the printer warms the bed, the chamber when the
+in the head and Move and heat beside it (its Heat the bed asks for the rest); the printer warms the bed, the chamber when the
 material wants one (up to PRINT_START's own limit) and the nozzle a little; it says when it's
 warm, tells the phone, and turns itself off after half an hour without a print."""
 
@@ -57,17 +57,17 @@ def view(t, now=2.0):
 
 # ---- where it starts -----------------------------------------------------------------
 
-def test_ready_offers_the_spool_in_the_head_and_something_else():
+def test_ready_offers_the_spool_in_the_head_and_move_and_heat():
     i = view(tracker())
     assert i["phase"] == "idle"
     assert [(x["id"], x["label"], x["primary"]) for x in i["actions"]] == [
-        ("warm_up", "Warm up for ASA", True), ("warm_choose", "Something else", False)]
+        ("warm_up", "Warm up for ASA", True), ("hands_open", "Move and heat", False)]
     assert i["actions"][0]["args"] == {"material": "ASA"}
 
 
 def test_nothing_in_the_head_asks():
     i = view(tracker(head_material=None))
-    assert [(x["id"], x["label"]) for x in i["actions"]] == [("warm_choose", "Warm up")]
+    assert [(x["id"], x["label"]) for x in i["actions"]] == [("warm_choose", "Warm up"), ("hands_open", "Move and heat")]
 
 
 def test_the_question_lists_loaded_materials_head_first():

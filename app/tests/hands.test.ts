@@ -13,14 +13,12 @@ const view = (over: Partial<HandsView> = {}): HandsView => ({
 test('the jobs: five, then Move it myself last', () => {
   const j = jobs(view())
   assert.deepEqual(j.map((x) => x.title), ['Get at the bed', 'Clean the nozzle', 'Heat the nozzle', 'Heat the bed', 'Let go of the motors', 'Move it myself'])
-  assert.deepEqual(j.map((x) => x.action), ['hands_clear', 'hands_clean', 'hands_nozzle', 'warm_up', 'hands_motors_off', null])
+  assert.deepEqual(j.map((x) => x.action), ['hands_clear', 'hands_clean', 'hands_nozzle', null, 'hands_motors_off', null])
   assert.equal(j[1].line, 'Hot for PETG, at the front')
-  assert.deepEqual(j[3].args, { material: 'PETG' })
+  assert.equal(j[3].line, 'Warm up for a material')   // what Now's Something else asked (design/hands-on-find/, B)
 })
 
-test('Heat the bed with nothing in the head asks which material', () => {
-  const bed = jobs(view({ material: null })).find((x) => x.id === 'bed')!
-  assert.equal(bed.action, null)
+test('with nothing in the head, Clean the nozzle heats for PLA', () => {
   assert.equal(jobs(view({ material: null }))[1].line, 'Hot for PLA, at the front')
 })
 
@@ -55,4 +53,10 @@ test('the sheet and Now say what is hot', () => {
   assert.equal(heldChip({ kind: 'clean', target: 240, minutes: 15 }, 186.2), 'Nozzle 186° of 240°')
   assert.equal(heldChip({ kind: 'clear', z: 150, minutes: 15 }, 25), 'Z 150')
   assert.equal(heldChip(null, 25), null)
+})
+
+test('a printer that only takes heat (a Kobra over LAN mode): the heat jobs, then Set the heat', () => {
+  const j = jobs(view({ can_move: false }))
+  assert.deepEqual(j.map((x) => x.title), ['Heat the nozzle', 'Heat the bed', 'Set the heat'])
+  assert.equal(rowLine(view({ can_move: false }), false), 'Heat the nozzle or the bed.')
 })

@@ -43,11 +43,46 @@ def test_theme_builds_from_the_mark(tmp_path):
     a0, a50, a100 = (accent_px(tmp_path / f"ring-{i}.png") for i in (0, 50, 100))
     assert a0 == 0 and 0 < a50 < a100
     assert abs(a50 / a100 - 0.5) < 0.05
-    # A′: "hi" first, then the track draws itself round; its last frame is the empty ring the fill starts from
-    assert "hi.png" in names and all(f"outline-{i}.png" in names for i in range(mp.OUTLINE + 1))
+    # the track draws itself round; its last frame is the empty ring the fill starts from
+    assert all(f"outline-{i}.png" in names for i in range(mp.OUTLINE + 1))
     assert all(px == 0 for r in pixels(tmp_path / "outline-0.png")[2] for px in r[3::4])
     assert pixels(tmp_path / f"outline-{mp.OUTLINE}.png")[2] == pixels(tmp_path / "ring-0.png")[2]
-    assert '"hi.png"' in script and '"outline-"' in script
+    assert '"outline-"' in script
+
+
+def inked(path):
+    return sum(1 for r in pixels(path)[2] for a in r[3::4] if a)
+
+
+def test_signature_writes_elyir_then_its_dot_becomes_the_pupil(tmp_path):
+    # design/boot/, E: elyir written by hand as Home Hub starts, the i's dot lit and gliding into the eye
+    mp.main(str(tmp_path))
+    names = {p.name for p in tmp_path.iterdir()}
+    assert {"dot.png", "glow.png"} <= names and "hi.png" not in names
+    assert all(f"name-{i}.png" in names for i in range(mp.NAME + 1))
+    # nothing written at first, then more ink every frame, all of it at the end
+    ink = [inked(tmp_path / f"name-{i}.png") for i in range(0, mp.NAME + 1, 8)]
+    assert ink[0] == 0 and all(a < b for a, b in zip(ink, ink[1:]))
+    # the name sits where the board puts it: across the middle (the hub centers its box, not its ink, so 5 units right),
+    # wholly on the panel, the eye's center inside it
+    script = (tmp_path / "elyir-bench.script").read_text()
+    x, y = map(float, re.search(r"name\.SetPosition\(at_x\(([\d.]+)\), at_y\(([\d.]+)\)", script).groups())
+    w, h, _ = pixels(tmp_path / f"name-{mp.NAME}.png")
+    w, h = w / mp.SCALE, h / mp.SCALE
+    assert abs(x + w / 2 - MARK["design"][0] / 2) < 6
+    assert 0 < y and y + h < MARK["design"][1]
+    assert x < MARK["center"][0] < x + w and y < MARK["center"][1] < y + h
+    assert '"name-"' in script and '"dot.png"' in script and '"glow.png"' in script
+    g = MARK["signature"]
+    tx = g["origin"][0] + (g["tittle"][0] - g["units"][0]) * g["scale"]
+    assert f"at_x({round(tx, 2)})" in script
+    # the dot grows from its own size into the pupil's
+    assert f"{round(g['dot'] / (2 * MARK['pupil']['r']), 4)} + (1 - " in script
+    # the dot before it lights is the name's ink; the pupil it becomes is the accent
+    ink_rgb = mp.over_bg(MARK, MARK["colors"]["ink"])
+    w, h, rows = pixels(tmp_path / "dot.png")
+    o = w // 2 * 4
+    assert tuple(rows[h // 2][o:o + 4]) == (*ink_rgb, 255)
 
 
 def test_cover_draws_the_handoff_frame(tmp_path):

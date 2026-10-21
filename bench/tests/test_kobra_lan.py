@@ -450,3 +450,26 @@ async def test_a_finished_print_found_when_the_box_starts_is_done_not_printing(r
     rig.mqtt.report("info", info)
     await until(lambda: rig.s.status["print_stats"]["state"] == "complete")
     assert rig.s.status["print_stats"]["filename"] == "cube.gcode" and not rig.s.up.store.d["history"]
+
+
+async def test_over_lan_mode_move_and_heat_only_heats(rig):
+    # LAN mode takes heater settings and nothing else (design/hands-on/): no toolhead, so nothing that moves is offered
+    rig.mqtt.info = {"state": "free", "temp": {}}
+    rig.mqtt.report("info", rig.mqtt.info)
+    await until(lambda: (rig.s.intent().get("hands") or {}).get("can_move") is False)
+    with pytest.raises(S.RpcError):
+        await rig.s.action("hands_clear", {})
+    await rig.s.action("hands_heat", {"heater": "bed", "target": 60})
+    await until(lambda: rig.mqtt.published and rig.mqtt.published[-1][:3] == ("tempature", "web", "set"))
+    assert rig.mqtt.published[-1][3]["target_hotbed_temp"] == 60
+
+
+async def test_after_a_stopped_print_the_heaters_go_off_the_idle_way(rig):
+    # a stopped job lingers in info; off as a print update to 0 was ignored and the nozzle stayed at 240° (18 October 2026)
+    rig.mqtt.info = {"state": "free", "temp": {}, "project": {"state": "stoped", "filename": "x.gcode", "pause": 0}}
+    rig.mqtt.report("info", rig.mqtt.info)
+    await until(lambda: rig.s.up.status.get("print_stats", {}).get("state") == "cancelled")
+    await rig.s.up.call("printer.gcode.script", {"script": "M104 S0"})
+    assert rig.mqtt.published[-1] == ("tempature", "web", "set", {"type": 0, "target_hotbed_temp": 0, "target_nozzle_temp": 0})
+    await rig.s.up.call("printer.gcode.script", {"script": "TURN_OFF_HEATERS"})
+    assert rig.mqtt.published[-1] == ("tempature", "web", "set", {"type": 2, "target_hotbed_temp": 0, "target_nozzle_temp": 0})

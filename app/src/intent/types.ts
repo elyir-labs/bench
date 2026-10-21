@@ -2,6 +2,7 @@
 
 import type { CareSummary } from './care'
 import type { PowerView } from './power'
+import type { LightView } from './light'
 import type { HandsView } from './hands'
 
 // setup: Klipper has no printer.cfg yet, a fresh card (docs/bring-it-over.md): Now the printer itself, never Problem
@@ -288,6 +289,38 @@ export interface IntentParts {
   can_skip: boolean
 }
 
+export interface OutageView {
+  back: boolean
+  held: 'print' | 'paused'
+  minutes: number
+  battery: number | null
+  runtime_min: number | null
+  bed: number | null
+  layer: number | null
+  heating: boolean
+  to: number | null
+  /** seconds until it heats up to carry on, while the power settles */
+  carry_in: number | null
+}
+
+export interface LostView {
+  file: string
+  name: string
+  layer: number | null
+  layers: number | null
+  /** the height it reached, mm, counted from the plate */
+  z: number | null
+  height: number | null
+  pct: number
+  material: string | null
+  off_at: string
+  back_at: string
+  /** it was holding on a battery first */
+  held: boolean
+  /** the plate's objects not skipped (p0c1__name), to know how many of each part are left */
+  objects: string[]
+}
+
 export interface Intent {
   version: number
   state: IntentState
@@ -313,8 +346,14 @@ export interface Intent {
   care?: CareSummary | null   // maintenance the printer counts itself (see ./care.ts)
   /** Turn off / Restart (design/power/): offered or why not, and the wait while it cools (see ./power.ts). */
   power?: PowerView | null
+  /** A print held on a UPS's battery, or carrying on once the power is back (design/power-loss/, A). */
+  outage?: OutageView | null
+  /** A print the power took, on Ready: where it got to (design/power-loss/, A). */
+  lost?: LostView | null
   /** Move and heat by hand (design/hands-on/, C): offered or why not, where the head is, what a job holds (see ./hands.ts). */
   hands?: HandsView | null
+  /** The chamber light (design/chamber-light/, A): null when the printer has none (see ./light.ts). */
+  light?: LightView | null
   head?: {
     loaded: boolean | null
     slot: number | null

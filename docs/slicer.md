@@ -39,17 +39,65 @@ when it is installed.
 
 | Call | What |
 |---|---|
-| `GET /slice/options` | purposes (id, label, summary), supports (`auto`, `normal`, `tree`, `off`; auto keeps the preset's kind), printers with their materials, slot count, bed size [x, y, z] in mm, base process and `supports` (the kind that process prints, `normal` or `tree`); `editable` [{key, label, kind (`number` or `choice`), min, max, step, unit, default, choices [[value, name]], help}] |
-| `POST /slice/models` | multipart: `model` (.stl .obj .step). Kept for a day. Answers its id, name and size in mm (none for STEP), so four purposes and every change after share one upload. |
-| `POST /slice` | JSON: `parts` [{`model` (an id from above), `copies` (1 to 200), `scale` (0.84 = 84%, STL and OBJ only), `lay` (`file` or `flat`), `brim` (`auto`, the default, or `none`, `ears`, `all`)}], `printer`, `purpose`, `supports`, `material`, `color` (#RRGGBB), `slot` (1-based), `thumbnail` (a PNG, base64, put in the G-code the way slicers do), `orient`, `kept` and `settings` ({key: value} from `editable`: the person's own for this purpose, then for this print; applied after the purpose, supports and spool, and refused with a sentence when a key isn't on the list or a value is out of range). One part can still be sent as `model`, `scale`, `lay`. Or multipart with the model itself. Answers 202 with the job, or 400 saying what's wrong. |
+| `GET /slice/options` | purposes (id, label, summary), supports (`auto`, `normal`, `tree`, `off`; auto keeps the preset's kind), printers with their materials, slot count, bed size [x, y, z] in mm, base process and `supports` (the kind that process prints, `normal` or `tree`), `unit` (it has a filament unit), `purges` (what Between colors offers, its usual first) and `change_seconds` (one color change by the unit); `editable` [{key, label, kind (`number` or `choice`), min, max, step, unit, default, choices [[value, name]], help}] |
+| `POST /slice/models` | multipart: `model` (.stl .obj .step .3mf). Kept for a day. Answers its id, name and size in mm (none for STEP), so four purposes and every change after share one upload. A 3MF is read as its parts (`models`, one each), unless it brings its own colors: then it's kept whole and answers `colors` {colors [{color, material, used}], painted, heights [{z, to}]} (see Several colors). |
+| `POST /slice` | JSON: `parts` [{`model` (an id from above), `copies` (1 to 200), `scale` (0.84 = 84%, STL and OBJ only), `lay` (`file` or `flat`), `brim` (`auto`, the default, or `none`, `ears`, `all`)}], `printer`, `purpose`, `supports`, `material`, `color` (#RRGGBB), `slot` (1-based), `thumbnail` (a PNG, base64, put in the G-code the way slicers do), `orient`, `kept` and `settings` ({key: value} from `editable`: the person's own for this purpose, then for this print; applied after the purpose, supports and spool, and refused with a sentence when a key isn't on the list or a value is out of range). Several colors: `spools` [{`material`, `color`, `filament`, `slot` (1-based), `hand` (swapped in by hand)}] in Orca's filament order, each part's `spool` (0-based, which of them it prints in), `purge` (`chute`, `tower`, `both` or `swap`; the printer's usual when left out) and `one_after_other`. One part can still be sent as `model`, `scale`, `lay`. Or multipart with the model itself. Answers 202 with the job, or 400 saying what's wrong. |
 | `POST /slice/fit` | JSON: `printer`, `parts`, `part`: how many of that part fit on one plate with the others as they are (`fits`), whether the others still fit (`others_fit`), and `at_least` when every copy tried fitted. With `part: null` the parts as they are: `counts` (each part's copies on plate 1), `plates`, `fits` (all on plate 1), for several shelf models on one bed (docs/bench.md, Several at once). Orca only arranges; nothing is sliced. |
 | `GET /slice/{id}/supports` | The first plate's supports as lines to draw: `count`, `width` (mm to draw them, wider when layers were left out to keep it under ~12,000 lines) and `segs` (base64 little-endian int16s, x0 y0 x1 y1 z per line in tenths of a mm on the bed). Read from the G-code the first time it's asked for. |
-| `GET /slice/{id}` | `state` queued, slicing, done, failed or cancelled; `parts` (each with `brim_pick` {kind, why, by (`auto`, `you`, `kept`), rule}: the brim it printed with and why); `changes` [{key, label, value, was, why, source}]; `estimate` {seconds, time, grams, layers} for the first plate; `plates` [{plate, seconds, time, grams, counts (per part), gcode}]; `placed` [{part, x, y, turn}] where Orca put each copy on the first plate (the centre of its box in mm, turned anticlockwise in degrees); `supports_added`; `values` and `before` (every editable setting as it prints, and before the person's own changes); `warnings`; on failure `error` for people and `error_detail` for Advanced |
+| `GET /slice/{id}` | `state` queued, slicing, done, failed or cancelled; `parts` (each with `brim_pick` {kind, why, by (`auto`, `you`, `kept`), rule}: the brim it printed with and why); `changes` [{key, label, value, was, why, source}]; `estimate` {seconds, time, grams, layers} for the first plate; `plates` [{plate, seconds, time, grams, counts (per part), gcode}]; `placed` [{part, x, y, turn}] where Orca put each copy on the first plate (the centre of its box in mm, turned anticlockwise in degrees); `supports_added`; `values` and `before` (every editable setting as it prints, and before the person's own changes); with several colors, `colors` {spools [{spool, parts, first, swaps (seconds into the print), changes}], changes [{layer, at, to, hand, purge (mm)}], hand_swaps, unit_changes, changes_seconds, grams (per spool)} and `estimate.changes_seconds` (the changes' own time, which Orca's estimate leaves out); `warnings`; on failure `error` for people and `error_detail` for Advanced |
 | `GET /slice/{id}/gcode` | the first plate's file, named the way Orca names them (`bracket_ASA_48m34s.gcode`; `bushing_x25_1of2_PETG_2h26m.gcode` for 25 copies on the first of two plates) |
 | `POST /slice/{id}/send` | uploads every plate to the printer's Moonraker. `{"print": true}` starts the first; nothing starts otherwise. With more than one plate, `elyir-bench/next_plates` in Moonraker's database says which file follows which, so Now can offer the rest when a plate is done. |
 | `DELETE /slice/{id}` | not wanted any more: dropped from the queue, or stopped mid-slice. The app does this whenever a change makes a slice stale. |
 
 One slice runs at a time, under `nice`. A slice that takes 15 minutes is stopped.
+
+## Several colors
+
+`design/multi-color/` (B, the Colors card). A plate prints with one spool per color (`spools`), each from a slot of
+the filament unit or swapped in by hand. Colors come from a spool per part (`spool` on each part) or from a 3MF that
+brings its own (an object or part in its own filament, painting, or a change at a height): that 3MF is kept whole,
+goes on a plate of its own, and wants a spool for each of its filaments in its order (unused ones too).
+
+Orca gets one filament preset per color (`filament.json`, `filament_2.json`...; `--load-filaments a;b`) and each
+model's color (`--load-filament-ids`); a 3MF's own colors and the arranged 3MF of the brim path carry it per object
+(`extruder` in `model_settings.config`). Its change G-code is set to
+
+```
+ELYIR_PURGE LENGTH=[flush_length] FROM=[previous_extruder] TO=[next_extruder]
+T[next_extruder]
+```
+
+and because that writes a `T` line itself, Orca leaves out its own. `[flush_length]` is Orca's purge for that pair of
+colors, worked out from them (white to black 33 mm, black to white 233 mm). After slicing, `assign_spools` points
+each change where its color comes from:
+
+- **A slot:** `T<slot>`, with `ELYIR_PURGE LENGTH=<mm>` before it when the chute takes the purge.
+- **By hand**, or any change on a printer without a unit: `;COLOR_CHANGE,T<n>,#RRGGBB`, `; elyir: by hand`, `M600`.
+  The printer's color-change sheet reads the color from the marker; the mark says the swap was chosen by hand.
+- **The first color** is loaded by `PRINT_START TOOL=<slot>` when the start G-code passes `TOOL=`; otherwise
+  Orca's first change stays, as the slot's `T`. On a printer with a unit it needs a slot, whichever color Orca
+  prints first.
+
+Purge (`purge`): `chute` (no tower; the printer purges), `tower` (Orca's tower takes the purge), `both` (a tower
+with `purge_in_prime_tower` off: Orca still writes the purge length, and the tower only primes) and `swap` (pushed
+through at a swap by hand, no tower). Measured on the Mac with Orca 2.3 on the Voron presets: a figure standing on its
+base in two colors (one change) 26 min one color, ~28 min with the chute, ~31 min both, ~35 min tower; separate parts
+change on every layer they share (62 changes for two covers side by side, one when printed `one_after_other`).
+
+A 3MF with colors also comes back as pieces to draw (`pieces` [{piece, name, filament}], each an STL at
+`GET /slice/models/{id}/piece/{k}`): its triangles split by filament, painting read per triangle (`paint_state`,
+the first leaf where the brush split one), so the app draws it in its colors. The app's side is the Colors card
+(`app/src/slice/colors.ts`, `ModelScreen.vue`).
+
+On the printer: `ELYIR_PURGE` (in `units/klipper/elyir_units.cfg`) keeps the length until the next `ELYIR_TOOL`,
+which hands it to the filament-unit service; the service passes it to the after-change macro as `LENGTH=`
+(the printer's own macro decides what to do with it: the shared `NOZZLE_POST_TOOL_CHANGE` purges at least 30 mm).
+A printer without that file (KlipperACE) answers `Unknown command` to `ELYIR_PURGE` and carries on. The color-change
+sheet reads the "by hand" mark (`colour_changes_in`, `hand`): that change is planned as a pause, never onto a
+loaded spool, and Print's spool check leaves its color out ("Yellow PLA, swapped in by hand").
+
+Not yet: files that fit together printed as one, PrusaSlicer's 3MF colors, painting and a change at a height chosen
+in the app.
 
 ## More than one on the plate
 
@@ -192,7 +240,9 @@ picks it up:
 ```
 ~/printer_data/config/elyir-bench-slicer/
   printer.json    {"machine", "process", "plate", "tools", "materials": {"PLA": "<filament preset>", ...}}
-                  with "learned": {"id", "at", "from_files"} when the printer wrote it from its own files
+                  with "learned": {"id", "at", "from_files"} when the printer wrote it from its own files,
+                  "purge": "chute" when it pushes the old color out off the plate at a change, and
+                  "change_seconds" (one change by its filament unit, 105 when left out)
   presets/        the person's Orca presets (Workshop: both of the owner's Orca user folders); they win over Orca's own
     0-learned/    learned from the printer's files (docs/slicer-profile.md); sorts first, so it wins
 ```

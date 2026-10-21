@@ -13,6 +13,7 @@
           <span class="status">{{ statusWord }}</span>
           <span class="ring" aria-hidden="true"></span>
         </button>
+        <LightButton v-if="lightTop" variant="pill" class="top-light" />
         <div class="clock a-num">{{ clock }}</div>
       </header>
       <NowScreen :layout="layout" />
@@ -33,6 +34,7 @@
       </button>
       <div class="right">
         <Vitals v-if="intent && layout === 'panel'" :intent="intent" />
+        <LightButton v-if="lightTop" variant="pill" class="top-light" />
         <div class="clock a-num">{{ clock }}</div>
       </div>
     </header>
@@ -69,6 +71,7 @@
     </nav>
 
     <CameraViewer v-if="cameraOpen && camera && !cameraInPane" :camera="camera" @close="cameraOpen = false" />
+    <LightSheet />
     <AdvancedDoor v-if="advancedOpen" :url="advancedUrl" @close="advancedOpen = false" />
     <AskCard />
 
@@ -97,6 +100,9 @@ import PrintScreen from '@/pages/PrintScreen.vue'
 import MaterialsScreen from '@/pages/MaterialsScreen.vue'
 import NowBar from '@/components/now/NowBar.vue'
 import CameraViewer from '@/components/camera/CameraViewer.vue'
+import LightButton from '@/components/light/LightButton.vue'
+import LightSheet from '@/components/light/LightSheet.vue'
+import { lightPlace, nowCameraShown } from '@/intent/light'
 import { useCameras } from '@/camera/useCameras'
 import { cameraOpen, cameraFull } from '@/camera/viewer'
 import { door } from '@/door'
@@ -130,6 +136,7 @@ function onArea(e: Event, to: string) {
 }
 
 const { cameras } = useCameras()
+const lightTop = computed(() => lightPlace({ light: !!intent.value?.light, cameraOnNow: nowCameraShown.value, embedded }) === 'top')
 const camera = computed(() => cameras.value[0] ?? null)
 // On a laptop the camera opens in the right-hand pane (with a Full screen button); phones and
 // tablets, whichever way up, go straight to full screen.
@@ -154,7 +161,7 @@ const statusWord = computed(() => {
   switch (state.value) {
     case 'preparing': return preparingWord(intent.value)
     case 'printing': return 'Printing'
-    case 'needs_you': return 'Needs you'
+    case 'needs_you': return intent.value?.phase === 'power_hold' ? 'On battery' : 'Needs you'
     case 'finished': return 'Finished'
     case 'problem': return 'Stopped'
     case 'setup': return 'New printer'
@@ -395,4 +402,5 @@ onBeforeUnmount(() => {
 
 .a-fade-enter-active, .a-fade-leave-active { transition: opacity 160ms ease; }
 .a-fade-enter-from, .a-fade-leave-to { opacity: 0; }
+.top-light { margin-right: 10px; }
 </style>

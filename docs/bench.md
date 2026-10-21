@@ -347,8 +347,11 @@ Rinkhals adds nothing the box can use, and holds its firmware back).
   read for Moonraker's metadata and pictures and kept on the box (`standins/<id>/gcodes/`, the newest 20) until it
   starts: a Kobra that's sent a file warms up and waits on "Downloading files" for a start, so it goes to the printer as
   the slicer sends it (multipart `filename` + `gcode` to its `fileUploadurl`) right before `print`/`start` (md5, size).
+  Move and heat (design/hands-on/) is heat only here: no `toolhead` object, so the engine says `can_move: false` and
+  never sends a move; through Rinkhals the whole sheet goes as G-code.
   `pause`, `resume`, `stop`; warm as its `update` settings, and off (an idle Kobra ignores an `update` to 0) as
-  `tempature`/`set`, the way the Anycubic Orca plugin sets them; other G-code refused. The heaters' targets come from
+  `tempature`/`set`, the way the Anycubic Orca plugin sets them (a stopped job stays in `info` until someone touches the screen, and that
+  Kobra is idle: off as a print update was ignored and Kobra 3 #2 stayed at 240°, 18 October 2026); other G-code refused. The heaters' targets come from
   its `tempature` query (asked with each `info`): `info` and the `tempature` reports it pushes keep the last `update`'s
   targets after they're off. An idle printer's answer to an `update` is a `print` report, and isn't a job. The spool, Care and history are kept on the box (`standins/<id>/lan.json`).
   LAN mode wins whenever it's on, Rinkhals or not; a Kobra on the bench whose LAN mode is turned off (with Rinkhals on it)
