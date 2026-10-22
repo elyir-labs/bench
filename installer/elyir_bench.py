@@ -13,6 +13,8 @@
     elyir-bench remove            take it off again and put KlipperScreen back
     elyir-bench bring scan|plan <id>|apply <id> [--gcodes]|address <address>
                                 bring an old printer's setup over (docs/bring-it-over.md)
+    elyir-bench unit scan|install --unit U --board B [--slots N] --mcu PORT|putback
+                                a Happy Hare or AFC filament unit, set up from the screen
 
 Runs on the printer as the printer's user (never root) and uses `sudo -n` for system
 changes. Standard library only. See docs/installer.md.
@@ -1589,7 +1591,7 @@ class Legacy(Step):
 
 class Component(Step):
     name = "moonraker component"
-    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py"]
+    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py"]
     def check(self, c):
         comp = Path(c.facts["moonraker"]["components"])
         wrong = [f for f in self.FILES
@@ -5190,6 +5192,492 @@ def bring_main(args, facts: dict, s: dict) -> int:
     return 0
 
 
+# ── A filament unit, set up from the screen (design/unit-setup/, B, stage 2; docs/filament-units.md) ─────────────
+# Happy Hare and AFC are GPL programs. They are downloaded onto the printer at the commits below and their own
+# installers run there; nothing of theirs is kept in this repository. Bench only chooses: which unit, which board,
+# how many slots and which port, as their installers' own settings (Happy Hare's .mmu_config, AFC's menu variables).
+
+UNIT_PROGRAMS = {
+    "happy_hare": {"name": "Happy Hare", "version": "4.1", "repo": "https://github.com/moggieuk/Happy-Hare.git",
+                   "commit": "70aa90fb9aa18787de445235bd26a0665168c441", "dir": "Happy-Hare", "object": "mmu",
+                   "branch": "main", "updater": "happy-hare",
+                   "guide": "https://github.com/moggieuk/Happy-Hare/wiki"},
+    "afc": {"name": "AFC", "version": "1.2", "repo": "https://github.com/AFCProject/AFC-Klipper-Add-On.git",
+            "commit": "5ea84ea6fab75b9b49db090f309154d1e52272bb", "dir": "AFC-Klipper-Add-On", "object": "AFC",
+            "branch": "main", "updater": "afc-software",
+            "guide": "https://www.afcproject.dev/", "packages": ["jq", "crudini"]},
+}
+# Happy Hare 3 (883a01198a3ff3bff8fbacfdcdc638e4621a6061) was read too: its installer only asks its questions
+# interactively, so Bench never installs it (it still drives a printer that has it).
+
+UNIT_KINDS = {
+    "box_turtle": {"name": "Box Turtle", "kind": "afc"},
+    "night_owl": {"name": "Night Owl", "kind": "afc"},
+    "ercf_v2": {"name": "ERCF v2", "kind": "happy_hare", "hh": "MMU_TYPE_ERCF_2_0"},
+    "tradrack": {"name": "Tradrack", "kind": "happy_hare", "hh": "MMU_TYPE_TRADRACK_1_0"},
+}
+
+# chips: what Klipper's firmware on the board calls itself on USB (usb-Klipper_<chip>_<serial>-if00), for "Probably"
+UNIT_BOARDS = {
+    "mmb_1_0": {"family": "mmb", "name": "BTT MMB", "version": "v1.0", "chips": ["stm32g0b1xx"], "hh": "BOARD_TYPE_MMB_1_0"},
+    "mmb_1_1": {"family": "mmb", "name": "BTT MMB", "version": "v1.1", "chips": ["stm32g0b1xx"], "hh": "BOARD_TYPE_MMB_1_1"},
+    "mmb_2_0": {"family": "mmb", "name": "BTT MMB", "version": "v2", "chips": ["stm32g0b1xx"], "hh": "BOARD_TYPE_MMB_2_0"},
+    "easy_brd_1": {"family": "easy_brd", "name": "Mellow EASY-BRD", "version": "v1", "chips": ["rp2040"],
+                   "hh": "BOARD_TYPE_MELLOW_EASY_BRD_CAN_1"},
+    "easy_brd_2": {"family": "easy_brd", "name": "Mellow EASY-BRD", "version": "v2", "chips": ["rp2040"],
+                   "hh": "BOARD_TYPE_MELLOW_EASY_BRD_CAN_2"},
+    "erb_1": {"family": "erb", "name": "Fysetc ERB", "version": "v1", "chips": ["rp2040"], "hh": "BOARD_TYPE_ERB_1"},
+    "erb_2": {"family": "erb", "name": "Fysetc ERB", "version": "v2", "chips": ["rp2040"], "hh": "BOARD_TYPE_ERB_2"},
+    "afc_lite": {"family": "afc_lite", "name": "AFC-Lite", "version": None, "chips": ["stm32h723xx"]},
+    "afc_pro": {"family": "afc_pro", "name": "AFC-Pro", "version": None, "chips": ["stm32h723xx"]},
+}
+
+HH_BOARDS = ["mmb_1_0", "mmb_1_1", "mmb_2_0", "easy_brd_1", "easy_brd_2", "erb_1", "erb_2"]
+# afc: their installer's own unit choice, which picks the board; afc_mcu: the [mcu …] their template leaves for a port
+UNIT_PAIRS = (
+    [{"unit": "ercf_v2", "board": b, "slots": [6, 8, 9, 12], "default": 8, "tested_on_hardware": False} for b in HH_BOARDS]
+    + [{"unit": "tradrack", "board": b, "slots": [6, 8, 10, 12], "default": 10, "tested_on_hardware": False}
+       for b in ("mmb_1_0", "mmb_1_1", "mmb_2_0", "easy_brd_1", "easy_brd_2")]
+    + [{"unit": "box_turtle", "board": "afc_lite", "slots": [4], "default": 4, "afc": "BoxTurtle (4-Lane)",
+        "afc_mcu": "Turtle_1", "tested_on_hardware": False},
+       {"unit": "box_turtle", "board": "afc_pro", "slots": [8], "default": 8, "afc": "BoxTurtle (8-Lane)",
+        "afc_mcu": "Turtle_1", "tested_on_hardware": False},
+       {"unit": "night_owl", "board": "erb_2", "slots": [2], "default": 2, "afc": "NightOwl",
+        "afc_mcu": "NightOwl", "tested_on_hardware": False}]
+)
+UNIT_KEPT = "config-before-unit-"     # the config folder as it was, beside it in printer_data
+UNIT_UPDATERS = ("update_manager happy-hare", "update_manager afc-software")   # Bench moves the pin, not Mainsail
+UNIT_STEPS = ("fetch", "settings", "restart", "answers")
+CAN_UUID = re.compile(r"[0-9a-f]{12}")
+
+
+def unit_pair(unit: str, board: str) -> dict | None:
+    return next((p for p in UNIT_PAIRS if p["unit"] == unit and p["board"] == board), None)
+
+
+def unit_catalog() -> dict:
+    """What the screen can offer: the programs at their pins, the units, the boards, and the pairs between them."""
+    return {"programs": {k: {"name": p["name"], "version": p["version"], "guide": p["guide"]} for k, p in UNIT_PROGRAMS.items()},
+            "units": [{"id": u, "name": d["name"], "kind": d["kind"]} for u, d in UNIT_KINDS.items()],
+            "boards": {b: {k: d[k] for k in ("family", "name", "version", "chips")} for b, d in UNIT_BOARDS.items()},
+            "pairs": [{k: p[k] for k in ("unit", "board", "slots", "default", "tested_on_hardware")} for p in UNIT_PAIRS]}
+
+
+def config_texts(folder: Path) -> dict[str, str]:
+    return {str(p.relative_to(folder)): read(p) for p in config_files(folder) if p.is_relative_to(folder)}
+
+
+def unit_found(facts: dict, here: dict | None = None) -> list[dict]:
+    """Boards on USB or CAN that no [mcu] section names: a unit's board that Klipper doesn't use yet. A USB board
+    shows its chip only once Klipper's firmware is on it; CAN boards answer the query only before Klipper claims them."""
+    here = here if here is not None else bring_here(facts)
+    folder = config_dir(facts)
+    named = cfg_boards(config_texts(folder)) if folder and folder.is_dir() else []
+    used = {b.get("serial") for b in named} | {b.get("can") for b in named}
+    out = []
+    for name in here.get("serial") or []:
+        chip = serial_chip(name)
+        path = f"/dev/serial/by-id/{name}"
+        if chip and path not in used:
+            out.append({"mcu": path, "chip": chip, "words": f"{chip_words(chip)} on USB"})
+    for uuid_ in here.get("can") or []:
+        if uuid_ not in used:
+            out.append({"mcu": f"can:{uuid_}", "chip": None, "words": "A board on CAN"})
+    return out
+
+
+def unit_probably(unit: str, found: list[dict]) -> dict | None:
+    """The board family a found board most likely is, for this unit: one found board whose chip only one of the
+    unit's board families has. {family, mcu} or None."""
+    families = {}
+    for p in UNIT_PAIRS:
+        if p["unit"] == unit:
+            b = UNIT_BOARDS[p["board"]]
+            families.setdefault(b["family"], set()).update(b["chips"])
+    if len(found) != 1:
+        return None
+    f = found[0]
+    if f["chip"] is None:
+        return None
+    match = [fam for fam, chips in families.items() if f["chip"] in chips]
+    return {"family": match[0], "mcu": f["mcu"]} if len(match) == 1 else None
+
+
+def unit_scan(facts: dict) -> dict:
+    found = unit_found(facts)
+    return {"catalog": unit_catalog(), "found": found,
+            "probably": {u: unit_probably(u, found) for u in UNIT_KINDS},
+            "kept": unit_kept_view()}
+
+
+def unit_kept_view() -> dict | None:
+    k = load_state().get("unit_kept")
+    return {key: k.get(key) for key in ("unit", "board", "slots", "program", "when")} if k else None
+
+
+def render_hh_config(pair: dict, slots: int, mcu: str, facts: dict) -> str:
+    """Happy Hare 4's .mmu_config for one unit and board: its installer fills in every other answer with its
+    defaults (olddefconfig), so this holds only what Bench knows."""
+    folder = config_dir(facts)
+    lines = [
+        "# Written by Elyir Bench for Happy Hare's installer (design/unit-setup/): the unit, its board and its port",
+        f'CONFIG_KLIPPER_HOME="{HOME / "klipper"}"',
+        f'CONFIG_MOONRAKER_HOME="{HOME / "moonraker"}"',
+        f'CONFIG_KLIPPER_CONFIG_HOME="{folder}"',
+        'CONFIG_PRINTER_CONFIG_FILE="printer.cfg"',
+        'CONFIG_MOONRAKER_CONFIG_FILE="moonraker.conf"',
+        'CONFIG_SERVICE_KLIPPER="klipper.service"',
+        'CONFIG_SERVICE_MOONRAKER="moonraker.service"',
+        f"CONFIG_{UNIT_KINDS[pair['unit']]['hh']}=y",
+        f"CONFIG_PARAM_NUM_GATES={int(slots)}",
+        f"CONFIG_{UNIT_BOARDS[pair['board']]['hh']}=y",
+    ]
+    if mcu.startswith("can:"):
+        lines += ["CONFIG_CHOICE_MMU_CONNECTION_TYPE_CANBUS=y", "CONFIG_CHOICE_MMU_CANBUS_UUID_OTHER=y",
+                  f'CONFIG_MMU_CANBUS_UUID_OTHER="{mcu[4:]}"', 'CONFIG_MMU_CANBUS_INTERFACE_OTHER="can0"']
+    else:
+        lines += ["CONFIG_CHOICE_MMU_CONNECTION_TYPE_SERIAL=y", "CONFIG_CHOICE_MMU_SERIAL_DEVICE_OTHER=y",
+                  f'CONFIG_MMU_SERIAL_DEVICE_OTHER="{mcu}"']
+    return "\n".join(lines) + "\n"
+
+
+def render_afc_run(pair: dict, facts: dict, program: Path) -> str:
+    """A shell run of AFC's own install function with its menu's answers set: the unit choice and every default.
+    Its prompts read nothing (stdin is empty), so each takes its default."""
+    folder = config_dir(facts)
+    q = lambda v: "'" + str(v).replace("'", "'\\''") + "'"
+    sets = {"printer_config_dir": folder, "klipper_dir": HOME / "klipper", "afc_path": program,
+            "afc_config_dir": folder / "AFC", "afc_file": folder / "AFC" / "AFC.cfg",
+            "moonraker_config_file": folder / "moonraker.conf", "installation_type": pair["afc"],
+            "git_install": "False", "test_mode": "False"}
+    includes = ["constants", "colors", "utils", "check_commands", "update_commands", "buffer_configurations",
+                "install_functions", "unit_functions", "emu_templater"]
+    return "\n".join([
+        "# Written by Elyir Bench (design/unit-setup/): AFC's own installer, with its menu's answers set",
+        f"cd {q(program)} || exit 1",
+        *(f". ./include/{n}.sh || exit 1" for n in includes),
+        *(f"{k}={q(v)}" for k, v in sets.items()),
+        "check_for_prereqs",
+        "install_afc",
+        # git_install False keeps their moonraker update entry (and its restart) out; this part of it is wanted
+        "exclude_from_klipper_git",
+        "",
+    ])
+
+
+def render_mcu_port(text: str, section: str, mcu: str) -> str:
+    """One [mcu …] section with its port set (serial or canbus_uuid) and the template's placeholders taken out."""
+    out, inside, done = [], False, False
+    for line in text.split("\n"):
+        m = re.match(r"^\[([^\]]+)\]", line)
+        if m:
+            inside = " ".join(m.group(1).split()) == section
+            out.append(line)
+            if inside and not done:
+                out.append(f"canbus_uuid: {mcu[4:]}" if mcu.startswith("can:") else f"serial: {mcu}")
+                done = True
+            continue
+        if inside and re.match(r"^#?\s*(serial|canbus_uuid)\s*:", line):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def sections_of(text: str, names: tuple[str, ...]) -> str:
+    """Only these sections of moonraker.conf, as written."""
+    out, keep = [], False
+    for line in text.split("\n"):
+        m = re.match(r"^\[([^\]]+)\]", line)
+        if m:
+            keep = " ".join(m.group(1).split()) in names
+        if keep:
+            out.append(line)
+    return "\n".join(out).strip("\n")
+
+
+def unit_updater(kind: str, written: str) -> str:
+    """The update entry Mainsail had for the program: what their installer wrote, else one like it (AFC's is
+    kept out of its run, with the Moonraker restart that comes with it)."""
+    p = UNIT_PROGRAMS[kind]
+    return written or (f"[update_manager {p['updater']}]\ntype: git_repo\npath: ~/{p['dir']}\norigin: {p['repo']}\n"
+                       f"primary_branch: {p['branch']}\nmanaged_services: klipper")
+
+
+def unit_hand_back(facts: dict) -> str | None:
+    """Removing Bench leaves a unit it set up working, and Mainsail updates it again: its update entry back in
+    moonraker.conf, and its copy on its branch, since Moonraker won't update a detached one."""
+    k = load_state().get("unit_kept")
+    if not k or not k.get("updater"):
+        return None
+    p = UNIT_PROGRAMS[k["kind"]]
+    conf = facts["moonraker"].get("conf")
+    if conf and Path(conf).is_file():
+        text = read(conf)
+        if not sections_of(text, (f"update_manager {p['updater']}",)):
+            Path(conf).write_text(text.rstrip("\n") + "\n\n" + k["updater"] + "\n")
+    home, git = HOME / p["dir"], shutil.which("git")
+    if git and (home / ".git").is_dir():
+        run([git, "-C", str(home), "checkout", "--quiet", "-B", p["branch"]], check=False)
+        run([git, "-C", str(home), "branch", "--quiet", f"--set-upstream-to=origin/{p['branch']}", p["branch"]], check=False)
+    return f"{p['name']} stays, and Mainsail updates it again"
+
+
+def strip_sections(text: str, names: tuple[str, ...]) -> str:
+    """moonraker.conf without these sections (the header up to the next one)."""
+    out, skip = [], False
+    for line in text.split("\n"):
+        m = re.match(r"^\[([^\]]+)\]", line)
+        if m:
+            skip = " ".join(m.group(1).split()) in names
+        if not skip:
+            out.append(line)
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+
+
+def unit_upstream(cmd: list[str], cwd: Path, env: dict | None = None, timeout: int = 900) -> None:
+    """Their installer, with nothing to read on stdin: a question it still asks takes its default."""
+    p = subprocess.run(cmd, cwd=str(cwd), env={**os.environ, **(env or {})}, stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=timeout)
+    print(p.stdout[-4000:], p.stderr[-4000:], sep="\n", file=sys.stderr)
+    if p.returncode != 0:
+        last = [ln for ln in (p.stderr + p.stdout).splitlines() if ln.strip()][-1:] or [f"exit {p.returncode}"]
+        said = re.sub(r"\x1b\[[0-9;]*m", "", last[0]).strip()[:160]
+        raise StepFailed(f"its installer stopped: {said}")
+
+
+def fetch_program(kind: str) -> Path:
+    """The program's source at its pinned commit, in the printer user's home where its installer expects it."""
+    p = UNIT_PROGRAMS[kind]
+    home = HOME / p["dir"]
+    git = shutil.which("git")
+    if not git:
+        raise StepFailed("git isn't on this printer, so it can't be fetched")
+    if not (home / ".git").is_dir():
+        if home.exists():
+            raise StepFailed(f"{home} is there already and isn't a copy Bench can use")
+        run([git, "clone", "--quiet", "--filter=blob:none", "--no-checkout", p["repo"], str(home)], timeout=600)
+    run([git, "-C", str(home), "fetch", "--quiet", "origin", p["commit"]], check=False, timeout=600)
+    run([git, "-C", str(home), "checkout", "--quiet", "--force", "--detach", p["commit"]], timeout=300)
+    head = run([git, "-C", str(home), "rev-parse", "HEAD"]).stdout.strip()
+    if head != p["commit"]:
+        raise StepFailed(f"{p['name']} isn't at the version Bench tested ({head[:7]})")
+    return home
+
+
+def tree_hashes(folder: Path) -> dict[str, str]:
+    out = {}
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if not d.startswith(".git")]
+        for d in dirs:
+            out[str((Path(root) / d).relative_to(folder))] = "<dir>"
+        for f in files:
+            p = Path(root) / f
+            if p.is_file() and not p.is_symlink():
+                out[str(p.relative_to(folder))] = hashlib.sha1(p.read_bytes()).hexdigest()
+            elif p.is_symlink():
+                out[str(p.relative_to(folder))] = "-> " + os.readlink(p)
+    return out
+
+
+def unit_outside_dirs() -> list[Path]:
+    """Where their installers put Klipper's and Moonraker's code: what's added there goes again with Put it back."""
+    return [HOME / "klipper" / "klippy" / "extras", HOME / "klipper" / "klippy" / "extras" / "mmu",
+            HOME / "moonraker" / "moonraker" / "components"]
+
+
+def outside_entries() -> set[str]:
+    return {str(d / n) for d in unit_outside_dirs() if d.is_dir() for n in os.listdir(d)}
+
+
+def unit_restart_klipper(facts: dict) -> dict:
+    """The Klipper service, restarted once (new modules load fresh), and its state when it has settled."""
+    url = facts["moonraker"]["url"]
+    before = klipper_info(url)[1]
+    try:
+        http_post(f"{url}/machine/services/restart?service=klipper", timeout=60)
+    except Exception:
+        sudo("systemctl", "restart", "klipper", check=False)
+    return klipper_settled(url, before)
+
+
+def unit_restore(kept: Path, folder: Path, changed: dict[str, bool], added: list[str]) -> None:
+    """The config folder's files back as they were in the copy (new ones removed), and their code taken out again."""
+    for rel, existed in sorted(changed.items(), key=lambda kv: len(kv[0])):
+        target = folder / rel
+        if existed and (kept / rel).is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(kept / rel, target, follow_symlinks=False)
+        elif not existed and (target.is_file() or target.is_symlink()):
+            target.unlink()
+        elif not existed and target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+    for p in sorted(added, key=len, reverse=True):
+        q = Path(p)
+        if q.is_symlink() or q.is_file():
+            q.unlink()
+        elif q.is_dir():
+            shutil.rmtree(q, ignore_errors=True)
+
+
+def port_here(mcu: str) -> bool:
+    return os.path.exists(mcu)
+
+
+def unit_install(facts: dict, s: dict, unit: str, board: str, slots: int | None, mcu: str, emit) -> dict:
+    """Set up a filament unit from the screen. Never while printing or beside another unit's driver. The config folder
+    is kept first (config-before-unit-<date>, recorded for Put it back), their installer runs with Bench's answers,
+    Klipper restarts once, and the unit must answer. If Klipper doesn't start with it, the copy goes back at once."""
+    pair = unit_pair(unit, board)
+    if pair is None:
+        raise StepFailed("Bench doesn't know that unit on that board yet")
+    slots = pair["default"] if slots is None else slots
+    if slots not in pair["slots"]:
+        raise StepFailed(f"{UNIT_KINDS[unit]['name']} on that board has {', '.join(map(str, pair['slots']))} slots")
+    if mcu.startswith("can:"):
+        if not CAN_UUID.fullmatch(mcu[4:]):
+            raise StepFailed("A CAN board's ID is twelve hex digits")
+    elif not (mcu.startswith("/dev/serial/by-id/") and port_here(mcu)):
+        raise StepFailed("That board isn't plugged in any more")
+    busy = printing_now(facts)
+    if busy:
+        raise StepFailed(f"Printing: {busy}. Nothing was changed; set it up when the print is done")
+    other = other_unit_driver(facts)
+    if other:
+        raise StepFailed(f"{other} is set up on this printer already")
+    if units_on(s) or klipperace_here(facts) or facts.get("ace_units"):
+        raise StepFailed("This printer has an ACE Pro, which Bench drives itself")
+    folder = config_dir(facts)
+    if folder is None or not (folder / "printer.cfg").is_file():
+        raise StepFailed("There's no printer.cfg to add it to")
+    kind = UNIT_KINDS[unit]["kind"]
+    prog = UNIT_PROGRAMS[kind]
+    label = f"{prog['name']} {prog['version']}"
+    done = [0]
+
+    def step(sid: str, words: str) -> None:
+        emit({"progress": {"id": sid, "step": words, "done": done[0], "of": len(UNIT_STEPS)}})
+        done[0] += 1
+
+    step("fetch", f"Fetching {label}")
+    if prog.get("packages"):
+        miss = missing_packages(prog["packages"])
+        if miss:
+            apt_install(*miss)
+    home = fetch_program(kind)
+
+    step("settings", "Writing its settings")
+    pdata = folder.parent
+    date = _dt.date.today().isoformat()
+    kept, n = pdata / f"{UNIT_KEPT}{date}", 2
+    while kept.exists():
+        kept, n = pdata / f"{UNIT_KEPT}{date}-{n}", n + 1
+    shutil.copytree(folder, kept, symlinks=True)
+    before, outside = tree_hashes(folder), outside_entries()
+    record = {"path": str(kept), "kind": kind, "unit": unit, "board": board, "slots": slots, "program": label,
+              "when": time.time(), "changed": {}, "added": []}
+
+    def changes() -> None:
+        after = tree_hashes(folder)
+        record["changed"] = {rel: rel in before for rel in set(before) | set(after) if before.get(rel) != after.get(rel)}
+        record["added"] = sorted(outside_entries() - outside)
+
+    def put_back() -> None:
+        changes()
+        unit_restore(kept, folder, record["changed"], record["added"])
+
+    try:
+        if kind == "happy_hare":
+            cfg = home / ".mmu_config"
+            cfg.write_text(render_hh_config(pair, slots, mcu, facts))
+            os.utime(cfg, (0, 0))   # older than their Kconfig files: their installer fills in its defaults first
+            unit_upstream(["./install.sh", "-z", "-y", "-s", "-k", str(HOME / "klipper"), "-c", str(folder),
+                           "-m", str(HOME / "moonraker")], home)
+        else:
+            unit_upstream(["bash", "-c", render_afc_run(pair, facts, home)], home)
+            for f in sorted((folder / "AFC").glob("*.cfg")):
+                text = read(f)
+                if re.search(rf"(?m)^\[mcu\s+{re.escape(pair['afc_mcu'])}\s*\]", text):
+                    f.write_text(render_mcu_port(text, f"mcu {pair['afc_mcu']}", mcu))
+        moon = folder / "moonraker.conf"
+        if moon.is_file():
+            record["updater"] = unit_updater(kind, sections_of(read(moon), UNIT_UPDATERS))
+            moon.write_text(strip_sections(read(moon), UNIT_UPDATERS))
+        if not any(ln.startswith(("[include mmu/", "[include AFC/")) for ln in printer_cfg_lines(facts)):
+            raise StepFailed(f"{prog['name']}'s installer didn't add itself to printer.cfg")
+    except Exception as e:
+        put_back()
+        why = str(e) if isinstance(e, StepFailed) else f"{e.__class__.__name__}: {e}"
+        raise StepFailed(f"{why}. Nothing was changed")
+    changes()
+    st = load_state()
+    st["unit_kept"] = record
+    save_state(st)
+
+    step("restart", "Restarting Klipper, once")
+    started = unit_restart_klipper(facts)
+    if started["klipper"] != "ready":
+        put_back()
+        st = load_state()
+        st.pop("unit_kept", None)
+        save_state(st)
+        unit_restart_klipper(facts)
+        raise StepFailed(f"Klipper didn't start with it: {started['message']} Your old settings are back")
+
+    step("answers", "Checking the unit answers")
+    if not klipper_has(facts, prog["object"]):
+        raise StepFailed(f"Klipper started, but {prog['name']} didn't answer. Your old settings are kept: "
+                         "Care › Filament unit › Put it back")
+    emit({"progress": {"id": "answers", "step": "It answers", "done": len(UNIT_STEPS), "of": len(UNIT_STEPS)}})
+    return {"kind": kind, "unit": unit, "board": board, "slots": slots, "program": label, "kept": str(kept)}
+
+
+def unit_putback(facts: dict, s: dict, emit) -> dict:
+    """The config folder as it was before the unit was set up, its code out of Klipper and Moonraker, Klipper
+    restarted once. The copy itself stays where it is."""
+    k = load_state().get("unit_kept")
+    if not k:
+        raise StepFailed("There's no copy of the old settings to put back")
+    busy = printing_now(facts)
+    if busy:
+        raise StepFailed(f"Printing: {busy}. Nothing was changed; put it back when the print is done")
+    kept, folder = Path(k["path"]), config_dir(facts)
+    if not kept.is_dir() or folder is None:
+        raise StepFailed(f"The copy isn't at {kept} any more")
+    emit({"progress": {"id": "settings", "step": "Putting your old settings back", "done": 0, "of": 2}})
+    unit_restore(kept, folder, k.get("changed") or {}, k.get("added") or [])
+    st = load_state()
+    st.pop("unit_kept", None)
+    save_state(st)
+    emit({"progress": {"id": "restart", "step": "Restarting Klipper, once", "done": 1, "of": 2}})
+    started = unit_restart_klipper(facts)
+    return {"put_back": True, "klipper": started["klipper"], "message": started["message"], "kept": str(kept)}
+
+
+def unit_main(args, facts: dict, s: dict) -> int:
+    as_json = args.json
+    if as_json:
+        bring_emit(True, {"started": f"unit-{args.what}", "pid": os.getpid()})
+    emit = (lambda obj: bring_emit(True, obj)) if as_json else (
+        lambda obj: print(f"  … {obj['progress']['step']}", flush=True))
+    try:
+        if args.what == "scan":
+            out = unit_scan(facts)
+        elif args.what == "putback":
+            out = {"result": unit_putback(facts, s, emit)}
+        else:
+            if args.kind and UNIT_KINDS.get(args.unit, {}).get("kind") != args.kind:
+                raise StepFailed(f"{args.unit} isn't run by {args.kind}")
+            out = {"result": unit_install(facts, s, args.unit, args.board, args.slots, args.mcu, emit)}
+    except StepFailed as e:
+        bring_emit(as_json, {"failed": str(e).rstrip(".") + "."})
+        return 1
+    except Exception as e:   # always a last line the component can read
+        bring_emit(as_json, {"failed": f"{e.__class__.__name__}: {e}"})
+        return 1
+    print(json.dumps(out) if as_json else json.dumps(out, indent=2), flush=True)
+    return 0
+
+
 # ── Bench Cloud (docs/cloud.md, design/cloud/ C) ─────────────────────────────────────────────────────────────
 # The house's paid service: a backup every night (started by the intent component, so no unit or sudo rule is
 # needed), and a new card bringing one back once the house's owner allows it. Nothing here changes what the printer
@@ -5878,6 +6366,9 @@ def remove(c: Ctx) -> bool:
     if conf and MoonrakerConf()._section(read(conf)):
         shutil.copy2(conf, Path(conf).with_suffix(".conf.elyir-bench-bak"))
         Path(conf).write_text(strip_intent_section(read(conf)))
+    handed = unit_hand_back(f)
+    if handed:
+        lines.append(("done", "filament unit", handed))
     if f["moonraker"]["service"]:
         try:
             restart_moonraker(f)
@@ -5961,6 +6452,16 @@ def main(argv: list[str] | None = None) -> int:
     cs.add_parser("backup", help="back up now (the intent component does this every night)")
     cs.add_parser("status", help="joined or not, and the last backup")
     cs.add_parser("leave", help="leave the house: no more backups from this printer")
+    un = sub.add_parser("unit", help="a Happy Hare or AFC filament unit, set up from the screen (docs/filament-units.md)")
+    us = un.add_subparsers(dest="what", required=True)
+    us.add_parser("scan", help="the units and boards Bench can set up, and boards on USB or CAN that Klipper doesn't use yet")
+    ui = us.add_parser("install", help="install Happy Hare or AFC for one unit and board (the config folder is kept first)")
+    ui.add_argument("--unit", required=True, choices=sorted(UNIT_KINDS))
+    ui.add_argument("--board", required=True, choices=sorted(UNIT_BOARDS))
+    ui.add_argument("--slots", type=int)
+    ui.add_argument("--mcu", required=True, help="the board's /dev/serial/by-id/ path, or can:<uuid>")
+    ui.add_argument("--kind", choices=sorted(UNIT_PROGRAMS), help="happy_hare or afc: checked against the unit")
+    us.add_parser("putback", help="put the config folder back as it was before, and restart Klipper")
     args = ap.parse_args(argv)
 
     if args.cmd == "homecert":
@@ -6047,6 +6548,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "role":
         return role_main(args, facts, settings)
+
+    if args.cmd == "unit":
+        return unit_main(args, facts, settings)
 
     if args.cmd == "remove":
         if not args.yes:

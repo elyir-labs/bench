@@ -33,6 +33,8 @@ export interface UnitCheckView {
   step: 'slots' | 'measure' | 'ready'
   n: number
   of: number
+  /** "Set up a filament unit" when the check is steps 4 and 5 of setting the unit up (unit-setup stage 2) */
+  title?: string | null
   headline: string
   detail: string | null
   /** The detail is about the slot before: it passed (ok) or didn't (failed). */

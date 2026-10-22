@@ -207,6 +207,24 @@ async def unit_check(sim, **_) -> None:
     sim.fail_check_slot = 3
 
 
+async def unit_setup(sim, **_) -> None:
+    """No filament unit in Klipper yet, and a BTT MMB on USB that Klipper doesn't use (design/unit-setup/, B, stage 2):
+    Materials and Care offer Set one up. The pretend installer then shows the pretend ACEs as the unit it set up, Happy
+    Hare's or AFC's, and Check and measure runs on it; Put it back (Care) takes it away again."""
+    await idle(sim)
+    sim.patch({"ace": {"selected_gate": -1}, "filament_switch_sensor extruder_sensor": {"filament_detected": False}})
+    for g in range(len(sim.status["ace"].get("gate_color") or [])):
+        sim.set_slot(g, status="ready")   # a spool at every slot's entry, so the check walks straight through
+    sim.set_bare(True)
+
+
+async def unit_setup_fails(sim, **_) -> None:
+    """unit_setup, where the first install fails at Klipper's restart (the unit's board doesn't answer), so the
+    failure and Try again can be seen."""
+    await unit_setup(sim)
+    sim.fail_unit_install = True
+
+
 async def hot(sim, **_) -> None:
     """Ready, with the nozzle still at printing heat (design/power/: Turn off waits for it to cool)."""
     await idle(sim)
@@ -728,6 +746,8 @@ async def power_lost(sim, **_) -> None:
 
 
 SCENARIOS = {
+    "unit_setup": unit_setup,
+    "unit_setup_fails": unit_setup_fails,
     "unit_check": unit_check,
     "power_out": power_out,
     "power_back": power_back,

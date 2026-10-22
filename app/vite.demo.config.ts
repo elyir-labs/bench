@@ -62,7 +62,7 @@ function demoFiles(): Plugin {
         copy(`simulator/${f}`, `py/simulator/${f}`)
         py.push([`simulator/${f}`, `/sim/simulator/${f}`])
       }
-      for (const f of ['elyir_bench_intent.py', 'filament_units.py', 'unit_check.py', 'elyir_bench_care.py']) {
+      for (const f of ['elyir_bench_intent.py', 'filament_units.py', 'unit_check.py', 'unit_setup.py', 'elyir_bench_care.py']) {
         copy(`printer/${f}`, `py/printer/${f}`)
         py.push([`printer/${f}`, `/sim/printer/${f}`])
       }

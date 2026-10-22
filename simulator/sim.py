@@ -42,6 +42,11 @@ import setup_card  # noqa: E402
 import bring  # noqa: E402
 import slicer_profile  # noqa: E402
 import unit_skins  # noqa: E402
+sys.path.insert(0, os.path.join(HERE, "..", "installer"))
+try:
+    import elyir_bench as installer  # noqa: E402  (the unit setup's catalog and board scan: one table, the installer's)
+except ImportError:   # the browser demo ships the simulator and the printer code, not the installer
+    installer = None
 
 
 # --------------------------------------------------------------------------
@@ -93,10 +98,20 @@ def sim_unit(i: int, slots: List[Dict[str, Any]], temp: float) -> Dict[str, Any]
 SIM_TUBE_MM = 900   # pulled back this far, the slot's sensor no longer sees the filament
 
 
+UNIT_BOARD = "usb-Klipper_stm32g0b1xx_4F0034000A50425539393020-if00"        # a BTT MMB, plugged in and not used yet
+
+
 class SimPrinter:
     def __init__(self, name: str, speed: float, ace: bool = True, light: str = "pin", skin: Optional[str] = None):
         self.name = name
         self.skin = skin   # --units afc / happy_hare: the pretend ACEs shown as AFC's lanes or Happy Hare's gates
+        self.skin_start = skin
+        # scenario unit_setup (design/unit-setup/, B, stage 2): no unit in Klipper, a bare board on USB; the pretend
+        # installer then shows the pretend ACEs as the unit it set up (a skin), and Put it back hides them again
+        self.bare = False
+        self.bare_board = UNIT_BOARD
+        self.fail_unit_install = False   # the next install fails once, at Klipper's restart
+        self.unit_kept: Optional[Dict[str, Any]] = None
         self.light = light   # the chamber light (--light): pin (an on/off light), strip (status LEDs), both, none
         self.speed = speed
         self.port = 7126   # main() sets the one it serves on: the Advanced door's stand-in page is there
@@ -275,9 +290,11 @@ class SimPrinter:
 
     def new_tracker(self) -> Any:
         t = engine.IntentTracker(self.name)
-        t.set_units_on_usb(2 if self.ace and not self.skin else 0)   # two ACE Pros on USB, like workshop
+        t.set_units_on_usb(2 if self.ace and not self.skin and not self.bare else 0)   # two ACE Pros on USB, like workshop
         t.head_sensor = "filament_switch_sensor extruder_sensor"
-        t.has_unit = self.ace
+        t.has_unit = self.ace and not self.bare
+        t.unit_installer = True
+        t.unit_kept = self.unit_kept
         t.light_objects = engine.light_candidates(list(self.status))
         t.light_choice = DATABASE.get("elyir-bench", {}).get("light")
         if self.units is not None:
@@ -318,6 +335,8 @@ class SimPrinter:
 
     def seen(self, status: Dict[str, Any]) -> Dict[str, Any]:
         """Status as Bench and the console get it: with --units afc or happy_hare, the unit's objects in `ace`'s place."""
+        if self.bare:
+            return {k: v for k, v in status.items() if k != "ace"}
         if not self.skin or "ace" not in status or "ace" not in self.status:
             return status
         return {**{k: v for k, v in status.items() if k != "ace"}, **unit_skins.view(self.skin, self.status["ace"])}
@@ -860,6 +879,9 @@ class SimPrinter:
             elif kind == P.UNIT_CHECK:
                 self.tracker.unit_check_input(payload)
                 self.drive()
+            elif kind == P.UNIT_SETUP:
+                self.tracker.unit_setup_input(payload)
+                self.drive()
             elif kind == P.COLOUR:
                 self.tracker.colour_input(payload)
                 self.publish()
@@ -883,6 +905,8 @@ class SimPrinter:
                 asyncio.get_event_loop().create_task(self._change_macro(script))
             elif kind in ("unit", "unit_macro"):
                 asyncio.get_event_loop().create_task(self._unit_step(script, kind == "unit_macro"))
+            elif kind in ("unit_scan", "unit_install", "unit_putback"):
+                asyncio.get_event_loop().create_task(self._unit_job(kind, script))
             else:
                 self._quick_gcode(script)
 
@@ -994,6 +1018,79 @@ class SimPrinter:
         elif script == "RESUME":   # a planned colour change, done by itself (design/colour-change/, C)
             self.patch({"pause_resume": {"is_paused": False}, "print_stats": {"state": "printing"}})
             self._release("resume")
+
+    # ---- setting a unit up (design/unit-setup/, B, stage 2): the installer's command, as the component runs it ----
+
+    def set_bare(self, on: bool, skin: Optional[str] = None, slots: Optional[int] = None) -> None:
+        """No unit in Klipper (on), or the pretend ACEs shown as the unit just set up."""
+        self.bare, self.skin = on, (None if on else skin)
+        if slots:
+            self.status["ace"]["sim_slots"] = slots
+        self.tracker.set_units_on_usb(0)
+        self.tracker.has_unit = not on
+        for k in [k for k in self.tracker.status if k == "ace" or k.split(" ")[0] in ("mmu", "mmu_machine", "AFC", "AFC_stepper", "AFC_hub")
+                  or k.startswith("filament_switch_sensor mmu_")]:
+            self.tracker.status.pop(k)   # what Klipper had before its restart is gone after it
+        self.tracker.update_status(self.seen(deepcopy(self.status)))
+        self.broadcast("notify_status_update", [self.seen(deepcopy(self.status)), time.time()])
+
+    def unit_scan(self) -> Dict[str, Any]:
+        here = {"serial": [self.bare_board] if self.bare and self.bare_board else [], "can": []}
+        found = installer.unit_found({"printer_data": None}, here)   # the printer's own board is in its config: not here
+        return {"catalog": installer.unit_catalog(), "found": found,
+                "probably": {u: installer.unit_probably(u, found) for u in installer.UNIT_KINDS}, "kept": self.unit_kept}
+
+    async def _unit_job(self, job: str, args: Optional[Dict[str, Any]]) -> None:
+        tracker = self.tracker
+        say = lambda msg: (tracker.unit_setup_heard(msg), self.publish(force=True))
+
+        async def wait(s: float) -> None:
+            await asyncio.sleep(s / self.speed)
+
+        say({"started": job.replace("_", "-"), "pid": os.getpid()})
+        if installer is None:
+            say({"failed": "Setting up a unit isn't part of this demo."})
+            return
+        if job == "unit_scan":
+            await wait(1.5)
+            say(self.unit_scan())
+        elif job == "unit_install":
+            kind = args["kind"]
+            prog = installer.UNIT_PROGRAMS[kind]
+            label = f"{prog['name']} {prog['version']}"
+            for i, (sid, words, s) in enumerate([("fetch", f"Fetching {label}", 20), ("settings", "Writing its settings", 14),
+                                                  ("restart", "Restarting Klipper, once", 0)]):
+                say({"progress": {"id": sid, "step": words, "done": i, "of": 4}})
+                await wait(s)
+            self.set_klippy("startup", "Klipper is restarting")
+            await wait(12)
+            if self.fail_unit_install:
+                self.fail_unit_install = False
+                self.set_klippy("ready")
+                say({"failed": "Klipper didn't start with it: mcu 'mmu': Unable to connect. Check the unit's USB cable. "
+                               "Your old settings are back."})
+                return
+            self.unit_kept = {"unit": args["unit"], "board": args["board"], "slots": args["slots"], "program": label,
+                              "when": time.time()}
+            self.set_bare(False, kind, args["slots"])
+            self.set_klippy("ready")
+            say({"progress": {"id": "answers", "step": "Checking the unit answers", "done": 3, "of": 4}})
+            await wait(2)
+            say({"result": {"kind": kind, "unit": args["unit"], "board": args["board"], "slots": args["slots"],
+                            "program": label, "kept": "~/printer_data/config-before-unit-2026-10-22"}})
+        else:
+            say({"progress": {"id": "settings", "step": "Putting your old settings back", "done": 0, "of": 2}})
+            await wait(4)
+            self.unit_kept = None
+            self.set_bare(True)
+            say({"progress": {"id": "restart", "step": "Restarting Klipper, once", "done": 1, "of": 2}})
+            self.set_klippy("startup", "Klipper is restarting")
+            await wait(10)
+            self.set_klippy("ready")
+            say({"result": {"put_back": True, "klipper": "ready", "message": "Klipper started with it."}})
+        if self.tracker is tracker:
+            self.drive()
+        self.publish(force=True)
 
     async def _check_macro(self, script: str) -> None:
         """A step of the unit check (printer/unit_check.py), answered the way Happy Hare or AFC would."""
@@ -1177,6 +1274,8 @@ class SimPrinter:
         self.tracker = self.new_tracker()
         self.fail_next_swap = False
         self.fail_check_slot = None
+        self.skin, self.bare, self.fail_unit_install, self.unit_kept = self.skin_start, False, False, None
+        self.tracker = self.new_tracker()
         for task in self._setup_tasks:
             task.cancel()
         self._setup_tasks = []

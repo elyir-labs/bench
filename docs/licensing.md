@@ -32,6 +32,7 @@ The installer downloads these onto the printer; none of their code is kept here.
 | Moonraker | GPL-3.0 | `printer/printer_intent.py` is a Moonraker component and runs inside it | That file ships under the GPL with Moonraker, so keep it a thin adapter. The logic lives in `elyir_bench_intent.py`, which imports nothing from Moonraker |
 | OrcaSlicer | AGPL-3.0 | Runs as its own program (`slicer/elyir_bench_slice.py` calls its command line) | Never import, link or copy its code or its profile files. Presets name Orca's own presets as parents (`inherits`) and hold only what differs. A patched Orca must have its patches published |
 | KlipperACE (ACE units, on printers that keep it) | GPL-3.0 | G-code commands and the status it publishes through Moonraker | It was started by other developers and can never be relicensed, so never copy or read its code here. Elyir Bench's own ACE driver (`units/`) was written from USB captures of a real unit instead (docs/filament-units.md) |
+| Happy Hare, AFC (filament units, docs/filament-units.md) | GPL-3.0 | Their G-code commands and status; `elyir-bench unit install` downloads them onto the printer at a pinned commit and runs their own installers with Bench's answers | Never copy their code, templates or board files here: Bench writes only its own answers (which unit, board, gates, port) |
 | Mainsail | GPL-3.0 | The Advanced door opens it as its own site | Never copy Mainsail components into `app/` |
 
 ## Code from elsewhere

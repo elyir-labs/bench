@@ -5,7 +5,7 @@
       <button class="back" :disabled="!back || !!store.busyAction" :aria-label="uc.step === 'ready' ? 'Done' : 'Stop checking'" @click="back && act(back)">
         <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
       </button>
-      <span class="where">{{ FLOW_TITLE }} · {{ uc.unit }}</span>
+      <span class="where">{{ uc.title ?? FLOW_TITLE }} · {{ uc.unit }}</span>
       <span class="step a-num">{{ stepLabel(uc) }}<span class="dots" aria-hidden="true"><i v-for="(d, i) in dots(uc)" :key="i" :class="d"></i></span></span>
     </header>
 
@@ -58,7 +58,7 @@
         <h1 class="a-display fh1" :class="{ huge: uc.headline.length <= 16 }">{{ uc.headline }}</h1>
         <p class="fd">{{ uc.detail }}</p>
       </div>
-      <div class="sum">
+      <div class="sum" :class="{ long: (uc.ready?.rows.length ?? 0) > 3 }">
         <div v-for="r in uc.ready?.rows ?? []" :key="r.title"><b>{{ r.title }}</b><span>{{ r.sub }}</span></div>
       </div>
     </div>
@@ -170,6 +170,8 @@ async function act(a: IntentAction) {
 
 .sum { flex: 0 0 360px; display: grid; gap: 1px; background: var(--a-line); border-radius: 18px; overflow: hidden; box-shadow: var(--a-card-shadow); }
 .sum > div { background: var(--a-surface); padding: 11px 16px; display: grid; gap: 2px; }
+.sum.long > div { padding: 8px 16px; }
+.sum.long span { font-size: 13px; }
 .sum b { font-size: 16.5px; }
 .sum span { font-size: 14px; color: var(--a-ink-3); line-height: 1.3; }
 

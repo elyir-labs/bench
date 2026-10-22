@@ -20,7 +20,7 @@ def lane_name(g: int) -> str:
 
 def view(skin: str, ace: Dict[str, Any]) -> Dict[str, Any]:
     """The objects AFC or Happy Hare would report for this `ace`."""
-    states = _slot_states(ace)
+    states = _slot_states(ace)[:ace.get("sim_slots") or None]   # sim_slots: as many as the unit set up has
     n = len(states)
     colors, mats, temps = ace.get("gate_color") or [], ace.get("gate_material") or [], ace.get("gate_temp") or []
     sel = ace.get("selected_gate")

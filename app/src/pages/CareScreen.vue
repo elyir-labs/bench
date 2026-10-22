@@ -12,7 +12,12 @@
       <div class="screen-text"><span class="name">{{ unitRows.length > 1 ? `Filament unit · ${r.name}` : 'Filament unit' }}</span><span class="when">{{ r.why ? r.why : `${r.name}. ${r.line}` }}</span></div>
       <button v-if="!door.away" class="a-btn ghost back" :disabled="!!r.why || store.busyAction !== null" @click="store.act(r.action)">{{ r.action.label }}</button>
     </div>
-    <h2 class="group" v-if="intent?.hands || unitRows.length">Maintenance</h2>
+    <!-- No unit yet: Set one up; a unit Bench set up: the old settings, kept (design/unit-setup/, B, stage 2) -->
+    <div v-for="r in setupRows" :key="r.key" class="screen wrap unit-row" :class="{ off: !!r.why }">
+      <div class="screen-text"><span class="name">{{ r.name }}</span><span class="when">{{ r.line }}</span></div>
+      <button v-if="!door.away" class="a-btn ghost back" :disabled="!!r.why || store.busyAction !== null" @click="store.act(r.action)">{{ r.action.label }}</button>
+    </div>
+    <h2 class="group" v-if="intent?.hands || unitRows.length || setupRows.length">Maintenance</h2>
     <p class="sub">Small things, now and then, that keep prints looking good. The printer counts its own hours and asks when one is due.</p>
     <ul class="list" v-if="care && care.items.length">
       <li v-for="c in care.items" :key="c.id" :class="{ due: c.due }">
@@ -178,6 +183,7 @@ import { keptLine, sheetLine, WHERE_KEPT } from '@/intent/firstLayer'
 import { rowLine } from '@/intent/hands'
 import HandsSheet from '@/components/hands/HandsSheet.vue'
 import { careRows } from '@/intent/unitCheck'
+import { careSetupRows } from '@/intent/unitSetup'
 import type { IntentAction } from '@/intent/types'
 import { slicerPrinters, slicerStatus, stopPrinter, type SlicerPrinter } from '@/slice/api'
 import { careLine, hostLine, type SlicerState } from '@/slice/elsewhere'
@@ -186,6 +192,7 @@ const intent = computed(() => store.intent)
 const handsOpen = ref(false)
 const handsOk = computed(() => !!intent.value?.hands && !intent.value.hands.why_not)
 const unitRows = computed(() => careRows(intent.value?.units?.list))
+const setupRows = computed(() => careSetupRows(intent.value?.unit_setup_offer, intent.value?.unit_putback))
 
 // slicing for this printer elsewhere, or for others here (design/slicing-elsewhere/, A)
 const slicing = ref<SlicerState | null>(null)

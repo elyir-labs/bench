@@ -84,6 +84,10 @@ elyir-bench pair              a QR code for a phone (a one-time pairing code whe
 elyir-bench remove [--yes]    take it off again: KlipperScreen back, Mainsail and printer.cfg untouched
 elyir-bench bring scan|plan <id>|apply <id> [--gcodes]|address <address>
                             bring an old printer's setup to a fresh card (docs/bring-it-over.md)
+elyir-bench unit scan         the units and boards Bench can set up, and boards on USB/CAN that Klipper doesn't use yet
+elyir-bench unit install --unit U --board B [--slots N] --mcu PORT [--kind happy_hare|afc]
+                            set up a Happy Hare or AFC unit (docs/filament-units.md)
+elyir-bench unit putback      the config from before it, back; Klipper restarts once
 ```
 
 `elyir-bench --json bring …` is what the component runs for Bring it over: one JSON line per step, the last one the
@@ -92,6 +96,21 @@ answer (`sources`, `plan`, `result` or `failed`). An old card is mounted read-on
 `mkdir -p` and `umount` for `sd[a-z]`, `sd[a-z][0-9]` and `sd[a-z][0-9][0-9]` and nothing else, never read-write.
 Apply keeps the config folder that was there as `config-before-bring-<date>/` beside the new one, and Moonraker's
 backup of the database from before as `backup/database/elyir-bench-before-bring-<date>.db`.
+
+`elyir-bench --json unit …` is what the component runs to set a filament unit up from the screen, the same way: a
+`started` line, `progress` lines (`{"id": "fetch" | "settings" | "restart" | "answers", "step": words, "done", "of"}`),
+then `result` or `failed`. `install` refuses while printing, beside an ACE Pro or another unit's driver, for a pair it
+doesn't know or a board that isn't plugged in. It fetches the program into `~/Happy-Hare` or `~/AFC-Klipper-Add-On` with
+git at its pinned commit (checked after checkout), keeps the config folder as `config-before-unit-<date>/` (recorded as
+`unit_kept` in the installer's `state.json`, with the files the install changed and what it added to Klipper's and
+Moonraker's folders), then runs their installer with stdin closed: Happy Hare's `install.sh -z -y -s` over a
+`.mmu_config` Bench writes (unit, board, gates, port; dated old so their installer fills in its defaults first), or
+AFC's `install_afc` with its menu's variables set (needs `jq` and `crudini`, installed with apt). AFC's template then
+gets the board's `serial:` or `canbus_uuid:`. Mainsail's update entry for either is removed (and kept in the state,
+as their installer wrote it, or one like it for AFC; `elyir-bench remove` writes it back and puts their copy on its
+branch, since Moonraker won't update a detached one), Klipper's service restarts
+once (Moonraker isn't restarted: Happy Hare's own component loads at its next start), and the unit must show up as
+Klipper's `mmu` or `AFC`. If Klipper doesn't start, the copy goes back at once.
 
 From a laptop: `./deploy.sh workshop.local` builds a release, copies it over and runs
 `elyir-bench apply` there.

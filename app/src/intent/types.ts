@@ -5,6 +5,7 @@ import type { PowerView } from './power'
 import type { LightView } from './light'
 import type { HandsView } from './hands'
 import type { UnitCheckOffer, UnitCheckView } from './unitCheck'
+import type { UnitSetupOffer, UnitSetupView } from './unitSetup'
 
 // setup: Klipper has no printer.cfg yet, a fresh card (docs/bring-it-over.md): Now the printer itself, never Problem
 export type IntentState = 'ready' | 'preparing' | 'printing' | 'needs_you' | 'finished' | 'problem' | 'setup'
@@ -365,6 +366,12 @@ export interface Intent {
   light?: LightView | null
   /** Checking and measuring a Happy Hare or AFC unit (design/unit-setup/, B): the flow draws it (see ./unitCheck.ts). */
   unit_check?: UnitCheckView | null
+  /** Setting a Happy Hare or AFC unit up (design/unit-setup/, B, stage 2): the flow draws it (see ./unitSetup.ts). */
+  unit_setup?: UnitSetupView | null
+  /** Set one up: offered on a printer with no filament unit (Materials, Care); null when it isn't. */
+  unit_setup_offer?: UnitSetupOffer | null
+  /** Put it back: the config from before a unit was set up, while a copy is kept (Care). */
+  unit_putback?: UnitSetupOffer | null
   head?: {
     loaded: boolean | null
     slot: number | null

@@ -107,7 +107,7 @@ export function unitsOf(colour: IntentColour): { name: string; tiles: ColourTile
 
 /** The status bar's word while getting ready or changing something. A planned colour switch is part of printing
  *  (CAuto: "Printing"); one a person chose is "Changing colour" (SSwitch). */
-export function preparingWord(i: Partial<Pick<Intent, 'change' | 'phase'>> | null | undefined): string {
+export function preparingWord(i: Partial<Pick<Intent, 'change' | 'phase' | 'unit_setup'>> | null | undefined): string {
   const c = i?.change
   if (c) {
     if (c.kind === 'colour') return c.auto ? 'Printing' : 'Changing color'
@@ -115,6 +115,7 @@ export function preparingWord(i: Partial<Pick<Intent, 'change' | 'phase'>> | nul
   }
   if (i?.phase === 'colour_resuming') return 'Printing'
   if (i?.phase?.startsWith('unit_check')) return 'Checking the unit'   // design/unit-setup/
+  if (i?.phase === 'unit_setup' || i?.unit_setup?.step === 'installing') return 'Setting up'   // Klipper's restart too
   if (i?.phase === 'turning_off') return 'Turning off'   // design/power/
   if (i?.phase === 'restarting') return 'Restarting'
   if (i?.phase === 'power_back') return "Power's back"   // design/power-loss/

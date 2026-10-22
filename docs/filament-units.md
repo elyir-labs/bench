@@ -83,6 +83,48 @@ per-gate calibration aren't on the screen: Happy Hare refuses the check until it
 and the screen says to do that from Advanced. The simulator shows it all with `--units happy_hare` or `--units afc`
 and the `unit_check` scenario.
 
+### Setting one up from the screen
+
+On a printer with no filament unit, Materials says **No filament unit found · Set one up** under the one spool, and
+Care has a Filament unit row with **Set one up** (design/unit-setup/, B, stage 2). Never beside an ACE Pro (it needs no
+setup), on a printer that already has a unit or one Bench only watches, or while printing. Five steps:
+
+1. **Which unit**, by its picture: Box Turtle, Night Owl, ERCF v2, Tradrack, or Something else (the two projects'
+   own guides).
+2. **Which board** it's wired to. Bench looks for a board on USB or CAN that no `[mcu]` section names; when its chip
+   matches only one of the unit's boards, that one is marked *Probably*. Then the board's version (a BTT MMB's v1.0,
+   v1.1 and v2 have the same chip and different pins) and the slot count. Another board leads to the guides.
+3. **Installing.** `elyir-bench unit install` (docs/installer.md) fetches Happy Hare or AFC at the commit Bench tested,
+   keeps a copy of the config folder, runs their own installer with Bench's answers, and restarts Klipper once. If
+   Klipper doesn't start with it, the copy goes back by itself and the screen says what Klipper said, with Try again.
+4. and 5. **Check and measure** (above) carries on as the last two steps; its Ready adds the version and **Your old
+   settings · kept**.
+
+A phone at home follows along and, while it installs, says what's next at the printer: **Carry on here**, or
+**Use Workshop's screen**, which leaves the rest to the panel.
+
+**Put it back** (Care › Filament unit › Your old settings, or after a failure while a copy is kept) runs
+`elyir-bench unit putback`: the config folder's files back as they were in the copy (files the install added go), their
+code taken out of Klipper's and Moonraker's folders, and Klipper restarted once. The copy itself stays in
+`printer_data/config-before-unit-<date>/`.
+
+The pairs Bench sets up (`UNIT_PAIRS` in `installer/elyir_bench.py`; none tried on a real unit yet, each marked
+`tested_on_hardware: false`):
+
+| Unit | Software | Boards | Slots |
+| --- | --- | --- | --- |
+| ERCF v2 | Happy Hare 4.1 | BTT MMB v1.0, v1.1, v2; Mellow EASY-BRD v1, v2; Fysetc ERB v1, v2 | 6, 8, 9, 12 |
+| Tradrack | Happy Hare 4.1 | BTT MMB v1.0, v1.1, v2; Mellow EASY-BRD v1, v2 | 6, 8, 10, 12 |
+| Box Turtle | AFC 1.2 | AFC-Lite; AFC-Pro | 4; 8 |
+| Night Owl | AFC 1.2 | Fysetc ERB v2 | 2 |
+
+Their code is never copied here (docs/licensing.md): the installer downloads it onto the printer at one pinned commit
+each (`UNIT_PROGRAMS`: Happy Hare `70aa90fb9aa1…` on main, AFC `5ea84ea6fab7…` on main; Happy Hare 3 `883a01198a3f…`
+was read too, but its installer only asks interactively, so Bench never installs it). Mainsail's update entry for
+either is taken out of `moonraker.conf`, so neither moves past the version Bench tested. Removing Bench gives it
+back: the unit stays set up, its update entry returns to `moonraker.conf` and its copy goes back on its branch, so
+Mainsail updates it again. (Put it back takes the unit itself out instead.)
+
 ## Settings
 
 In the same file, all optional:
@@ -101,4 +143,5 @@ In the same file, all optional:
 
 Tested on hardware with one ACE Pro: loads, unloads, changes from the screen and two-color prints. Not tried on
 hardware yet: two ACE Pros on one printer, and Happy Hare and AFC (built from their documented status and
-commands, tried in the simulator), including Check and measure. Installing Happy Hare or AFC for you comes next. See `units/README.md` for how the service is put together.
+commands, tried in the simulator), including Check and measure and setting one up from the screen (the simulator's
+`unit_setup` and `unit_setup_fails` scenarios). See `units/README.md` for how the service is put together.

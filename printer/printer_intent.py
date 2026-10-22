@@ -215,6 +215,10 @@ BRING_QUIET = 30                # seconds a run may take to say who it is before
 ROLE_ACTIONS = ("role_box", "role_back")
 ROLE_RUN = "role-run.jsonl"
 BOX_PORT = 8088                 # the Bench app's port on a box (installer: the controller's serve port)
+# Setting a filament unit up (design/unit-setup/, B): `elyir-bench --json unit scan|install|putback`, followed like a
+# bring run; each line it says goes to the tracker's setup routine (unit_setup.py)
+UNIT_RUN = "unit-run.jsonl"
+UNIT_JOBS = {"unit_scan": ["scan"], "unit_putback": ["putback"]}
 
 
 def switch_failure(report: str) -> Optional[str]:
@@ -319,6 +323,7 @@ class PrinterIntent:
         # Finish setting up: rows closed with ×, how the screen row ended (done | kept_klipperscreen), both kept
         # at elyir-bench/setup; the trial and the include while they run
         self.installer_state = INSTALLER_STATE
+        self._unit_run: Optional[Dict[str, Any]] = None   # the installer command a unit setup is running
         self._objects: list = []                  # Klipper's objects, read at each ready
         self._setup_dismissed: list = []
         self._screen_outcome: Optional[str] = None
@@ -734,6 +739,7 @@ class PrinterIntent:
             self._check_trial()
             self._bring_tick()
             self._role_tick()
+            self._unit_tick()
             if self._ticks % CLOUD_TICKS == CLOUD_TICKS // 3:
                 self._cloud_tick()
             self._cloud_say_tick()
@@ -919,10 +925,16 @@ class PrinterIntent:
     def _read_setup_files(self) -> None:
         """What the installer found this board can do (state.json, as its last apply saved it), and what
         elyir-bench.conf says the printer's screen shows: elyir-bench | klipperscreen | none."""
+        self.tracker.unit_installer = os.access(self.cli, os.X_OK)
         try:
             with open(self.installer_state) as f:
-                exp = json.load(f).get("expectations")
+                st = json.load(f)
+            exp = st.get("expectations")
             self._board_seen = exp if isinstance(exp, dict) else None
+            kept = st.get("unit_kept")
+            if self._unit_run is None:
+                self.tracker.unit_kept = ({k: kept.get(k) for k in ("unit", "board", "slots", "program", "when")}
+                                          if isinstance(kept, dict) else None)
         except (OSError, ValueError, AttributeError):
             self._board_seen = None
         self._panel_seen = None
@@ -1501,6 +1513,59 @@ class PrinterIntent:
                 return True
         return time.time() - r["since"] < BRING_QUIET   # hasn't said who it is yet
 
+    # ---- setting a filament unit up (design/unit-setup/, B, stage 2) -------------------------------------------
+
+    def _unit_start(self, job: str, args: Optional[Dict[str, Any]]) -> None:
+        """`elyir-bench --json unit …` apart from Moonraker, like a bring run; its lines go to the run file."""
+        cmd = UNIT_JOBS.get(job) or ["install", "--unit", str(args["unit"]), "--board", str(args["board"]),
+                                     "--slots", str(args["slots"]), "--mcu", str(args["mcu"]), "--kind", str(args["kind"])]
+        folder = self._bring_folder()
+        run, log = os.path.join(folder, UNIT_RUN), os.path.join(folder, "unit-run.log")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            with open(run, "w"):
+                pass
+            subprocess.run(["/bin/sh", "-c", 'exec "$0" "$@" >"$RUN" 2>>"$LOG" </dev/null &', self.cli, "--json", "unit",
+                            *cmd], env=dict(os.environ, RUN=run, LOG=log), timeout=10, check=True)
+        except Exception as e:
+            logging.info("intent: elyir-bench unit %s didn't start: %s", cmd[0], e)
+            self.tracker.unit_setup_heard({"failed": "Bench's installer didn't start."})
+            self._publish(force=True)
+            return
+        self._unit_run = {"pid": None, "since": time.time(), "seen": 0}
+
+    def _unit_tick(self) -> None:
+        r = self._unit_run
+        if r is None:
+            return
+        try:
+            with open(os.path.join(self._bring_folder(), UNIT_RUN)) as f:
+                lines = f.read().splitlines()
+        except OSError:
+            lines = []
+        final = None
+        for line in lines[r["seen"]:]:
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(msg, dict):
+                continue
+            if "started" in msg:
+                r["pid"] = msg.get("pid")
+            elif "progress" not in msg:
+                final = msg
+            self.tracker.unit_setup_heard(msg)
+        r["seen"] = len(lines)
+        if final is None and not self._bring_alive(r):
+            self.tracker.unit_setup_heard({"failed": "It stopped without saying why."})
+            final = {}
+        if final is not None:
+            self._unit_run = None
+            self._read_setup_files()
+            self._drive()
+        self._publish(force=True)
+
     # ---- printer or Bench Box (design/role/, B) ----------------------------------------------
 
     def _role_action(self, action: str) -> None:
@@ -1817,6 +1882,8 @@ class PrinterIntent:
                 self.eventloop.create_task(self._run_unit_step(script))
             elif kind == "unit":
                 self.eventloop.create_task(self._run_unit(script))
+            elif kind in ("unit_scan", "unit_install", "unit_putback"):
+                self._unit_start(kind, script)
             else:
                 self.eventloop.create_task(self._run_gcode_logged(script))
 
@@ -1965,6 +2032,9 @@ class PrinterIntent:
             self._drive()
         elif kind == P.UNIT_CHECK:
             self.tracker.unit_check_input(payload)
+            self._drive()
+        elif kind == P.UNIT_SETUP:
+            self.tracker.unit_setup_input(payload)
             self._drive()
         elif kind == P.COLOUR:
             self.tracker.colour_input(payload)

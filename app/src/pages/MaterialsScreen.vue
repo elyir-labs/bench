@@ -56,7 +56,7 @@
     <OneSpool v-if="one" :spool="one" :feeding="feeding" />
     <template v-else>
     <p class="sub away" v-if="door.away">Load, switch and edit spools at the printer.</p>
-    <p class="sub" v-if="!spools.length">No filament unit found. Spools will appear here when one is connected.</p>
+    <p class="sub" v-if="!spools.length && !setupOffer">No filament unit found. Spools will appear here when one is connected.</p>
 
     <!-- An untagged spool was pushed into an empty slot: ask once (design/slots/, B) -->
     <div v-if="newSpool && !door.away" class="notice head" role="status">
@@ -134,6 +134,17 @@
     <SpoolSheet :spool="editing" :unit-name="unitNameOf(editing)" :start-editing="editStart" @close="editing = null; editStart = false" />
     <DrySheet :unit="dryingUnit" @close="dryingUnit = null" />
     </template>
+
+    <!-- No unit in Klipper: Bench sets a Happy Hare or AFC unit up (design/unit-setup/, B, stage 2) -->
+    <div v-if="setupOffer && !door.away" class="setline unitline">
+      <span class="w">
+        <b>No filament unit found</b>
+        <span>{{ setupOffer.why ?? 'A Box Turtle, Night Owl, ERCF or Tradrack: Bench sets it up.' }}</span>
+      </span>
+      <button class="a-btn ghost" :disabled="!!setupOffer.why || !!store.busyAction" @click="store.act(setupOffer.action)">
+        {{ store.busyAction === setupOffer.action.id ? '…' : setupOffer.action.label }}
+      </button>
+    </div>
   </section>
 </template>
 
@@ -165,6 +176,7 @@ const editStart = ref(false)
 const dryingUnit = ref<IntentUnit | null>(null)
 const newSpool = computed(() => store.intent?.new_spool ?? null)
 const carryOn = computed(() => units.value?.carry_on ?? null)
+const setupOffer = computed(() => store.intent?.unit_setup_offer ?? null)
 // Slots grouped by unit; an intent layer older than design/slots/ has no list: one grid, no unit line
 const groups = computed(() => {
   const list = units.value?.list ?? []
@@ -280,6 +292,7 @@ function nameOf(s: IntentSpool): string {
 .setline .w { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .setline b { font-size: calc(14 * var(--u) + 3px); font-weight: 600; }
 .setline .w span { font-size: calc(11 * var(--u) + 3px); color: var(--a-ink-3); }
+.unitline .a-btn { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
 .choice.plain { padding-left: calc(14 * var(--u) + 5px); }
 @media (max-width: 640px) { .grid { grid-template-columns: 1fr 1fr; } }
 /* Phones: each unit a list, one slot per row */

@@ -77,6 +77,7 @@ class UnitCheck:
         self.tube_why: Optional[str] = None
         self.raw = ""
         self.started = now
+        self.frame: Optional[Dict[str, Any]] = None   # part of setting the unit up (unit_setup.py): its title and rows
 
     # ---- inputs ------------------------------------------------------------------------
 
@@ -356,13 +357,16 @@ class UnitCheck:
             return f"Check how {self.name} is wired and that each slot has filament, then check it again."
         if self.tube is None:
             return f"{self.name} is checked. The tube to the head still needs measuring."
-        return f"{self.name} is checked and measured. Load spools, and Bench prints in several colors."
+        done = "set up, checked and measured" if self.frame else "checked and measured"
+        return f"{self.name} is {done}. Load spools, and Bench prints in several colors."
 
     def _rows(self) -> List[Dict[str, str]]:
         rows = []
         cmds = self._cmds()
         version = cmds.version(self._status()) if cmds is not None else None
-        if version:
+        if self.frame:
+            rows.append({"title": self.frame["program"], "sub": "Bench moves it to a newer version only after testing it."})
+        elif version:
             rows.append({"title": version, "sub": f"Bench drives {self.name} through it."})
         ok, total = self.ok_slots(), len(self.slots)
         skipped = [g for g in self.slots if self.marks[g]["state"] == "skipped"]
@@ -382,6 +386,8 @@ class UnitCheck:
             rows.append({"title": f"The tube to the head · {round(self.tube)} mm", "sub": "Measured just now."})
         else:
             rows.append({"title": "The tube to the head · not measured", "sub": self.tube_why or "Check and measure again to try."})
+        if self.frame and self.frame.get("kept"):
+            rows.append({"title": "Your old settings · kept", "sub": "Care › Filament unit › Put it back."})
         return rows
 
     def view(self, now: Optional[float] = None) -> Dict[str, Any]:
@@ -414,8 +420,9 @@ class UnitCheck:
             "unit_index": self.index,
             "driver": self.driver,
             "step": step,
-            "n": {"slots": 1, "measure": 2, "ready": 3}[step],
-            "of": 3,
+            "n": ({"slots": 4, "measure": 4, "ready": 5} if self.frame else {"slots": 1, "measure": 2, "ready": 3})[step],
+            "of": 5 if self.frame else 3,
+            "title": self.frame["title"] if self.frame else None,
             "headline": w["headline"],
             "detail": w["detail"],
             "tone": w["tone"],

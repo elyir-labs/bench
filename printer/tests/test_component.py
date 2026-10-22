@@ -123,7 +123,7 @@ class FakeConfig:
         return {"printer_name": "Studio"}.get(key, default)
 
 
-def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "elyir_bench_care.py", "orca_profile.py")):
+def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "orca_profile.py")):
     """Load printer_intent.py as moonraker.components.printer_intent, as Moonraker does."""
     pkg = tmp_path / "moonraker"
     (pkg / "components").mkdir(parents=True)
@@ -252,7 +252,7 @@ def test_care_seeds_once_comes_due_and_done_or_later_clear_it(component):
 
 
 def test_without_the_care_module_everything_else_still_works(tmp_path, monkeypatch):
-    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py"))
+    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py"))
     run(server.handlers["server:klippy_ready"]())
     server.kc.state = KlippyState.READY
     run(comp._refresh_care())
@@ -448,3 +448,34 @@ def test_the_unit_check_reads_happy_hares_gate_sensors_and_afcs_hubs(component):
     assert seen["filament_switch_sensor mmu_pre_gate_1"] == ["filament_detected"]
     assert "filament_switch_sensor runout" not in seen
     assert "AFC_hub Turtle_1" in seen and seen["AFC_hub Turtle_1"] is None
+
+
+def test_a_unit_setup_runs_the_installer_apart_and_hands_each_line_to_the_tracker(component, tmp_path):
+    server, comp = component
+    state = tmp_path / "elyir-bench" / "state.json"
+    state.parent.mkdir()
+    state.write_text(json.dumps({"unit_kept": {"unit": "ercf_v2", "program": "Happy Hare 4.1", "path": "/x", "changed": {}}}))
+    comp.installer_state = str(state)
+    comp.cli = str(tmp_path / "elyir-bench-cli")
+    seen = tmp_path / "args"
+    Path(comp.cli).write_text(
+        f"#!/bin/sh\necho \"$@\" > {seen}\n"
+        "echo '{\"started\": \"unit-install\", \"pid\": 1}'\n"
+        "echo '{\"progress\": {\"id\": \"fetch\", \"step\": \"Fetching Happy Hare 4.1\", \"done\": 0, \"of\": 4}}'\n"
+        "echo '{\"failed\": \"Klipper didn'\"'\"'t start with it.\"}'\n")
+    Path(comp.cli).chmod(0o755)
+    comp._read_setup_files()
+    assert comp.tracker.unit_installer and comp.tracker.unit_kept["program"] == "Happy Hare 4.1"
+    heard = []
+    comp.tracker.unit_setup_heard = heard.append
+    comp._unit_start("unit_install", {"unit": "ercf_v2", "board": "mmb_1_1", "slots": 8,
+                                      "mcu": "/dev/serial/by-id/usb-Klipper_stm32g0b1xx_1-if00", "kind": "happy_hare"})
+    for _ in range(50):
+        if seen.exists() and "failed" in (tmp_path / "elyir-bench" / "state" / "unit-run.jsonl").read_text():
+            break
+        time.sleep(0.05)
+    comp._unit_tick()
+    assert seen.read_text().split() == ["--json", "unit", "install", "--unit", "ercf_v2", "--board", "mmb_1_1", "--slots",
+                                        "8", "--mcu", "/dev/serial/by-id/usb-Klipper_stm32g0b1xx_1-if00", "--kind", "happy_hare"]
+    assert [list(m)[0] for m in heard] == ["started", "progress", "failed"]
+    assert comp._unit_run is None

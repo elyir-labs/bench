@@ -44,6 +44,7 @@ def _sibling(name: str):
 
 filament_units = _sibling("filament_units")
 unit_check = _sibling("unit_check")
+unit_setup = _sibling("unit_setup")
 
 SCHEMA_VERSION = 1
 
@@ -983,6 +984,9 @@ class IntentTracker:
         self._change: Optional[Dict[str, Any]] = None   # changing filament by hand, or checking after a swap
         self._change_queue: List[tuple] = []          # commands for whoever runs work() next
         self._check: Optional[Any] = None              # checking and measuring a Happy Hare or AFC unit (unit_check.py)
+        self._setup: Optional[Any] = None              # setting one up from the screen (unit_setup.py)
+        self.unit_installer = False   # the installer can set a unit up here (the component sets it: its command is there)
+        self.unit_kept: Optional[Dict[str, Any]] = None   # the config from before a unit was set up, for Put it back
         self._keep_warm_until: Optional[float] = None  # heaters go off then, unless a print started
         self._warm: Optional[Dict[str, Any]] = None   # warming up before a print: material, targets, when warm
         self._hands: Optional[Dict[str, Any]] = None  # a job from Move and heat holding the printer: kind, until
@@ -1266,8 +1270,8 @@ class IntentTracker:
             return "Not while it's printing."
         if self._change is not None or self._swap is not None:
             return "Not while it's changing filament."
-        if self._checking():
-            return "Not while it's checking the filament unit."
+        if self._unit_busy():
+            return "Not while it's checking the filament unit." if self._checking() else "Not while a filament unit is set up."
         return None
 
     def power_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> None:
@@ -1692,6 +1696,10 @@ class IntentTracker:
         """A unit check is going (its Ready summary alone holds nothing up)."""
         return self._check is not None and self._check.phase != "ready"
 
+    def _unit_busy(self) -> bool:
+        """A unit check is going, or a unit is being set up or put back: nothing else moves the printer."""
+        return self._checking() or (self._setup is not None and self._setup.step in ("installing", "putting_back"))
+
     def unit_check_offer(self, index: int) -> Optional[Dict[str, Any]]:
         """Check and measure for one unit: {action, why} with why saying why not right now, or None when the unit's
         driver has no check (an ACE, or a unit Bench only watches)."""
@@ -1741,6 +1749,102 @@ class IntentTracker:
             self._check = None
             return True
         return self._check.answer(str(op))
+
+    # ---- setting a Happy Hare or AFC unit up from the screen (design/unit-setup/, B, stage 2) ---------------
+
+    def _busy_why(self) -> Optional[str]:
+        if self.klippy_state != "ready":
+            return "The printer isn't ready."
+        if (self.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
+            return "Not while it's printing."
+        if self._change is not None or (self._swap is not None and not self._swap.get("error")):
+            return "Not while the filament is changing."
+        if self._hands is not None or self._power is not None or self._checking():
+            return "Not while the printer is busy."
+        if self._setup is not None:
+            return "It's setting a unit up now."
+        return None
+
+    def unit_setup_offer(self) -> Optional[Dict[str, Any]]:
+        """Set one up, on a printer with no filament unit (never beside an ACE Pro, which needs no setup, or on a
+        printer Bench only watches): {action, why}, or None when it isn't offered at all."""
+        if not self.unit_installer or self.units_watch_only or self.has_unit is not False or self.units_on_usb:
+            return None
+        return {"action": _action("unit_setup_start", "Set one up"), "why": self._busy_why()}
+
+    def unit_putback_offer(self) -> Optional[Dict[str, Any]]:
+        """Put it back: the config from before a unit was set up, while a copy is kept."""
+        if not self.unit_installer or not self.unit_kept:
+            return None
+        why = self._busy_why()
+        return {"action": _action("unit_setup_putback", "Put it back"), "why": why,
+                "line": why or f"Your settings from before {self.unit_kept.get('program') or 'the unit'} was set up."}
+
+    def unit_setup_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> bool:
+        now = time.time() if now is None else now
+        op = str(payload.get("op"))
+        if op == "start":
+            offer = self.unit_setup_offer()
+            if offer is None or offer["why"]:
+                return False
+            self._setup = unit_setup.UnitSetup(self.printer_name, now)
+            return True
+        s = self._setup
+        if op == "putback" and (s is None or s.step == "put_back"):
+            offer = self.unit_putback_offer()
+            if offer is None or offer["why"]:
+                return False
+            self._setup = unit_setup.UnitSetup(self.printer_name, now, step="putting_back")
+            return True
+        if s is None:
+            return False
+        if op == "close":
+            if s.running in ("unit_install", "unit_putback") or (s.step == "installed" and not s.why):
+                return False
+            self._setup = None
+            return True
+        if op in ("install", "retry") and (self.klippy_state != "ready"
+                                           or (self.status.get("print_stats") or {}).get("state") in ("printing", "paused")):
+            return False
+        return s.answer(op, {k: v for k, v in payload.items() if k != "op"}, bool(self.unit_kept))
+
+    def unit_setup_heard(self, msg: Dict[str, Any], now: Optional[float] = None) -> None:
+        """A line from the installer command the setup started (the component and the simulator pass each one)."""
+        now = time.time() if now is None else now
+        s = self._setup
+        job = s.running if s is not None else None
+        if "kept" in msg and "catalog" in msg:
+            self.unit_kept = msg["kept"]
+        if job == "unit_install" and isinstance(msg.get("result"), dict):
+            r = msg["result"]
+            self.unit_kept = {**{k: r.get(k) for k in ("unit", "board", "slots", "program")}, "when": now}
+        if job == "unit_putback" and isinstance(msg.get("result"), dict):
+            self.unit_kept = None
+        if s is not None:
+            s.heard(msg, now)
+
+    def _setup_work(self, now: float) -> List[tuple]:
+        s = self._setup
+        if s is None:
+            return []
+        out = s.take_jobs()
+        if s.handed_over:
+            if self._check is None:
+                self._setup = None   # the check is done (or stopped): so is the setup
+            return out
+        if s.step == "installed" and not s.why:
+            fu = self.unit_state()
+            units = self._units_raw()
+            if self.klippy_state == "ready" and fu and fu["driver"] in ("happy_hare", "afc") and units:
+                if self.begin_unit_check(units[0]["index"], now):
+                    self._check.frame = s.check_frame(self.unit_kept)
+                    s.handed_over = True
+                else:
+                    s.why = ((self.unit_check_offer(units[0]["index"]) or {}).get("why")
+                             or "It's set up, but Bench can't check it right now. Check and measure is in Care.")
+            elif now - (s.done_at or now) > unit_setup.HANDOVER_SECONDS:
+                s.why = "The unit didn't show up in Klipper. Check its cable, then look in Care."
+        return out
 
     def _check_work(self, now: float) -> List[tuple]:
         c = self._check
@@ -2203,7 +2307,7 @@ class IntentTracker:
         """Swap the spool in one slot of a filament unit (design/slots/, B). Idle only. Out of the
         head first if it's there, then pulled back until the slot reads empty; work() drives it."""
         if (self._change is not None or self._swap is not None or self.direct or self.klippy_state != "ready"
-                or self._checking()):
+                or self._unit_busy()):
             return False
         if (self.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
             return False
@@ -2885,6 +2989,7 @@ class IntentTracker:
         out += self._update_outage(now)
         out += self._assist_work()
         out += self._check_work(now)
+        out += self._setup_work(now)
         if self._keep_warm_until is not None:
             pstate = (self.status.get("print_stats") or {}).get("state")
             if pstate in ("printing", "paused") or self._change is not None:
@@ -3059,8 +3164,8 @@ class IntentTracker:
             return "Not while it's printing."
         if self._change is not None or self._swap is not None:
             return "Not while the filament is changing."
-        if self._checking():
-            return "Not while it's checking the filament unit."
+        if self._unit_busy():
+            return "Not while it's checking the filament unit." if self._checking() else "Not while a filament unit is set up."
         if self._power is not None:
             return "Not while it's turning off."
         return None
@@ -4375,6 +4480,11 @@ class IntentTracker:
             else:
                 detail = "Keep clear of the nozzle."
 
+        elif self._setup is not None and self._setup.step in ("installing", "putting_back"):
+            state, phase, actions = "preparing", "unit_setup", []
+            headline = "Setting up a filament unit" if self._setup.step == "installing" else "Putting the old settings back"
+            detail = self._setup.why or ""
+
         elif self._checking():
             w = self._check.words(now)
             state, phase, headline, detail, actions = "preparing", w["phase"], w["headline"], w["detail"] or "", w["actions"]
@@ -4650,6 +4760,10 @@ class IntentTracker:
             "hands":self._hands_view(now) if state == "ready" or self._hands is not None else None,
             "light": self._light_view() if self.klippy_state == "ready" else None,
             "unit_check": self._check.view(now) if self._check is not None else None,
+            "unit_setup": (self._setup.view(now, self.unit_kept)
+                           if self._setup is not None and not self._setup.handed_over else None),
+            "unit_setup_offer": self.unit_setup_offer(),
+            "unit_putback": self.unit_putback_offer(),
             "printer": {
                 "name": self.printer_name,
                 "connected": self.klippy_state == "ready",
@@ -4912,6 +5026,8 @@ class ActionPlan:
     OUTAGE = "outage"        # payload {"op": "keep"}, for IntentTracker.outage_input (design/power-loss/)
     LOST = "lost"            # payload {"op": "dismiss"}, for IntentTracker.lost_input
     LIGHT = "light"          # payload {"op": "on" | "off" | "try" | "pick", "name"?}, for IntentTracker.light_input
+    UNIT_SETUP = "unit_setup"   # payload {"op": "start" | "unit" | "next" | "board" | "slots" | "port" | "scan" | "back" |
+                                # "install" | "retry" | "putback" | "close", ...}, for IntentTracker.unit_setup_input
     UNIT_CHECK = "unit_check"   # payload {"op": "start" (unit) | "in" | "skip" | "retry" | "stop" | "done"}, for
                                 # IntentTracker.unit_check_input (design/unit-setup/, B)
     NONE = "none"
@@ -4938,6 +5054,8 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         return [(ActionPlan.RESUME, None)]
     if action_id.startswith("change_"):
         return plan_change(action_id, args, tracker)
+    if action_id.startswith("unit_setup_"):
+        return plan_unit_setup(action_id, args, tracker)
     if action_id.startswith("unit_check_"):
         return plan_unit_check(action_id, args, tracker)
     if action_id == "colour_choose":
@@ -4974,7 +5092,7 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         material = _material_key(args.get("material"))
         if (tracker.klippy_state != "ready" or not material or material not in WARM_BED
                 or (tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused")
-                or tracker._change is not None or tracker._swap is not None or tracker._checking()):
+                or tracker._change is not None or tracker._swap is not None or tracker._unit_busy()):
             return []
         return [(ActionPlan.WARM, {"op": "start", "material": material})]
     if action_id in FIRST_LAYER_OPS:
@@ -5054,7 +5172,7 @@ def plan_change(action_id: str, args: Dict[str, Any], tracker: IntentTracker) ->
         kind = str(args.get("kind") or "change")
         if kind not in ("change", "unload", "load") or not tracker.direct:
             return []
-        if tracker._change is not None or tracker._swap is not None or tracker._checking():
+        if tracker._change is not None or tracker._swap is not None or tracker._unit_busy():
             return []
         ps = tracker.status.get("print_stats") or {}
         paused = bool((tracker.status.get("pause_resume") or {}).get("is_paused"))
@@ -5080,6 +5198,31 @@ def plan_change(action_id: str, args: Dict[str, Any], tracker: IntentTracker) ->
 
 UNIT_CHECK_OPS = {"unit_check_in": "in", "unit_check_skip": "skip", "unit_check_retry": "retry",
                   "unit_check_stop": "stop", "unit_check_done": "done"}
+
+
+UNIT_SETUP_ARGS = {"unit_setup_unit": "unit", "unit_setup_board": "board", "unit_setup_slots": "slots",
+                   "unit_setup_port": "mcu"}
+
+
+def plan_unit_setup(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> List[tuple]:
+    """Set a Happy Hare or AFC unit up, or answer the setup going on (design/unit-setup/, B, stage 2)."""
+    op = action_id[len("unit_setup_"):]
+    if op == "start":
+        offer = tracker.unit_setup_offer()
+        return [] if offer is None or offer["why"] else [(ActionPlan.UNIT_SETUP, {"op": "start"})]
+    if op == "putback" and tracker._setup is None:
+        offer = tracker.unit_putback_offer()
+        return [] if offer is None or offer["why"] else [(ActionPlan.UNIT_SETUP, {"op": "putback"})]
+    if tracker._setup is None or op not in ("unit", "next", "board", "slots", "port", "scan", "back", "install",
+                                            "retry", "putback", "close"):
+        return []
+    payload: Dict[str, Any] = {"op": op}
+    key = UNIT_SETUP_ARGS.get(action_id)
+    if key:
+        if key not in args:
+            return []
+        payload[key] = _int(args[key]) if key == "slots" else str(args[key])
+    return [(ActionPlan.UNIT_SETUP, payload)]
 
 
 def plan_unit_check(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> List[tuple]:
@@ -5178,7 +5321,7 @@ def plan_spool_move(action_id: str, args: Dict[str, Any], tracker: IntentTracker
     pstate = (tracker.status.get("print_stats") or {}).get("state")
     if pstate == "printing" or (pstate == "paused" and action_id != "mark_loaded"):
         return []
-    if (tracker._swap is not None and not tracker._swap.get("error")) or tracker._checking():
+    if (tracker._swap is not None and not tracker._swap.get("error")) or tracker._unit_busy():
         return []
     spools = {s["slot"]: s for s in tracker.spools()}
     sel = tracker._selected_slot()
@@ -5250,7 +5393,7 @@ def plan_slot(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> L
     # swapping and moving filament: idle, nothing else moving
     if (tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
         return []
-    if tracker._change is not None or (tracker._swap is not None and not tracker._swap.get("error")) or tracker._checking():
+    if tracker._change is not None or (tracker._swap is not None and not tracker._swap.get("error")) or tracker._unit_busy():
         return []
     if action_id == "swap_start":
         # the spool in the head comes out with a tool change first
