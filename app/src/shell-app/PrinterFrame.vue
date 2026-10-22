@@ -24,12 +24,15 @@
       <template v-else-if="p.reach === 'unpaired'">
         <h2 class="a-display">{{ p.name }} doesn't know this phone any more</h2>
         <p>It was removed on the printer. To use it again, add it once more from the printer's screen.</p>
-        <button class="a-btn ghost" @click="forget">Remove it from this list</button>
+        <button class="a-btn ghost" @click="emit('remove')">Remove it from this list</button>
       </template>
       <template v-else-if="p.reach === 'offline'">
         <h2 class="a-display">Can't reach {{ p.name }}</h2>
         <p>Not at home and not through the internet. It may be off, or its network may be down.</p>
-        <button class="a-btn accent" @click="retry">Try again</button>
+        <div class="acts">
+          <button class="a-btn accent" @click="retry">Try again</button>
+          <button class="a-btn ghost" @click="emit('remove')">Remove it from this list</button>
+        </div>
       </template>
     </div>
     <div v-if="!src && p && p.reach !== 'unpaired' && p.reach !== 'offline'" class="stage"><PrinterCover :p="p" /></div>
@@ -39,12 +42,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { forgetPrinter, printerById, reach, tryOtherAddress } from './printers'
+import { printerById, reach, tryOtherAddress } from './printers'
 import { handoff } from './look'
 import PrinterCover from './PrinterCover.vue'
 
 const props = defineProps<{ id: string; current: boolean }>()
-const emit = defineEmits<{ drop: [] }>()
+const emit = defineEmits<{ drop: []; remove: [] }>()
 const route = useRoute()
 const router = useRouter()
 const frame = ref<HTMLIFrameElement | null>(null)
@@ -172,11 +175,6 @@ onBeforeUnmount(() => { window.removeEventListener('message', onMessage); window
 function retry() {
   if (p.value) reach(p.value.id)
 }
-async function forget() {
-  if (!p.value) return
-  await forgetPrinter(p.value.id)
-  router.replace('/')
-}
 </script>
 
 <style scoped>
@@ -187,6 +185,7 @@ async function forget() {
 .away-note h2 { font-size: 26px; margin: 0; }
 .away-note p { color: var(--a-ink-2); font-size: 17px; line-height: 1.45; margin: 0; }
 .away-note .a-btn { flex: none; text-decoration: none; }
+.acts { display: flex; flex-wrap: wrap; gap: 10px; }
 .stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .lift-leave-active { transition: opacity .25s ease; }
 .lift-leave-to { opacity: 0; }

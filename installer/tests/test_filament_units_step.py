@@ -176,6 +176,20 @@ def test_auto_drives_an_ace_nothing_else_drives(tmp_path, monkeypatch):
     assert a.resolve_units(dict(c.facts, ace_units=0), auto)["filament_units"] == "elyir"
 
 
+def test_auto_and_the_question_leave_an_ace_on_afc_or_happy_hare_alone(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    monkeypatch.setattr(a.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda prompt: (_ for _ in ()).throw(AssertionError("asked")))
+    monkeypatch.setattr(a, "load_state", lambda: {})
+    for include, who in (("[include AFC/*.cfg]", "AFC"), ("[include mmu/base/*.cfg]", "Happy Hare")):
+        (config / "printer.cfg").write_text(f"[include mainsail.cfg]\n{include}\n[printer]\nkinematics: corexy\n")
+        assert a.other_unit_driver(c.facts) == who
+        s = a.resolve_units(dict(c.facts, ace_units=1), {**c.s, "filament_units": "auto"})
+        assert s["filament_units"] == "klipperace" and a.ask_units(dict(c.facts, ace_units=1), s) == s
+    (config / "printer.cfg").write_text("#[include AFC/*.cfg]\n[printer]\nkinematics: corexy\n")
+    assert a.other_unit_driver(c.facts) is None
+
+
 def test_auto_needs_the_head_sensor(tmp_path, monkeypatch):
     c, config, *_ = rig(tmp_path, monkeypatch)
     (config / "printer.cfg").write_text("[printer]\nkinematics: corexy\n")

@@ -1,6 +1,6 @@
 """First layer: squish more, squish less (design/first-layer/, direction B). On layers 1 to 3 Now offers
 Further / Closer (0.025 mm a press, SET_GCODE_OFFSET Z_ADJUST ... MOVE=1) with the total in words; at the
-end "Keep the new first layer for next time?" saves it in [save_variables] for the shared PRINT_START to
+end "Keep this first layer?" saves it in [save_variables] for the shared PRINT_START to
 apply, recording whether Z was found by the Eddy's scan or by tap. Care can go back; when the way of finding
 Z changes, Now asks once whether to clear the old value."""
 
@@ -170,10 +170,10 @@ def test_the_end_takes_the_nudges_back_out_and_asks_to_keep():
     i = t.intent(now=101.0)
     assert i["state"] == "finished"
     keep = i["first_layer"]["keep"]
-    assert keep["headline"] == "Keep the new first layer for next time?"
+    assert keep["headline"] == "Keep this first layer?"
     assert keep["detail"] == "You moved it a little further from the bed (+0.300 mm)."
-    assert [x["id"] for x in keep["actions"]] == ["keep_first_layer", "just_this_once"]
-    assert [x["label"] for x in keep["actions"]] == ["Keep it", "Just this once"]
+    assert [x["id"] for x in keep["actions"]] == ["keep_first_layer", "keep_for_sheet", "just_this_once"]
+    assert [x["label"] for x in keep["actions"]] == ["For every print", "Only on this sheet", "Just this once"]
 
 
 def test_keep_saves_it_for_print_start_measured_against_scan():
@@ -331,3 +331,87 @@ def test_the_tap_stage_is_leveling():
                      "gcode_macro _PRINT_START": {"stage": "tap"}}, now=1.0)
     i = t.intent(now=1.0)
     assert i["state"] == "preparing" and i["phase"] == "leveling"
+
+
+# ---- sheets (design/first-layer-sheets/, C) ---------------------------------------------------
+
+def act_with(t, action, now=2.0, **args):
+    plan = a.plan_action(action, args, t)
+    assert plan, f"{action} {args} was refused"
+    for kind, payload in plan:
+        assert t.first_layer_input(payload, now=now)
+    sent = [s for _, s in t.work(now=now)]
+    klipper(t, sent, now=now)
+    return sent
+
+
+def nudged_and_finished(t, by="squish_more", times=2, kept_offset=None):
+    start_printing(t, kept_offset=kept_offset)
+    for _ in range(times):
+        act(t, by)
+    finish(t)
+
+
+def test_only_on_this_sheet_keeps_a_value_for_that_sheet_and_puts_it_on():
+    t = tracker(saved={"first_layer_z": 0.0, "first_layer_against": "scan", "first_layer_history": []})
+    nudged_and_finished(t)
+    keep = fl(t)["keep"]
+    assert keep["sheet"] is None and keep["sheets"][:3] == ["Smooth PEI", "Textured PEI", "Satin PEI"]
+    act_with(t, "keep_for_sheet", now=1000.0, name="Textured PEI")
+    v = t.status["save_variables"]["variables"]
+    assert v["first_layer_sheets"] == {"Textured PEI": {"z": -0.05, "at": 1000}} and v["first_layer_sheet"] == "Textured PEI"
+    assert v["first_layer_z"] == 0.0   # every other print stays as it was
+    f = fl(t)
+    assert f["keep"] is None
+    assert [(x["name"], x["mm"], x["on"]) for x in f["kept"]["sheets"]] == [("Textured PEI", "−0.050 mm", True)]
+    assert [x["label"] for x in f["kept"]["sheets"][0]["actions"]] == ["Forget it"]
+    assert f["sheet"]["on"] == "Textured PEI" and [o["name"] for o in f["sheet"]["options"]] == ["Textured PEI", ""]
+
+
+def test_a_print_on_a_sheet_starts_from_its_value_and_keeps_into_it():
+    saved = {"first_layer_z": 0.1, "first_layer_against": "scan", "first_layer_history": [0.0],
+             "first_layer_sheets": {"Textured PEI": {"z": -0.05, "at": 1000}}, "first_layer_sheet": "Textured PEI"}
+    t = tracker(saved=saved)
+    nudged_and_finished(t, times=1, kept_offset=-0.05)
+    keep = fl(t)["keep"]
+    assert keep["headline"] == "Keep it for the Textured PEI sheet?" and keep["sheet"] == "Textured PEI"
+    assert [x["label"] for x in keep["actions"]] == ["Keep it", "Just this once"]
+    act(t, "keep_first_layer", now=2000.0)
+    v = t.status["save_variables"]["variables"]
+    assert v["first_layer_sheets"]["Textured PEI"]["z"] == -0.075 and v["first_layer_z"] == 0.1
+
+
+def test_print_asks_which_sheet_only_when_the_values_differ():
+    same = {"first_layer_z": 0.0, "first_layer_against": "scan", "first_layer_sheets": {"Smooth PEI": {"z": 0.0, "at": 1}}}
+    assert fl(tracker(saved=same))["sheet"] is None
+    differ = dict(same, first_layer_sheets={"Smooth PEI": {"z": 0.0, "at": 1}, "Textured PEI": {"z": -0.05, "at": 2}},
+                  first_layer_sheet="Textured PEI")
+    t = tracker(saved=differ)
+    assert [o["name"] for o in fl(t)["sheet"]["options"]] == ["Smooth PEI", "Textured PEI", ""]
+    act_with(t, "first_layer_sheet", name="Smooth PEI")
+    assert t.status["save_variables"]["variables"]["first_layer_sheet"] == "Smooth PEI"
+    act_with(t, "first_layer_sheet", name="")
+    assert fl(t)["sheet"]["on"] == ""
+    assert refused_with(t, "first_layer_sheet", name="Glass")
+
+
+def test_forgetting_the_sheet_on_the_bed_goes_back_to_every_print():
+    t = tracker(saved={"first_layer_z": 0.1, "first_layer_against": "scan",
+                       "first_layer_sheets": {"Textured PEI": {"z": -0.05, "at": 1}}, "first_layer_sheet": "Textured PEI"})
+    act_with(t, "first_layer_forget", name="Textured PEI")
+    v = t.status["save_variables"]["variables"]
+    assert v["first_layer_sheets"] == {} and v["first_layer_sheet"] == ""
+    assert fl(t)["sheet"] is None
+
+
+def test_a_sheet_name_is_plain_and_short():
+    t = tracker(saved={"first_layer_z": 0.0, "first_layer_against": "scan"})
+    nudged_and_finished(t)
+    for bad in ("", "x" * 30, "Bad'quote", '"', "a;b"):
+        assert refused_with(t, "keep_for_sheet", name=bad)
+    act_with(t, "keep_for_sheet", name="Satin 0.4")
+    assert t.status["save_variables"]["variables"]["first_layer_sheet"] == "Satin 0.4"
+
+
+def refused_with(t, action, **args):
+    return a.plan_action(action, args, t) == []

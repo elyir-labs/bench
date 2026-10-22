@@ -1,5 +1,6 @@
 """Filament units in one shape, whatever drives them (design/ace-driver/, A): KlipperACE's `ace` with several
-units or one, Happy Hare's `mmu` as Rinkhals reports a Kobra's unit, and the commands each driver takes."""
+units or one, Happy Hare's `mmu` (a real Happy Hare, or Rinkhals reporting a Kobra's unit), AFC's lanes, and the
+commands each driver takes."""
 
 import os
 import sys
@@ -67,7 +68,7 @@ def test_happy_hare_as_rinkhals_reports_a_kobras_unit_is_watched_not_driven():
     assert [(s["status"], s["color"], s["material"]) for s in u["slots"]] == [
         ("ready", "#D9534F", "PLA"), ("ready", "#F1F1F1", "PETG"), ("empty", None, None), ("unknown", None, None)]
     assert u["units"][0]["temp"] == 44 and u["units"][0]["dryer"]["status"] == "drying"
-    assert fu.commands(u) is None
+    assert fu.commands(u, watch_only=True) is None
     assert fu.read({"mmu": {"enabled": True, "num_gates": 0}}) is None
     assert fu.read({"mmu": {"enabled": False, "num_gates": 4}}) is None
 
@@ -96,6 +97,7 @@ def test_the_gcode_klipperace_takes():
 def kobra_tracker():
     t = a.IntentTracker("Kobra 3")
     t.has_unit = True
+    t.units_watch_only = True   # as the Bench Box sets it
     t.set_klippy_state("ready")
     t.update_status({"print_stats": {"state": "standby"}, **KOBRA_MMU})
     return t

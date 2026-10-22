@@ -247,6 +247,7 @@ class Standin:
         self.renamed: Callable[[str], Any] = lambda name: None         # the box keeps a new name (its list, its door)
         self.tracker = engine.IntentTracker(name)
         self.tracker.has_unit = False     # one spool, until Rinkhals reports an ACE Pro (mmu, read by _unit)
+        self.tracker.units_watch_only = True   # Rinkhals reports Happy Hare's shape but takes none of its commands
         self.notifier = engine.Notifier(f"{pid}{int(time.time())}")
         self.events: List[Dict[str, Any]] = []
         self.status: Dict[str, Any] = {}

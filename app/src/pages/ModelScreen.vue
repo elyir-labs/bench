@@ -209,6 +209,12 @@
             <span class="v"><span class="one"><i class="dot" :style="{ '--c': spool?.color || 'transparent' }"></i>{{ spool?.name }}</span><small>{{ spoolNote }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
           </button>
+          <!-- design/first-layer-sheets/, C: only when the sheets' first layers differ -->
+          <button v-if="sheetPick" class="row" :disabled="!allowedHere('first_layer_sheet')" @click="open = 'sheet'">
+            <span class="k">Sheet on</span>
+            <span class="v">{{ sheetChoice(sheetPick.on) }}<small>{{ sheetNote(sheetNow, sheetOthers) }}</small></span>
+            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
           <button v-if="changedWords" class="row" @click="router.push({ query: { view: 'settings' } })">
             <span class="k">Changed</span>
             <span class="v">{{ changedWords }}<small>You set this · for this print</small></span>
@@ -423,6 +429,14 @@
       </template>
     </SliceSheet>
 
+    <SliceSheet :open="open === 'sheet' && !!sheetPick" title="Which sheet is on the bed?" sub="Each keeps its own first layer. It's used from this print on." @close="open = null">
+      <div class="opts">
+        <button v-for="o in sheetPick?.options ?? []" :key="o.name" class="opt" :class="{ on: o.name === sheetPick?.on }" @click="pickSheet(o.name)">
+          <span class="t"><b>{{ sheetChoice(o.name) }}</b><span>{{ o.words }} ({{ o.mm }})</span></span>
+        </button>
+      </div>
+    </SliceSheet>
+
     <!-- Supports -->
     <!-- Normal or tree (design/supports/, A, picked 4 October 2026): each kind sliced for the chosen purpose, its
          real supports drawn solid under a see-through plate, with its real time. -->
@@ -487,7 +501,8 @@ import { computed, markRaw, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useIntentStore } from '@/intent/store'
 import type { IntentSpool, PrintCheck } from '@/intent/types'
-import { door } from '@/door'
+import { allowedHere, door } from '@/door'
+import { sheetChoice, sheetNote } from '@/intent/firstLayer'
 import { layout } from '@/shell/useLayout'
 import { humanDuration, prettyName } from '@/intent/jobs'
 import { COLORS } from '@/components/materials/palette'
@@ -537,7 +552,7 @@ const router = useRouter()
 
 const view = computed(() => (route.query.view === 'settings' ? 'settings' : 'ready'))
 const orcaNames = ref(false)
-const open = ref<null | 'purpose' | 'spool' | 'supports' | 'size' | 'bed' | 'lay' | 'part' | 'edit' | 'brim' | 'color' | 'partColor'>(null)
+const open = ref<null | 'sheet' | 'purpose' | 'spool' | 'supports' | 'size' | 'bed' | 'lay' | 'part' | 'edit' | 'brim' | 'color' | 'partColor'>(null)
 const editAt = ref(0)
 const working = ref(false)
 const actionError = ref('')
@@ -598,6 +613,13 @@ const spoolNote = computed(() => {
   return [s.slot != null ? `Slot ${s.slot + 1}` : 'Loaded', live?.grams ? `${live.grams} g left` : ''].filter(Boolean).join(' · ')
 })
 const ready = computed(() => store.intent?.state === 'ready')
+const sheetPick = computed(() => store.intent?.first_layer?.sheet ?? null)
+const sheetNow = computed(() => sheetPick.value?.options.find((o) => o.name === sheetPick.value?.on))
+const sheetOthers = computed(() => (sheetPick.value?.options ?? []).map((o) => o.name).filter(Boolean))
+async function pickSheet(name: string) {
+  open.value = null
+  await store.act('first_layer_sheet', { name })
+}
 // Whether the spool is really loaded is the printer's own check (check_print), after the bed question.
 const canPrint = computed(() => job.value?.state === 'done' && ready.value && !working.value && !unsortedColors.value.length)
 const copies = computed(() => session.parts.reduce((a, p) => a + p.copies, 0))

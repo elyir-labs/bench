@@ -165,6 +165,20 @@ async def test_a_removed_phone_is_a_stranger_at_once(rig):
     assert not (await (await rig.away.get("/door/me", headers=h)).json())["paired"]
 
 
+async def test_a_phone_takes_itself_off_from_away(rig):
+    h = await paired(rig)
+    other = await paired(rig)
+    assert (await rig.away.delete("/door/me", headers=h)).status == 204
+    assert not (await (await rig.away.get("/door/me", headers=h)).json())["paired"]
+    assert (await (await rig.away.get("/door/me", headers=other)).json())["paired"]
+
+
+async def test_a_stranger_cannot_take_anyone_off(rig):
+    await paired(rig)
+    assert (await rig.away.delete("/door/me")).status == 401
+    assert len((await (await rig.home.get("/door/phones")).json())["phones"]) == 1
+
+
 async def test_another_site_cannot_act_with_the_cookie(rig):
     h = await paired(rig)
     evil = {**h, "Origin": "https://evil.example"}
@@ -225,7 +239,8 @@ def test_move_and_heat_is_home_only():
 def test_the_first_layer_is_home_only():
     # Further / Closer move the nozzle in a running print (design/first-layer/, 3 October 2026)
     for action in ("squish_less", "squish_more", "keep_first_layer", "just_this_once",
-                   "first_layer_back", "first_layer_clear", "first_layer_keep_old"):
+                   "first_layer_back", "first_layer_clear", "first_layer_keep_old", "keep_for_sheet",
+                   "first_layer_sheet", "first_layer_forget"):
         assert D.allowed_call("printer.intent.action", {"action": action}) == "That has to be done at the printer."
 
 

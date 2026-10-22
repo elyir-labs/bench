@@ -1,4 +1,4 @@
-# Filament units: the Anycubic ACE Pro
+# Filament units: the ACE Pro, Happy Hare and AFC
 
 Elyir Bench drives the ACE Pro itself, with its own driver in [`units/`](../units/). It's free and open source
 (AGPL-3.0-only, like the rest of Elyir Bench) and no Klipper add-on: a small service talks to each unit over USB
@@ -12,8 +12,8 @@ and to Klipper through Moonraker, so a Klipper update can't break it.
   service unloads, loads and purges through your printer's own macros, then resumes where it stopped. A failed
   change leaves the print paused with what went wrong and Try again.
 - **Drying and feed assist** from the slot, and the spool's color and material kept per slot, across restarts.
-- **Watches what it can't move.** A unit run by Happy Hare, or inside a Kobra's own firmware, shows on the
-  screen the same way; Elyir Bench only sends commands to units it drives.
+- **Units run by Happy Hare or AFC** (ERCF, Tradrack, Box Turtle, Night Owl and the rest) show and work the
+  same way; see below. A unit inside a Kobra's own firmware shows on the screen but takes no commands.
 
 ## Written from scratch
 
@@ -44,6 +44,45 @@ driver off with the rest.
 
 If the sensor's pin needs a pull-up Klipper doesn't show, name it: `units_sensor_pin: ^PB8`.
 
+## Happy Hare and AFC
+
+A unit that [Happy Hare](https://github.com/moggieuk/Happy-Hare) (v3 or v4) or Armored Turtle's
+[AFC](https://github.com/ArmoredTurtle/AFC-Klipper-Add-On) runs needs nothing from Elyir Bench's side: it reads
+their status and sends their own commands. They keep doing the tool change themselves, so a multi-color print
+uses their `T0`..`Tn` as before.
+
+| From the screen | Happy Hare | AFC |
+| --- | --- | --- |
+| Load, switch, unload | `MMU_CHANGE_TOOL GATE= STANDALONE=1`, `MMU_UNLOAD` | `CHANGE_TOOL LANE=`, `TOOL_UNLOAD` |
+| A spool's color and material | `MMU_GATE_MAP` (with the gate's temperature, which it would otherwise reset) | `SET_COLOR`, `SET_MATERIAL` |
+| Already in the head / empty | `MMU_RECOVER` | `SET_LANE_LOADED`, `UNSET_LANE_LOADED` |
+| Carry on with a matching spool | `MMU_ENDLESS_SPOOL` | (each lane names its own runout lane) |
+| Move filament, swap a spool | (by hand) | `LANE_MOVE` |
+
+The screen only offers what the unit can do: no Dry button where there's no dryer, no "Pull it in" on Happy
+Hare. An ACE Pro that AFC or Happy Hare drives stays theirs: `filament_units: auto` never puts Elyir Bench's
+own driver in their way, and the install command doesn't ask. Try either without hardware:
+`python3 simulator/sim.py --units afc` or `--units happy_hare`.
+
+### Check and measure
+
+Materials (on the unit's line) and Care (Filament unit) offer **Check and measure** for a Happy Hare or AFC unit, when
+nothing is printing and no filament is in the head. The screen goes through each slot: if its sensor doesn't see
+filament it asks for some to be pushed in (or, on a Happy Hare gate without a sensor, for "It's in"), then the unit
+turns its motor a little with its own command. Each slot is passed, skipped, or didn't pass with a sentence saying what
+to check and Try again. Then it measures: Happy Hare the tube to the head (`MMU_SELECT` and `MMU_CALIBRATE_BOWDEN`
+with the first slot that passed), AFC each slot to its hub (`CALIBRATE_AFC LANE=`) and then the tube
+(`CALIBRATE_AFC BOWDEN=`). Ready sums it up: the slots checked and the tube's length. Stop finishes the command
+running and then stops. Happy Hare's check is `MMU_CHECK_GATE GATE=n`, after `MMU_HOME` when the selector isn't
+homed (Happy Hare 3 needs it); AFC's is `LANE_MOVE` back and forward 10 mm. Both save what they measure in their own
+files, as their own commands do.
+
+Neither raises an error for most failures: the command returns and says so on the console, so the result of each
+step is read from those lines and the status (`printer/unit_check.py`). Happy Hare's gear, encoder, selector and
+per-gate calibration aren't on the screen: Happy Hare refuses the check until its gear and selector are calibrated,
+and the screen says to do that from Advanced. The simulator shows it all with `--units happy_hare` or `--units afc`
+and the `unit_check` scenario.
+
 ## Settings
 
 In the same file, all optional:
@@ -61,5 +100,5 @@ In the same file, all optional:
 ## Today
 
 Tested on hardware with one ACE Pro: loads, unloads, changes from the screen and two-color prints. Not tried on
-hardware yet: two units on one printer. Other units can follow the same way (a driver for a unit with its own
-controller, or an adapter to Happy Hare or AFC); see `units/README.md` for how the service is put together.
+hardware yet: two ACE Pros on one printer, and Happy Hare and AFC (built from their documented status and
+commands, tried in the simulator), including Check and measure. Installing Happy Hare or AFC for you comes next. See `units/README.md` for how the service is put together.

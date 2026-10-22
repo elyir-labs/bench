@@ -7,7 +7,12 @@
       <div class="screen-text"><span class="name">Move and heat</span><span class="when">{{ rowLine(intent.hands, door.away) }}</span></div>
       <button v-if="!door.away" class="a-btn ghost back" :disabled="!handsOk" @click="handsOpen = true">Open</button>
     </div>
-    <h2 class="group" v-if="intent?.hands">Maintenance</h2>
+    <!-- Filament unit (design/unit-setup/, B): check each slot and measure the tube, on Happy Hare or AFC -->
+    <div v-for="r in unitRows" :key="r.name" class="screen wrap unit-row" :class="{ off: !!r.why }">
+      <div class="screen-text"><span class="name">{{ unitRows.length > 1 ? `Filament unit · ${r.name}` : 'Filament unit' }}</span><span class="when">{{ r.why ? r.why : `${r.name}. ${r.line}` }}</span></div>
+      <button v-if="!door.away" class="a-btn ghost back" :disabled="!!r.why || store.busyAction !== null" @click="store.act(r.action)">{{ r.action.label }}</button>
+    </div>
+    <h2 class="group" v-if="intent?.hands || unitRows.length">Maintenance</h2>
     <p class="sub">Small things, now and then, that keep prints looking good. The printer counts its own hours and asks when one is due.</p>
     <ul class="list" v-if="care && care.items.length">
       <li v-for="c in care.items" :key="c.id" :class="{ due: c.due }">
@@ -33,7 +38,7 @@
       <h2 class="group">Printer</h2>
       <div class="screen wrap first-layer">
         <div class="screen-text">
-          <span class="name">First layer</span>
+          <span class="name">{{ sheets.length ? 'First layer · every print' : 'First layer' }}</span>
           <span class="when">{{ keptLine(intent.first_layer, intent.printer.name) }}</span>
         </div>
         <button
@@ -42,6 +47,18 @@
         >{{ a.label }}</button>
       </div>
       <p class="sub tiny" v-if="backActions.length && intent.first_layer.kept?.back">Before: {{ intent.first_layer.kept.back.words.toLowerCase() }} ({{ intent.first_layer.kept.back.mm }}).</p>
+      <!-- design/first-layer-sheets/, C: a sheet that keeps its own first layer -->
+      <div v-for="sh in sheets" :key="sh.name" class="screen wrap first-layer">
+        <div class="screen-text">
+          <span class="name">{{ sh.name }}<i v-if="sh.on" class="on-now">On now</i></span>
+          <span class="when">{{ sheetLine(sh) }}</span>
+        </div>
+        <button
+          v-for="a in sh.actions.filter((x) => allowedHere(x.id))" :key="a.id" class="a-btn ghost back"
+          :disabled="store.busyAction !== null" @click="goBack(a)"
+        >{{ a.label }}</button>
+      </div>
+      <p class="sub tiny" v-if="intent.first_layer.can_keep && intent.first_layer.kept">{{ sheets.length ? 'Print asks which sheet is on when they differ. ' : '' }}{{ WHERE_KEPT }}</p>
       <p class="sub tiny err" v-if="backError">{{ backError }}</p>
       <!-- Printer › Slicing (design/slicing-elsewhere/, A): who slices for this printer, or who it slices for -->
       <div class="screen" v-if="slicingLine">
@@ -157,9 +174,10 @@ import BusyBanner from '@/components/now/BusyBanner.vue'
 import PowerSheet from '@/components/now/PowerSheet.vue'
 import TellSheet from '@/components/report/TellSheet.vue'
 import type { PowerKind } from '@/intent/power'
-import { keptLine } from '@/intent/firstLayer'
+import { keptLine, sheetLine, WHERE_KEPT } from '@/intent/firstLayer'
 import { rowLine } from '@/intent/hands'
 import HandsSheet from '@/components/hands/HandsSheet.vue'
+import { careRows } from '@/intent/unitCheck'
 import type { IntentAction } from '@/intent/types'
 import { slicerPrinters, slicerStatus, stopPrinter, type SlicerPrinter } from '@/slice/api'
 import { careLine, hostLine, type SlicerState } from '@/slice/elsewhere'
@@ -167,6 +185,7 @@ const store = useIntentStore()
 const intent = computed(() => store.intent)
 const handsOpen = ref(false)
 const handsOk = computed(() => !!intent.value?.hands && !intent.value.hands.why_not)
+const unitRows = computed(() => careRows(intent.value?.units?.list))
 
 // slicing for this printer elsewhere, or for others here (design/slicing-elsewhere/, A)
 const slicing = ref<SlicerState | null>(null)
@@ -285,6 +304,7 @@ async function setPush(v: 'on' | 'off') {
 
 // The first layer kept for next time, and "Back to how it was" (the value before the last one kept)
 const backActions = computed(() => (intent.value?.first_layer?.kept?.actions ?? []).filter((a) => allowedHere(a.id)))
+const sheets = computed(() => intent.value?.first_layer?.kept?.sheets ?? [])
 const backError = ref<string | null>(null)
 async function goBack(a: IntentAction) {
   backError.value = null
@@ -329,7 +349,8 @@ async function act(action: 'care_done' | 'care_later', id: string) {
 .err { color: var(--a-red-text); }
 .group { font-size: calc(13 * var(--u) + 4px); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--a-ink-3); margin: calc(18 * var(--u) + 6px) 0 0; }
 .hands.off .name { color: var(--a-ink-3); }
-.first-layer .back, .hands .back, .lends .back, .tell .back { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
+.unit-row.off .name { color: var(--a-ink-3); }
+.first-layer .back, .hands .back, .lends .back, .tell .back, .unit-row .back { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
 .first-layer + .tiny { margin-top: 8px; }
 .actions.switch { flex: none; margin-top: 0; }
 
@@ -360,4 +381,5 @@ async function act(action: 'care_done' | 'care_later', id: string) {
 .seg-opt.on { background: var(--a-surface); color: var(--a-ink); box-shadow: var(--a-card-shadow); }
 .seg-opt[disabled] { opacity: 0.5; cursor: default; }
 .seg-opt:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
+.on-now { font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--a-accent); background: color-mix(in srgb, var(--a-accent) 14%, transparent); padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 2px; }
 </style>

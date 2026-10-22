@@ -197,6 +197,16 @@ async def idle(sim, **_) -> None:
                "heater_bed": {"target": 0.0}, "extruder": {"target": 0.0}, "idle_timeout": {"state": "Idle"}})
 
 
+async def unit_check(sim, **_) -> None:
+    """With --units afc or happy_hare: idle, nothing in the head, so Materials and Care offer Check and measure
+    (design/unit-setup/, B). Slot 3 is empty until a spool is pushed in (the control page), and slot 4's motor test
+    fails once, so Try again can be seen."""
+    await idle(sim)
+    sim.patch({"ace": {"selected_gate": -1}, "filament_switch_sensor extruder_sensor": {"filament_detected": False}})
+    sim.set_slot(2, status="empty")
+    sim.fail_check_slot = 3
+
+
 async def hot(sim, **_) -> None:
     """Ready, with the nozzle still at printing heat (design/power/: Turn off waits for it to cool)."""
     await idle(sim)
@@ -456,6 +466,14 @@ async def first_layer_kept(sim, **_) -> None:
     _kept(sim, 0.3)
 
 
+async def sheets_kept(sim, **_) -> None:
+    """Idle, with nothing kept for every print and the textured sheet's own first layer (design/first-layer-sheets/):
+    Care lists both, and Print asks which sheet is on."""
+    _kept(sim, 0.0)
+    sim.save_vars({"first_layer_sheets": {"Textured PEI": {"z": -0.05, "at": int(time.time() - 86400)}},
+                   "first_layer_sheet": "Textured PEI"})
+
+
 async def tap_arrives(sim, **_) -> None:
     """The printer now taps for its own first layer, and a value kept against the scan is still there."""
     sim.tap = True
@@ -710,6 +728,7 @@ async def power_lost(sim, **_) -> None:
 
 
 SCENARIOS = {
+    "unit_check": unit_check,
     "power_out": power_out,
     "power_back": power_back,
     "power_lost": power_lost,
@@ -745,6 +764,7 @@ SCENARIOS = {
     "first_layer": first_layer,
     "first_layer_end": first_layer_end,
     "first_layer_kept": first_layer_kept,
+    "sheets_kept": sheets_kept,
     "tap_arrives": tap_arrives,
     "setup_new": setup_new,
     "setup_trial": setup_trial,

@@ -73,7 +73,7 @@ function byId(id: string): LivePrinter | undefined {
   return printers.find((p) => p.id === id)
 }
 
-function record(p: LivePrinter): PrinterRecord {
+export function recordOf(p: LivePrinter): PrinterRecord {
   return { id: p.id, name: p.name, addresses: { ...p.addresses }, token: p.token, added: p.added, ...(p.kind ? { kind: p.kind } : {}) }
 }
 
@@ -135,7 +135,7 @@ async function probe(id: string): Promise<void> {
   const changed = theirs.home !== p.addresses.home || theirs.away !== p.addresses.away || me.printer.name !== p.name
   p.addresses = theirs
   p.name = me.printer.name || p.name
-  if (changed) await put('printers', record(p))
+  if (changed) await put('printers', recordOf(p))
   p.reach = via
   if (p.base !== base || !clients.has(id)) {
     p.base = base
@@ -193,7 +193,7 @@ export async function reachBench(id: string): Promise<void> {
   b.reach = 'away'
   b.base = base
   const box = (me as unknown as { box?: { name?: string } }).box
-  if (box?.name && box.name !== b.name) { b.name = box.name; await put('printers', record(b as unknown as LivePrinter)) }
+  if (box?.name && box.name !== b.name) { b.name = box.name; await put('printers', recordOf(b as unknown as LivePrinter)) }
   try {
     const r = await fetch(`${base}/bench/printers`, { headers: { Authorization: `Bearer ${b.token}` }, cache: 'no-store' })
     if (r.ok) b.printers = ((await r.json()) as { id: string; name: string }[]).map((x) => ({ id: x.id, name: x.name }))

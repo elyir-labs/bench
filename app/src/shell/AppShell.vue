@@ -40,6 +40,9 @@
     </header>
 
     <main class="content">
+      <!-- Check and measure a filament unit (design/unit-setup/, B): the flow takes the screen, as drawn, until Done -->
+      <UnitCheckFlow v-if="checking" :uc="intent!.unit_check!" />
+      <template v-else>
       <nav v-if="pane" class="areas" aria-label="Sections">
         <router-link
           v-for="t in areaTabs" :key="t.to" :to="t.to" class="area"
@@ -54,11 +57,12 @@
           <component :is="pane && r.path === '/' ? defaultArea : Component" :key="pane && r.path === '/' ? 'area-default' : r.path" />
         </transition>
       </router-view>
+      </template>
     </main>
 
-    <NowBar v-if="layout === 'compact' && route.path !== '/' && !benchChrome" class="nowbar-slot" />
+    <NowBar v-if="layout === 'compact' && route.path !== '/' && !benchChrome && !checking" class="nowbar-slot" />
 
-    <nav v-if="!pane && !benchChrome" class="tabs" aria-label="Sections">
+    <nav v-if="!pane && !benchChrome && !checking" class="tabs" aria-label="Sections">
       <router-link
         v-for="t in tabs" :key="t.to" :to="t.to" class="tab"
         :class="{ attention: t.to === '/' && needsAttention, locked: t.to === '/print' && busy, 'router-link-active': t.to !== '/' && route.path.startsWith(t.to + '/') }"
@@ -108,6 +112,8 @@ import { cameraOpen, cameraFull } from '@/camera/viewer'
 import { door } from '@/door'
 import { benchChrome, embedded } from '@/auth'
 import TrialBar from '@/components/setup/TrialBar.vue'
+import UnitCheckFlow from '@/components/unitcheck/UnitCheckFlow.vue'
+import { flowShown } from '@/intent/unitCheck'
 
 const store = useIntentStore()
 const router = useRouter()
@@ -156,6 +162,7 @@ const advancedUrl = computed(() => store.advancedUrl)
 const trial = computed(() => layout.value === 'panel' && !benchChrome && !!intent.value?.printer.screen_trial)
 const needsAttention = computed(() => state.value === 'needs_you' || state.value === 'problem')
 const busy = computed(() => store.busy)
+const checking = computed(() => flowShown(intent.value?.unit_check, door.away))
 
 const statusWord = computed(() => {
   switch (state.value) {

@@ -62,20 +62,26 @@ away behind an **Advanced** door that opens Mainsail.
 a 7" DSI panel or an HDMI touchscreen, some with Anycubic ACE Pro filament units). Expect rough
 edges, missing hardware support and interfaces that change.
 
-## The Anycubic ACE Pro, built in
+## Filament units, built in
 
-Elyir Bench has its own ACE Pro driver, free and open source (AGPL-3.0-only) like the rest, and it's part of every
-install: nothing extra to set up, no Klipper add-on.
+Elyir Bench has its own driver for the Anycubic ACE Pro, free and open source (AGPL-3.0-only) like the rest, and it
+works with units that Happy Hare or AFC already run. Nothing extra to install, no Klipper add-on.
+
+| Unit | How Elyir Bench drives it | Today |
+|---|---|---|
+| Anycubic ACE Pro | Its own driver, `units/` | Tested on a real printer: loads, swaps, two-color prints |
+| Happy Hare units: ERCF, Tradrack and others | Happy Hare's own commands | **New:** tried in the simulator, not yet on a real unit. [Testers wanted](https://bench.elyir.com/testers) |
+| AFC units: Box Turtle, Night Owl and others | AFC's own commands | **New:** tried in the simulator, not yet on a real unit. [Testers wanted](https://bench.elyir.com/testers) |
 
 - **Load and unload from the screen**, with the spool's color and material kept per slot.
-- **Multi-color prints switch spools by themselves.** The print pauses quietly, the unit swaps through your
-  printer's own macros, and the print carries on where it stopped.
-- **Drying and feed assist** from the slot.
+- **Multi-color prints switch spools by themselves**, and the print carries on where it stopped.
+- **Drying and feed assist** on an ACE Pro; **check and measure** a Happy Hare or AFC unit from the screen.
 
-An ACE Pro that nothing drives yet just works once Elyir Bench is installed. A printer on KlipperACE keeps it until
-you switch: the install command asks once, and one setting switches back. The driver was written from scratch
-from USB captures of a real unit ([`units/ace-protocol.md`](units/ace-protocol.md); every fact names its
-capture), with no code from another ACE project. More: [docs/filament-units.md](docs/filament-units.md).
+An ACE Pro that nothing drives yet just works once Elyir Bench is installed. A unit already set up another way stays as
+it is: Elyir Bench never puts its own driver beside Happy Hare or AFC, and a printer on KlipperACE is asked once before
+switching (one setting switches back). The ACE Pro driver was written from scratch from USB captures of a real unit
+([`units/ace-protocol.md`](units/ace-protocol.md); every fact names its capture), with no code from another ACE
+project. More: [docs/filament-units.md](docs/filament-units.md).
 
 ## The parts
 
@@ -87,7 +93,7 @@ capture), with no code from another ACE project. More: [docs/filament-units.md](
 | Slicer | `slicer/` | A model, a purpose and a spool in; G-code and every setting it changed out. Wraps OrcaSlicer's command line. See [docs/slicer.md](docs/slicer.md). |
 | Installer | `installer/`, `kiosk/` | Runs on the printer: detects the hardware, installs Elyir Bench, keeps it correct, rolls back a bad release. See [docs/installer.md](docs/installer.md). |
 | Door | `door/` | Phone pairing, HTTPS on the printer's own name, reaching it from away, Web Push. See [docs/door.md](docs/door.md). |
-| Filament units | `units/` | Its own driver for filament units, the Anycubic ACE Pro first: a small service that talks to each unit over USB and to Klipper through Moonraker. See [docs/filament-units.md](docs/filament-units.md). |
+| Filament units | `units/`, `printer/filament_units.py` | Its own driver for the Anycubic ACE Pro, a small service that talks to the unit over USB and to Klipper through Moonraker; Happy Hare and AFC units through their own commands. See [docs/filament-units.md](docs/filament-units.md). |
 
 Where it is heading: [docs/vision.md](docs/vision.md).
 
@@ -140,7 +146,7 @@ before it is unpacked. More, with the table of boards: [bench.elyir.com/install]
 - **It adds** Elyir Bench at `http://<printer>.local:8088/`, on the printer's touchscreen if you say so, and a
   name on Elyir's relay (`<printer>.elyir.app`) for notifications and your phone away from home.
 - **An ACE Pro** gets Elyir Bench's own driver, with one include line in printer.cfg; a printer on KlipperACE is
-  asked first ([docs/filament-units.md](docs/filament-units.md)).
+  asked first, and a unit on Happy Hare or AFC stays theirs ([docs/filament-units.md](docs/filament-units.md)).
 - **It leaves alone** printer.cfg (apart from that line) and your macros, Mainsail or Fluidd (still on port 80), your files and print
   history. KlipperScreen stays installed.
 - **Will it work on my printer?** A Raspberry Pi 4 or 5 on Debian 13 gets everything. On Debian 11 or 12, or a

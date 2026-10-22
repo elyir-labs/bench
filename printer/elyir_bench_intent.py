@@ -43,6 +43,7 @@ def _sibling(name: str):
 
 
 filament_units = _sibling("filament_units")
+unit_check = _sibling("unit_check")
 
 SCHEMA_VERSION = 1
 
@@ -527,6 +528,10 @@ SQUISH_LAYERS = 3         # offered on layers 1 to 3; after that a nudge can't s
 SQUISH_LOW_Z = 1.0        # without layer numbers from the slicer, the first layers are below this (mm)
 SQUISH_LIMIT = 0.5        # mm either way from where the printer finds Z; PRINT_START won't apply more
 FIRST_LAYER_HISTORY = 5   # kept values remembered for "Back to how it was"
+# Sheets (design/first-layer-sheets/, C): first_layer_sheets {name: {"z", "at"}} and first_layer_sheet, the one on the
+# bed ("" for any other). A sheet's value replaces first_layer_z for a print while that sheet is on.
+SHEET_NAMES = ("Smooth PEI", "Textured PEI", "Satin PEI")   # offered first; any other name can be typed
+SHEET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .+\-]{0,23}")
 
 
 def squish_words(mm: float) -> str:
@@ -977,6 +982,7 @@ class IntentTracker:
         self._head_ok: Optional[int] = None           # slot someone said is in the head though the sensor reads empty
         self._change: Optional[Dict[str, Any]] = None   # changing filament by hand, or checking after a swap
         self._change_queue: List[tuple] = []          # commands for whoever runs work() next
+        self._check: Optional[Any] = None              # checking and measuring a Happy Hare or AFC unit (unit_check.py)
         self._keep_warm_until: Optional[float] = None  # heaters go off then, unless a print started
         self._warm: Optional[Dict[str, Any]] = None   # warming up before a print: material, targets, when warm
         self._hands: Optional[Dict[str, Any]] = None  # a job from Move and heat holding the printer: kind, until
@@ -1045,6 +1051,7 @@ class IntentTracker:
         # Klipper's objects sets has_unit (None until then). The component stores direct_spool
         # in Moonraker's database whenever direct_spool_dirty is set, and restores it at start.
         self.has_unit: Optional[bool] = None
+        self.units_watch_only = False   # the Bench Box speaking for a Kobra: Rinkhals' unit is watched, never driven
         self.direct_spool: Optional[Dict[str, Any]] = None   # {color, material, source, at, changed, was, from}
         self.direct_spool_dirty = False
         self.spoolman_spool: Optional[Dict[str, Any]] = None  # the active Spoolman spool: {color, material, grams}
@@ -1126,6 +1133,8 @@ class IntentTracker:
             self._level = {"range": float(m.group(1)), "tolerance": float(m.group(2))}
         self._match_prep_step(low)
         self._match_swap_step(low)
+        if self._check is not None:
+            self._check.hear(line)
 
     def set_metadata(self, filename: Optional[str], metadata: Optional[Dict[str, Any]]) -> None:
         self.metadata_file = filename
@@ -1257,6 +1266,8 @@ class IntentTracker:
             return "Not while it's printing."
         if self._change is not None or self._swap is not None:
             return "Not while it's changing filament."
+        if self._checking():
+            return "Not while it's checking the filament unit."
         return None
 
     def power_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> None:
@@ -1673,7 +1684,80 @@ class IntentTracker:
 
     def unit_commands(self) -> Optional[Any]:
         """The commands the unit's driver takes, or None when Bench can only watch it."""
-        return filament_units.commands(self.unit_state())
+        return filament_units.commands(self.unit_state(), self.units_watch_only)
+
+    # ---- checking and measuring a Happy Hare or AFC unit (design/unit-setup/, B, stage 1) --------------
+
+    def _checking(self) -> bool:
+        """A unit check is going (its Ready summary alone holds nothing up)."""
+        return self._check is not None and self._check.phase != "ready"
+
+    def unit_check_offer(self, index: int) -> Optional[Dict[str, Any]]:
+        """Check and measure for one unit: {action, why} with why saying why not right now, or None when the unit's
+        driver has no check (an ACE, or a unit Bench only watches)."""
+        cmds = self.unit_commands()
+        fu = self.unit_state()
+        if not fu or fu["driver"] not in ("happy_hare", "afc") or not filament_units.can(cmds, "check_slot"):
+            return None
+        why = None
+        if self.klippy_state != "ready":
+            why = "The printer isn't ready."
+        elif (self.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
+            why = "Not while it's printing."
+        elif self._change is not None or (self._swap is not None and not self._swap.get("error")):
+            why = "Not while the filament is changing."
+        elif self._hands is not None or self._power is not None:
+            why = "Not while the printer is busy."
+        elif self._checking():
+            why = "It's checking a unit now."
+        elif fu["selected"] is not None:
+            why = "Take the filament out of the head first: the check runs each slot up the tube."
+        return {"action": _action("unit_check_start", "Check and measure", unit=index), "why": why}
+
+    def begin_unit_check(self, index: int, now: Optional[float] = None) -> bool:
+        now = time.time() if now is None else now
+        offer = self.unit_check_offer(index)
+        u = next((x for x in self._units_raw() if x["index"] == index), None)
+        if offer is None or offer["why"] or u is None or not u["n"]:
+            return False
+        name = next((x["name"] for x in self.unit_list([], now) if x["index"] == index), "The unit")
+        self._check = unit_check.UnitCheck(u, name, self.unit_state()["driver"], lambda: self.status,
+                                           self.unit_commands, now)
+        self._keep_warm_until = None
+        return True
+
+    def unit_check_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> bool:
+        op = payload.get("op")
+        if op == "start":
+            return self.begin_unit_check(int(payload.get("unit", -1)), now)
+        if self._check is None:
+            return False
+        if op == "done":
+            if self._check.phase != "ready":
+                return False
+            self._check = None
+            return True
+        if op == "stop" and self._check.busy is None:
+            self._check = None
+            return True
+        return self._check.answer(str(op))
+
+    def _check_work(self, now: float) -> List[tuple]:
+        c = self._check
+        if c is None:
+            return []
+        pstate = (self.status.get("print_stats") or {}).get("state")
+        if c.busy is None and (self.klippy_state != "ready" or pstate in ("printing", "paused")
+                               or self.unit_commands() is None):
+            self._check = None   # a print started from elsewhere, or Klipper went away: the check is over
+            return []
+        if pstate in ("printing", "paused"):
+            c.stop = True
+        out = c.work(now)
+        if ("end", None) in out:
+            self._check = None
+            return []
+        return out
 
     # ---- chamber -------------------------------------------------------
 
@@ -1820,13 +1904,14 @@ class IntentTracker:
     def unit_list(self, spools: List[Dict[str, Any]], now: float) -> List[Dict[str, Any]]:
         """One entry per filament unit: its slots, its temperature, its dryer, and Dry or Stop."""
         raw = self._units_raw()
+        cmds = self.unit_commands()
         out = []
         for u in raw:
             slots = [s for s in spools if u["offset"] <= s["slot"] < u["offset"] + u["n"]]
             drying = self._drying(u["dryer"], now, self._dryer_seconds.get(u["index"]))
             plan = self.dry_plan(slots)
             actions: List[Dict[str, Any]] = []
-            if self.klippy_state == "ready" and u["connected"]:
+            if self.klippy_state == "ready" and u["connected"] and u["dryer"] is not None and filament_units.can(cmds, "dry"):
                 actions = ([_action("stop_drying", "Stop", unit=u["index"])] if drying
                            else [_action("dry_unit", "Dry", unit=u["index"], hours=plan["hours"])])
             temp = u["temp"]
@@ -1839,6 +1924,7 @@ class IntentTracker:
                 "drying": drying,
                 "dry": plan,
                 "actions": actions,
+                "check": self.unit_check_offer(u["index"]),
             })
         return out
 
@@ -1970,7 +2056,7 @@ class IntentTracker:
         if key in self._assist_sent:
             return []
         cmds = self.unit_commands()
-        if cmds is None:
+        if not filament_units.can(cmds, "feed_assist"):
             return []
         self._assist_sent.add(key)
         return [(cmds.kind, cmds.feed_assist(sel, True))]
@@ -2116,7 +2202,8 @@ class IntentTracker:
     def begin_slot_swap(self, slot: int, now: Optional[float] = None) -> bool:
         """Swap the spool in one slot of a filament unit (design/slots/, B). Idle only. Out of the
         head first if it's there, then pulled back until the slot reads empty; work() drives it."""
-        if self._change is not None or self._swap is not None or self.direct or self.klippy_state != "ready":
+        if (self._change is not None or self._swap is not None or self.direct or self.klippy_state != "ready"
+                or self._checking()):
             return False
         if (self.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
             return False
@@ -2173,8 +2260,8 @@ class IntentTracker:
                     c["seen_out"] = True
                     self._enter("swap")
                     continue
-                if c["pulled"] >= PULLBACK_MAX_MM:
-                    c["stuck"] = True   # the slot never said empty: a person pulls the rest
+                if c["pulled"] >= PULLBACK_MAX_MM or not filament_units.can(cmds, "move"):
+                    c["stuck"] = True   # the slot never said empty, or the unit can't pull back: a person pulls the rest
                     self._enter("swap")
                     continue
                 c["busy"] = "pullback"
@@ -2366,7 +2453,7 @@ class IntentTracker:
                     c["seen_out"] = True
                     self._enter("put")
                     continue
-                if c["pulled"] >= PULLBACK_MAX_MM:
+                if c["pulled"] >= PULLBACK_MAX_MM or not filament_units.can(cmds, "move"):
                     c["stuck"] = True
                     self._enter("put")
                     continue
@@ -2748,6 +2835,9 @@ class IntentTracker:
     def change_done(self, error: Optional[str] = None, now: Optional[float] = None) -> None:
         """A background command of the routine finished (or failed)."""
         now = time.time() if now is None else now
+        if self._check is not None and self._check.busy is not None:
+            self._check.done(error, now)
+            return
         c = self._change
         if c is None:
             return
@@ -2794,6 +2884,7 @@ class IntentTracker:
         out += self._update_light(now)
         out += self._update_outage(now)
         out += self._assist_work()
+        out += self._check_work(now)
         if self._keep_warm_until is not None:
             pstate = (self.status.get("print_stats") or {}).get("state")
             if pstate in ("printing", "paused") or self._change is not None:
@@ -2968,6 +3059,8 @@ class IntentTracker:
             return "Not while it's printing."
         if self._change is not None or self._swap is not None:
             return "Not while the filament is changing."
+        if self._checking():
+            return "Not while it's checking the filament unit."
         if self._power is not None:
             return "Not while it's turning off."
         return None
@@ -3332,8 +3425,27 @@ class IntentTracker:
         hist = v.get("first_layer_history")
         hist = [round(float(h), 3) for h in hist if isinstance(h, (int, float))] if isinstance(hist, list) else []
         at = v.get("first_layer_at")
+        sheets: Dict[str, Dict[str, Any]] = {}
+        raw = v.get("first_layer_sheets")
+        for name, val in (raw.items() if isinstance(raw, dict) else []):
+            if isinstance(name, str) and isinstance(val, dict) and isinstance(val.get("z"), (int, float)):
+                sheets[name] = {"z": round(float(val["z"]), 3), "at": float(val["at"]) if isinstance(val.get("at"), (int, float)) else None}
+        sheet = v.get("first_layer_sheet")
         return {"set": "first_layer_z" in v, "z": z, "against": str(v.get("first_layer_against") or "scan"),
-                "history": hist[-FIRST_LAYER_HISTORY:], "at": float(at) if isinstance(at, (int, float)) else None}
+                "history": hist[-FIRST_LAYER_HISTORY:], "at": float(at) if isinstance(at, (int, float)) else None,
+                "sheets": sheets, "sheet": sheet if isinstance(sheet, str) and sheet in sheets else ""}
+
+    @staticmethod
+    def _kept_for_print(k: Dict[str, Any]) -> float:
+        """The value print start uses: the sheet on the bed's, else the every-print one."""
+        return k["sheets"][k["sheet"]]["z"] if k["sheet"] else (k["z"] if k["set"] else 0.0)
+
+    def _sheets_differ(self, k: Optional[Dict[str, Any]]) -> bool:
+        """Print asks which sheet is on only when the answer changes the print."""
+        if not k or not k["sheets"]:
+            return False
+        every = k["z"] if k["set"] else 0.0
+        return any(abs(v["z"] - every) > 1e-9 for v in k["sheets"].values())
 
     def _applied_first_layer(self) -> float:
         """What PRINT_START put on top of the printer's Z for this print (the same rules as the macro).
@@ -3344,9 +3456,10 @@ class IntentTracker:
             except (TypeError, ValueError):
                 return 0.0
         k = self.kept_first_layer()
-        if not k or not k["set"] or k["against"] != self.z_by() or abs(k["z"]) > SQUISH_LIMIT:
+        if not k or not (k["set"] or k["sheet"]) or k["against"] != self.z_by():
             return 0.0
-        return k["z"]
+        z = self._kept_for_print(k)
+        return 0.0 if abs(z) > SQUISH_LIMIT else z
 
     def _homing_z(self) -> Optional[float]:
         origin = (self.status.get("gcode_move") or {}).get("homing_origin")
@@ -3361,8 +3474,9 @@ class IntentTracker:
         sq = self._squish
         if sq is None:
             if state == "printing" and self._print_started and not getting_ready:
+                k = self.kept_first_layer()
                 self._squish = {"applied": self._applied_first_layer(), "z_by": self.z_by(), "moved": 0.0,
-                                "base": None, "ended": False, "answered": False}
+                                "base": None, "ended": False, "answered": False, "sheet": k["sheet"] if k else ""}
             return
         if sq["ended"] or state in ("printing", "paused"):
             return
@@ -3418,7 +3532,14 @@ class IntentTracker:
             return False
         if op == "keep":
             sq = self._squish
-            return sq is not None and sq["ended"] and not sq["answered"] and abs(sq["moved"]) > 1e-9
+            sheet = payload.get("sheet")
+            return (sq is not None and sq["ended"] and not sq["answered"] and abs(sq["moved"]) > 1e-9
+                    and (sheet is None or bool(SHEET_NAME.fullmatch(str(sheet)))))
+        if op == "sheet":
+            name = payload.get("name", "")
+            return name == "" or name in k["sheets"]
+        if op == "forget":
+            return payload.get("name") in k["sheets"]
         if op == "back":
             return bool(k["history"])
         if op in ("clear", "keep_old"):
@@ -3442,7 +3563,18 @@ class IntentTracker:
             sq["answered"] = True
         elif op == "keep":
             sq["answered"] = True
-            self._save_first_layer(round(sq["applied"] + sq["moved"], 3), sq["z_by"], k["history"] + [k["z"]], now)
+            z = round(sq["applied"] + sq["moved"], 3)
+            sheet = payload.get("sheet") or sq.get("sheet") or ""
+            if sheet:
+                sheets = dict(k["sheets"], **{sheet: {"z": z, "at": now}})
+                self._save_sheets(sheets, sheet, against=sq["z_by"])
+            else:
+                self._save_first_layer(z, sq["z_by"], k["history"] + [k["z"]], now)
+        elif op == "sheet":
+            self._save_sheets(k["sheets"], payload.get("name", ""))
+        elif op == "forget":
+            sheets = {n: v for n, v in k["sheets"].items() if n != payload["name"]}
+            self._save_sheets(sheets, "" if k["sheet"] == payload["name"] else k["sheet"])
         elif op == "back":
             self._save_first_layer(k["history"][-1], k["against"], k["history"][:-1], now)
         elif op == "clear":
@@ -3461,12 +3593,20 @@ class IntentTracker:
             f"SAVE_VARIABLE VARIABLE=first_layer_at VALUE={int(now)}",
         ])))
 
+    def _save_sheets(self, sheets: Dict[str, Dict[str, Any]], current: str, against: Optional[str] = None) -> None:
+        body = ", ".join(f'"{n}": {{"z": {v["z"]:.3f}, "at": {int(v["at"] or 0)}}}' for n, v in sheets.items())
+        lines = [f"SAVE_VARIABLE VARIABLE=first_layer_sheets VALUE='{{{body}}}'",
+                 f"SAVE_VARIABLE VARIABLE=first_layer_sheet VALUE='\"{current}\"'"]
+        if against:
+            lines.append(f"SAVE_VARIABLE VARIABLE=first_layer_against VALUE='\"{against}\"'")
+        self._change_queue.append(("gcode", "\n".join(lines)))
+
     def _first_layer_view(self, state: str, now: float) -> Optional[Dict[str, Any]]:
         """What the screens show: Further / Closer with the total while the first layers go down,
         the question at the end, what's kept (Care), and the question when tap arrives."""
         k = self.kept_first_layer()
         sq = self._squish
-        out: Dict[str, Any] = {"can_keep": k is not None, "adjust": None, "keep": None, "kept": None, "ask": None}
+        out: Dict[str, Any] = {"can_keep": k is not None, "adjust": None, "keep": None, "kept": None, "ask": None, "sheet": None}
         if state == "printing" and self.squish_open():
             total = self._squish_total()
             acts = []
@@ -3478,11 +3618,21 @@ class IntentTracker:
                              "moved": sq["moved"], "actions": acts}
         if self._keep_offered(state, now):
             m = sq["moved"]
-            out["keep"] = {"moved": m, "total": self._squish_total(),
-                           "headline": "Keep the new first layer for next time?",
-                           "detail": f"You moved it {squish_words(m).lower()} {'from' if m > 0 else 'to'} the bed ({squish_mm(m)}).",
-                           "actions": [_action("keep_first_layer", "Keep it", primary=True),
-                                       _action("just_this_once", "Just this once")]}
+            moved = f"You moved it {squish_words(m).lower()} {'from' if m > 0 else 'to'} the bed ({squish_mm(m)})."
+            if sq.get("sheet"):
+                out["keep"] = {"moved": m, "total": self._squish_total(), "sheet": sq["sheet"], "sheets": [],
+                               "headline": f"Keep it for the {sq['sheet']} sheet?",
+                               "detail": f"{moved} Every other print stays as it was.",
+                               "actions": [_action("keep_first_layer", "Keep it", primary=True),
+                                           _action("just_this_once", "Just this once")]}
+            else:
+                names = list(dict.fromkeys(list(k["sheets"]) + list(SHEET_NAMES)))
+                out["keep"] = {"moved": m, "total": self._squish_total(), "sheet": None, "sheets": names,
+                               "headline": "Keep this first layer?",
+                               "detail": moved,
+                               "actions": [_action("keep_first_layer", "For every print", primary=True),
+                                           _action("keep_for_sheet", "Only on this sheet"),
+                                           _action("just_this_once", "Just this once")]}
         if k is not None:
             z = k["z"] if k["set"] else 0.0
             back = k["history"][-1] if k["history"] else None
@@ -3490,7 +3640,17 @@ class IntentTracker:
                            "against": k["against"] if k["set"] else None,
                            "used": not k["set"] or k["against"] == self.z_by(), "at": _iso(k["at"]),
                            "back": {"z": back, "words": squish_words(back), "mm": squish_mm(back)} if back is not None else None,
-                           "actions": [_action("first_layer_back", "Back to how it was")] if back is not None else []}
+                           "actions": [_action("first_layer_back", "Back to how it was")] if back is not None else [],
+                           "sheets": [{"name": n, "z": v["z"], "words": squish_words(v["z"]), "mm": squish_mm(v["z"]),
+                                       "at": _iso(v["at"]), "on": n == k["sheet"],
+                                       "actions": ([] if n == k["sheet"] else [_action("first_layer_sheet", "It's on now", name=n)])
+                                       + [_action("first_layer_forget", "Forget it", name=n)]} for n, v in k["sheets"].items()],
+                           "sheet": k["sheet"]}
+            if self._sheets_differ(k):
+                every = k["z"] if k["set"] else 0.0
+                out["sheet"] = {"on": k["sheet"],
+                                "options": [{"name": n, "words": squish_words(v["z"]), "mm": squish_mm(v["z"])} for n, v in k["sheets"].items()]
+                                + [{"name": "", "words": squish_words(every), "mm": squish_mm(every)}]}
         if state == "ready" and self._clear_asked():
             now_tap = self.z_by() == "tap"
             out["ask"] = {"headline": (f"{self.printer_name} now finds its own first layer. Clear your old adjustment?" if now_tap
@@ -3801,7 +3961,8 @@ class IntentTracker:
             # Loading an empty slot is something hands do: say how, then notice (design/slots/).
             return {"actions": [], "move": False,
                     "note": f"Put a spool on and push its end into slot {g + 1} until the unit grabs it. I'll notice and ask what it is.",
-                    "fix": _action("move_filament", "It won't catch? Pull it in", slot=g, mm=PULL_IN_MM)}
+                    "fix": _action("move_filament", "It won't catch? Pull it in", slot=g, mm=PULL_IN_MM)
+                    if filament_units.can(self.unit_commands(), "move") else None}
         if s.get("in_use"):
             return {"actions": [_action("unload_spool", "Unload", style="default"), swap], "move": False,
                     "note": f"Unload takes {name} out of the head. Swap also pulls it back so you can put a new spool on.",
@@ -3813,7 +3974,7 @@ class IntentTracker:
         what = "swaps the filament" if sel is not None else "feeds it in"
         note = f"Heats the nozzle, {what}{' and cleans the nozzle' if purge else ''}. About {3 if sel is not None else 2} minutes."
         return {"actions": [_action("load_spool", label, primary=True, slot=g), swap],
-                "note": note, "move": True,
+                "note": note, "move": filament_units.can(self.unit_commands(), "move"),
                 "fix": _action("mark_loaded", "Already in the head? Mark as in use", slot=g)}
 
     # ---- spools --------------------------------------------------------
@@ -4214,6 +4375,11 @@ class IntentTracker:
             else:
                 detail = "Keep clear of the nozzle."
 
+        elif self._checking():
+            w = self._check.words(now)
+            state, phase, headline, detail, actions = "preparing", w["phase"], w["headline"], w["detail"] or "", w["actions"]
+            raw = self._check.raw
+
         elif self._change is not None:
             state, phase, headline, detail, actions, steps, expires, raw = self._change_intent(now, job)
 
@@ -4483,6 +4649,7 @@ class IntentTracker:
             "lost": self._lost_view() if state == "ready" else None,
             "hands":self._hands_view(now) if state == "ready" or self._hands is not None else None,
             "light": self._light_view() if self.klippy_state == "ready" else None,
+            "unit_check": self._check.view(now) if self._check is not None else None,
             "printer": {
                 "name": self.printer_name,
                 "connected": self.klippy_state == "ready",
@@ -4745,6 +4912,8 @@ class ActionPlan:
     OUTAGE = "outage"        # payload {"op": "keep"}, for IntentTracker.outage_input (design/power-loss/)
     LOST = "lost"            # payload {"op": "dismiss"}, for IntentTracker.lost_input
     LIGHT = "light"          # payload {"op": "on" | "off" | "try" | "pick", "name"?}, for IntentTracker.light_input
+    UNIT_CHECK = "unit_check"   # payload {"op": "start" (unit) | "in" | "skip" | "retry" | "stop" | "done"}, for
+                                # IntentTracker.unit_check_input (design/unit-setup/, B)
     NONE = "none"
 
 
@@ -4769,6 +4938,8 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         return [(ActionPlan.RESUME, None)]
     if action_id.startswith("change_"):
         return plan_change(action_id, args, tracker)
+    if action_id.startswith("unit_check_"):
+        return plan_unit_check(action_id, args, tracker)
     if action_id == "colour_choose":
         return plan_colour_choose(args, tracker)
     if action_id == "print_planned":
@@ -4803,13 +4974,15 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         material = _material_key(args.get("material"))
         if (tracker.klippy_state != "ready" or not material or material not in WARM_BED
                 or (tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused")
-                or tracker._change is not None or tracker._swap is not None):
+                or tracker._change is not None or tracker._swap is not None or tracker._checking()):
             return []
         return [(ActionPlan.WARM, {"op": "start", "material": material})]
     if action_id in FIRST_LAYER_OPS:
         if tracker.klippy_state != "ready":
             return []
         payload = dict(FIRST_LAYER_OPS[action_id])
+        if action_id in ("keep_for_sheet", "first_layer_sheet", "first_layer_forget"):
+            payload["sheet" if action_id == "keep_for_sheet" else "name"] = str(args.get("name") or "").strip()
         return [(ActionPlan.FIRST_LAYER, payload)] if tracker.first_layer_ok(payload) else []
     if action_id in ("help", "bring_open", "write_own", "hands_open"):   # the screens open these themselves
         return [(ActionPlan.NONE, None)]
@@ -4865,7 +5038,8 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
 FIRST_LAYER_OPS = {"squish_more": {"op": "nudge", "by": -SQUISH_STEP}, "squish_less": {"op": "nudge", "by": SQUISH_STEP},
                    "keep_first_layer": {"op": "keep"}, "just_this_once": {"op": "once"},
                    "first_layer_back": {"op": "back"}, "first_layer_clear": {"op": "clear"},
-                   "first_layer_keep_old": {"op": "keep_old"}}
+                   "first_layer_keep_old": {"op": "keep_old"}, "keep_for_sheet": {"op": "keep"},
+                   "first_layer_sheet": {"op": "sheet"}, "first_layer_forget": {"op": "forget"}}
 
 CHANGE_OPS = {"change_out": "out", "change_in": "in", "change_what": "what", "change_good": "good",
               "change_more": "more", "change_stop": "stop", "change_retry": "retry", "change_end": "end"}
@@ -4880,7 +5054,7 @@ def plan_change(action_id: str, args: Dict[str, Any], tracker: IntentTracker) ->
         kind = str(args.get("kind") or "change")
         if kind not in ("change", "unload", "load") or not tracker.direct:
             return []
-        if tracker._change is not None or tracker._swap is not None:
+        if tracker._change is not None or tracker._swap is not None or tracker._checking():
             return []
         ps = tracker.status.get("print_stats") or {}
         paused = bool((tracker.status.get("pause_resume") or {}).get("is_paused"))
@@ -4902,6 +5076,24 @@ def plan_change(action_id: str, args: Dict[str, Any], tracker: IntentTracker) ->
             return []
         return [(ActionPlan.CHANGE, {"op": "what", "material": material, "color": _hex_color(args.get("color"))})]
     return [(ActionPlan.CHANGE, {"op": op})]
+
+
+UNIT_CHECK_OPS = {"unit_check_in": "in", "unit_check_skip": "skip", "unit_check_retry": "retry",
+                  "unit_check_stop": "stop", "unit_check_done": "done"}
+
+
+def plan_unit_check(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> List[tuple]:
+    """Check and measure a Happy Hare or AFC unit, or answer the check going on."""
+    if action_id == "unit_check_start":
+        unit = _int(args.get("unit"))
+        offer = tracker.unit_check_offer(unit) if unit is not None else None
+        if offer is None or offer["why"]:
+            return []
+        return [(ActionPlan.UNIT_CHECK, {"op": "start", "unit": unit})]
+    op = UNIT_CHECK_OPS.get(action_id)
+    if op is None or tracker._check is None:
+        return []
+    return [(ActionPlan.UNIT_CHECK, {"op": op})]
 
 
 def plan_colour_choose(args: Dict[str, Any], tracker: IntentTracker) -> List[tuple]:
@@ -4986,7 +5178,7 @@ def plan_spool_move(action_id: str, args: Dict[str, Any], tracker: IntentTracker
     pstate = (tracker.status.get("print_stats") or {}).get("state")
     if pstate == "printing" or (pstate == "paused" and action_id != "mark_loaded"):
         return []
-    if tracker._swap is not None and not tracker._swap.get("error"):
+    if (tracker._swap is not None and not tracker._swap.get("error")) or tracker._checking():
         return []
     spools = {s["slot"]: s for s in tracker.spools()}
     sel = tracker._selected_slot()
@@ -5027,13 +5219,15 @@ def plan_slot(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> L
     if action_id == "carried_ok":
         return [(ActionPlan.SLOT, {"op": "carried_ok"})]
     if action_id == "carry_on":
-        if tracker.carry_on() is None:
+        if tracker.carry_on() is None or not filament_units.can(cmds, "carry_on"):
             return []
         return [(cmds.kind, cmds.carry_on(on))]
     if action_id in ("dry_unit", "stop_drying"):
         units = {u["index"]: u for u in tracker._units_raw()}
         u = units.get(_int(args.get("unit")))
         if not u or not u["connected"]:
+            return []
+        if not filament_units.can(cmds, "dry") or u["dryer"] is None:
             return []
         if action_id == "stop_drying":
             return [(cmds.kind, cmds.stop_drying(u))]
@@ -5050,13 +5244,13 @@ def plan_slot(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> L
     sel = tracker._selected_slot()
     if action_id == "feed_assist":
         # only the slot feeding the head; allowed while printing, which is when it matters
-        if slot != sel:
+        if slot != sel or not filament_units.can(cmds, "feed_assist"):
             return []
         return [(cmds.kind, cmds.feed_assist(slot, on)), (ActionPlan.SLOT, {"op": "assist", "slot": slot, "on": on})]
     # swapping and moving filament: idle, nothing else moving
     if (tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
         return []
-    if tracker._change is not None or (tracker._swap is not None and not tracker._swap.get("error")):
+    if tracker._change is not None or (tracker._swap is not None and not tracker._swap.get("error")) or tracker._checking():
         return []
     if action_id == "swap_start":
         # the spool in the head comes out with a tool change first
@@ -5065,7 +5259,7 @@ def plan_slot(action_id: str, args: Dict[str, Any], tracker: IntentTracker) -> L
         return [(ActionPlan.SLOT, {"op": "swap", "slot": slot})]
     # move_filament: never the slot in the head, which would grind cold filament
     mm = _int(args.get("mm"))
-    if slot == sel or mm is None:
+    if slot == sel or mm is None or not filament_units.can(cmds, "move"):
         return []
     empty = spools[slot]["status"] == "empty"
     if empty and mm != PULL_IN_MM:

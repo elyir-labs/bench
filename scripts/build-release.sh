@@ -39,7 +39,7 @@ VERSION="${RELEASE_VERSION:-$VERSION}"
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/app" "$STAGE/printer" "$STAGE/kiosk" "$STAGE/installer" "$STAGE/door" "$STAGE/slicer" "$STAGE/bench-app" "$STAGE/bench" "$STAGE/setup"
 cp -R "$SRC/app/dist/." "$STAGE/app/"
-cp "$SRC/printer/elyir_bench_intent.py" "$SRC/printer/filament_units.py" "$SRC/printer/elyir_bench_care.py" "$SRC/printer/printer_intent.py" "$SRC/printer/orca_profile.py" "$SRC/printer/power_key.py" "$STAGE/printer/"
+cp "$SRC/printer/elyir_bench_intent.py" "$SRC/printer/filament_units.py" "$SRC/printer/unit_check.py" "$SRC/printer/elyir_bench_care.py" "$SRC/printer/printer_intent.py" "$SRC/printer/orca_profile.py" "$SRC/printer/power_key.py" "$STAGE/printer/"
 # the start macro the installer writes into the config folder (elyir-bench startmacro on, docs/start-macro.md)
 mkdir -p "$STAGE/printer/klipper"
 cp "$SRC/printer/klipper/elyir-bench.cfg" "$STAGE/printer/klipper/"

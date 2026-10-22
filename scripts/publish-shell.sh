@@ -31,9 +31,17 @@ fi
 REF="${REF:-HEAD}"
 VERSION="$(git -C "$ROOT" log -1 --format=%cd --date=format:%Y.%m.%d "$REF")-$(git -C "$ROOT" rev-parse --short "$REF")"
 WT="$(mktemp -d)"
-trap 'git -C "$ROOT" worktree remove --force "$WT" >/dev/null 2>&1 || true' EXIT
-git -C "$ROOT" worktree add -q --detach "$WT" "$REF"
-ln -s "$ROOT/app/node_modules" "$WT/app/node_modules"
+if [ -x "$ROOT/scripts/public/export.sh" ]; then
+  # From the private tree, phones get the public copy's build: it speaks the printers' own names (the door's
+  # token subprotocol, the frame's messages), which a private build doesn't on a printer from a public release.
+  trap 'rm -rf "$WT"' EXIT
+  REV="$REF" PY="${PY:-$HOME/.venvs/elyir-bench-dev/bin/python}" "$ROOT/scripts/public/export.sh" "$WT" >/dev/null
+  ln -s "$(readlink -f "$ROOT/app/node_modules" 2>/dev/null || echo "$ROOT/app/node_modules")" "$WT/app/node_modules"
+else
+  trap 'git -C "$ROOT" worktree remove --force "$WT" >/dev/null 2>&1 || true' EXIT
+  git -C "$ROOT" worktree add -q --detach "$WT" "$REF"
+  ln -s "$ROOT/app/node_modules" "$WT/app/node_modules"
+fi
 
 echo "== build $VERSION"
 (cd "$WT/app" && npm run build:shell --silent >/dev/null)

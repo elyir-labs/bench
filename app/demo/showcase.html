@@ -3,9 +3,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
 <style>
-  /* Layout: the printer's own dark room. Two real screens on one stage, the moments you can cause
-     beside them; on a phone, the app itself with the moments under it. Dark or light, page and screens
-     together: the visitor's own setting first, then the switch above the moments. */
+  /* design/try-page, B: the two real screens with a remote right under them, so a moment and what it does
+     are in one view. The playing line says whether the moment is still playing, waiting for you, or done.
+     On a phone, the app itself with the remote under it. Dark or light, page and screens together. */
   :root {
     --ground: #0b0e13;
     --surface: #131821;
@@ -14,7 +14,9 @@
     --ink: #eef1f6;
     --quiet: #8d97a8;
     --accent: #4da3ff;
+    --accent-soft: rgba(77, 163, 255, .16);
     --warn: #f5a524;
+    --warn-soft: rgba(245, 165, 36, .16);
     --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     color-scheme: dark;
   }
@@ -26,13 +28,16 @@
     --ink: #13171d;
     --quiet: #5b6473;
     --accent: #1f6fe0;
+    --accent-soft: rgba(31, 111, 224, .10);
     --warn: #a35f00;
+    --warn-soft: rgba(163, 95, 0, .10);
     color-scheme: light;
   }
   * { box-sizing: border-box }
   html, body { background: var(--ground); color: var(--ink) }
   body { font: 16px/1.5 var(--font); padding-inline: 16px; padding-block: 0 48px }
-  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 24px }
+  [hidden] { display: none !important }
 
   nav { display: flex; align-items: center; gap: 28px; padding-block: 18px; border-bottom: 1px solid var(--line) }
   nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
@@ -40,21 +45,20 @@
   nav .links a:hover, nav .end a.quiet:hover, nav .links a[aria-current] { color: var(--ink) }
   nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
   nav .go { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: var(--ground); text-decoration: none; font-weight: 700 }
-  header { padding-block: 8px 0; display: grid; gap: 10px; max-width: 760px }
+  header { padding-top: 4px; display: grid; gap: 8px }
   .mark { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none; flex: none }
   .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
   .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
-  h1 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1.05; font-weight: 800; letter-spacing: -.02em; text-wrap: balance }
-  .lede { margin: 0; color: var(--quiet); font-size: 18px; max-width: 62ch }
+  h1 { margin: 0; font-size: clamp(28px, 3.4vw, 40px); line-height: 1.05; font-weight: 800; letter-spacing: -.02em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 17px; max-width: 70ch }
   .lede b { color: var(--ink); font-weight: 600 }
   .lede a { color: var(--accent); font-weight: 600 }
 
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start }
+  .stage { display: grid; gap: 14px; max-width: 960px; width: 100%; margin: 0 auto }
   .screens { display: flex; gap: 24px; align-items: flex-end; min-width: 0 }
-  figure { margin: 0; display: grid; gap: 10px; min-width: 0 }
-  figcaption { color: var(--quiet); font-size: 13px; font-weight: 500; letter-spacing: .02em }
+  figure { margin: 0; min-width: 0 }
   .panel { flex: 1 1 0 }
-  .phone { flex: 0 0 min(25%, 240px) }
+  .phone { flex: 0 0 min(22%, 212px) }
   .device { position: relative; background: #05070a; border: 1px solid var(--line); overflow: hidden }
   .panel .device { border-radius: 18px; padding: 14px; aspect-ratio: 828 / 508 }
   .phone .device { border-radius: 34px; padding: 10px; aspect-ratio: 410 / 864 }
@@ -66,24 +70,40 @@
   .loading.done { opacity: 0; pointer-events: none }
   .loading.error { color: var(--warn) }
 
-  aside { display: grid; gap: 14px; min-width: 0 }
-  aside h2 { margin: 0; font-size: 15px; font-weight: 700 }
-  .theme { justify-self: start; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line) }
-  .theme button { all: unset; cursor: pointer; padding: 5px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--quiet) }
-  .theme button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
-  .theme button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-  aside p { margin: 0; color: var(--quiet); font-size: 14px }
-  .moments { display: grid; gap: 6px }
-  .moment { all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); transition: border-color .15s, background .15s }
-  .moment b { font-weight: 600; font-size: 15px }
-  .moment span { color: var(--quiet); font-size: 13px; line-height: 1.35 }
-  .moment:hover { background: var(--raised) }
-  .moment:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-  .moment[aria-pressed="true"] { border-color: var(--accent) }
+  .remote { position: relative; display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface) }
+  .groups { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center }
+  .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+  .group > small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--quiet); margin-right: 2px; white-space: nowrap }
+  .moment { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--raised); font-size: 14px; font-weight: 600; white-space: nowrap }
+  .moment:hover { border-color: var(--quiet) }
+  .moment[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--ground) }
   .moment:disabled { opacity: .45; cursor: default }
-  details { color: var(--quiet); font-size: 14px }
-  details summary { cursor: pointer; padding-block: 4px }
-  details .moments { margin-top: 8px }
+  .moment.more { background: none; color: var(--quiet) }
+  .moment.more[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent) }
+  .moment:focus-visible, .theme button:focus-visible, .again:focus-visible, .pop button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+  .playing { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; min-height: 44px }
+  .state { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--quiet); background: var(--raised) }
+  .state::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor }
+  .state[data-phase="playing"] { color: var(--accent); background: var(--accent-soft) }
+  .state[data-phase="playing"]::before { animation: beat 1.2s ease-in-out infinite }
+  .state[data-phase="waiting"] { color: var(--warn); background: var(--warn-soft) }
+  @keyframes beat { 50% { opacity: .25 } }
+  .playing p { margin: 0; flex: 1; font-size: 14px; color: var(--quiet); line-height: 1.4 }
+  .playing p b { color: var(--ink); font-weight: 700 }
+  .again { all: unset; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap }
+  .theme { flex: none; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line) }
+  .theme button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--quiet) }
+  .theme button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
+
+  /* every other scenario opens over the screens, so picking one never moves the page */
+  .pop { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 8px); max-height: min(420px, 60vh); display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 20px 50px rgba(0, 0, 0, .35); overflow: hidden; z-index: 5 }
+  .pop input { margin: 10px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--ground); color: var(--ink); font: inherit; font-size: 14px }
+  .pop .items { overflow-y: auto; padding: 0 6px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px; align-content: start }
+  .pop button { all: unset; cursor: pointer; padding: 7px 10px; border-radius: 8px; display: grid }
+  .pop button b { font-size: 14px; font-weight: 600 }
+  .pop button span { font-size: 12px; color: var(--quiet); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+  .pop button:hover, .pop button[aria-pressed="true"] { background: var(--accent-soft) }
 
   .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; border-top: 1px solid var(--line); padding-top: 24px }
   .facts h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700 }
@@ -94,22 +114,23 @@
   .embed nav, .embed header, .embed .facts { display: none }
 
   @media (max-width: 960px) {
-    .stage { grid-template-columns: minmax(0, 1fr) }
     .facts { grid-template-columns: minmax(0, 1fr) }
   }
-  /* a phone: the app itself, no picture of a phone inside a phone */
+  /* a phone: the app itself, no picture of a phone inside a phone; the moments are a strip to swipe */
   @media (max-width: 640px) {
     nav { gap: 16px }
     nav .links, nav .go { display: none }
-    header { padding-block: 0 }
     .lede { font-size: 16px }
     .panel { display: none }
     .phone { flex: 1 1 auto }
     .phone .device { padding: 0; border-radius: 20px; aspect-ratio: auto; height: 78vh }
     .phone .viewport { border-radius: 20px }
-    .phone figcaption { display: none }
+    .groups { flex-wrap: nowrap; overflow-x: auto; margin-inline: -16px; padding-inline: 16px; scrollbar-width: none }
+    .group { flex-wrap: nowrap }
+    .playing { flex-wrap: wrap }
+    .playing p { flex: 1 1 calc(100% - 100px) }
   }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
 </style>
 
 <div class="wrap">
@@ -120,9 +141,8 @@
   </nav>
   <header>
     <h1>A Klipper printer that tells you what it needs, in one sentence.</h1>
-    <p class="lede">These are the real screens, connected to a pretend printer running inside this page.
-      <b>Pick a moment and watch both screens react.</b> Tap the screens too: everything works except the actual plastic.</p>
-    <p class="lede"><a href="install">Put it on your printer</a>: one command, for a Raspberry Pi printer that already runs Klipper.</p>
+    <p class="lede">The 7-inch touchscreen and a phone, connected to one pretend printer running in this page.
+      <b>Pick a moment under the screens and watch both react.</b> Everything works except the actual plastic.</p>
   </header>
 
   <section class="stage">
@@ -132,41 +152,52 @@
           <iframe id="panel" title="The 7-inch touchscreen on the printer" data-src="app/index.html?host=parent&amp;screen=panel&amp;theme=dark"></iframe>
           <div class="loading" id="load-panel">Starting the pretend printer…</div>
         </div></div>
-        <figcaption>The 7-inch touchscreen on the printer</figcaption>
       </figure>
       <figure class="phone">
         <div class="device"><div class="viewport" data-w="390" data-h="844">
-          <iframe id="phone" title="Your phone" data-src="app/index.html?host=parent&amp;screen=phone&amp;theme=dark"></iframe>
+          <iframe id="phone" title="Your phone, same printer" data-src="app/index.html?host=parent&amp;screen=phone&amp;theme=dark"></iframe>
           <div class="loading" id="load-phone">Starting…</div>
         </div></div>
-        <figcaption>Your phone, same printer</figcaption>
       </figure>
     </div>
 
-    <aside>
-      <div class="theme" role="group" aria-label="Screen theme">
-        <button type="button" data-theme-pick="dark" aria-pressed="true">Dark</button>
-        <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+    <div class="remote">
+      <div class="pop" id="pop" hidden>
+        <input id="filter" placeholder="Every other scenario in the simulator: filter" aria-label="Filter scenarios">
+        <div class="items" id="items"></div>
       </div>
-      <h2>Make something happen</h2>
-      <p>Each one resets the printer and plays out at four times real speed.</p>
-      <div class="moments" id="moments">
-        <button class="moment" data-s="print" disabled><b>Start a print</b><span>Warm-up, leveling, first layer, then printing</span></button>
-        <button class="moment" data-s="runout" disabled><b>Filament runs out</b><span>Mid-print, at 40%, with nobody watching</span></button>
-        <button class="moment" data-s="carried_on" disabled><b>Runs out, carries on</b><span>Another spool of the same white takes over by itself</span></button>
-        <button class="moment" data-s="multi_color" disabled><b>Multi-color print</b><span>The filament unit swaps red and white by itself, layer after layer</span></button>
-        <button class="moment" data-s="color_change" disabled><b>Color change by hand</b><span>The file pauses for a spool you load yourself</span></button>
-        <button class="moment" data-s="first_layer" disabled><b>First layer going down</b><span>Squish more or less, kept for next time</span></button>
-        <button class="moment" data-s="finished" disabled><b>Print finished</b><span>Bed still warm, ready for the next plate</span></button>
-        <button class="moment" data-s="new_spool" disabled><b>A new spool goes in</b><span>Someone pushes filament into an empty slot</span></button>
-        <button class="moment" data-s="problem" disabled><b>Heater fault</b><span>Klipper shuts down mid-print</span></button>
-        <button class="moment" data-s="day" disabled><b>A whole day</b><span>Ready, a print, a runout, finished, ready again</span></button>
+      <!-- each moment: data-s is the simulator's scenario, title is what it is, data-look what to watch for -->
+      <div class="groups" id="groups">
+        <div class="group"><small>Printing</small>
+          <button class="moment" data-s="print" disabled title="Warm-up, leveling, first layer, then printing" data-look="The panel walks through warm-up, leveling and the first layer, one line at a time.">Start a print</button>
+          <button class="moment" data-s="first_layer" disabled title="Squish more or less, kept for next time" data-look="Tap Check the first layer on the panel: squish more or less, and it's kept for next time.">First layer</button>
+          <button class="moment" data-s="multi_color" disabled title="The filament unit swaps red and white by itself" data-look="Watch the slots: red and white trade places by themselves, layer after layer.">Multi-color print</button>
+          <button class="moment" data-s="finished" disabled title="Bed still warm, ready for the next plate" data-look="The bed stays warm, and the next print is one tap away.">Print finished</button>
+        </div>
+        <div class="group"><small>Filament</small>
+          <button class="moment" data-s="runout" disabled title="Mid-print, at 40%, with nobody watching" data-look="Both screens say the same sentence: which spool to load.">Filament runs out</button>
+          <button class="moment" data-s="carried_on" disabled title="Another spool of the same white takes over by itself" data-look="No question at all: another white spool takes over, and the panel says so.">Runs out, carries on</button>
+          <button class="moment" data-s="color_change" disabled title="The file pauses for a spool you load yourself" data-look="The file asks for a color by name and waits until it's in.">Color change by hand</button>
+          <button class="moment" data-s="new_spool" disabled title="Someone pushes filament into an empty slot" data-look="An empty slot fills, and the screen asks what went in.">A new spool goes in</button>
+        </div>
+        <div class="group"><small>When it goes wrong</small>
+          <button class="moment" data-s="power_lost" disabled title="Stopped mid-print; print the rest once it's back" data-look="The panel says when the power went and came back, and offers to print the rest.">Power cut</button>
+          <button class="moment" data-s="problem" disabled title="Klipper shuts down mid-print" data-look="A heater fault, in plain words, with the one thing to do next.">Heater fault</button>
+        </div>
+        <div class="group"><small>All of it</small>
+          <button class="moment" data-s="day" disabled title="Ready, a print, a runout, finished, ready again" data-look="Leave it playing: a print, a runout, a finish and back to Ready.">A whole day</button>
+        </div>
+        <button class="moment more" id="more" aria-expanded="false" aria-controls="pop" disabled>More…</button>
       </div>
-      <details>
-        <summary>Every scenario in the simulator</summary>
-        <div class="moments" id="all"></div>
-      </details>
-    </aside>
+      <div class="playing" aria-live="polite">
+        <span class="state" id="state" hidden></span>
+        <p id="said">Each moment resets the printer and plays at four times real speed. The screens work too: tap them.</p>
+        <button class="again" id="again" hidden>↻ Again</button>
+        <span class="theme" role="group" aria-label="Screen theme">
+          <button type="button" data-theme-pick="dark" aria-pressed="true">Dark</button><button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+        </span>
+      </div>
+    </div>
   </section>
 
   <section class="facts">
@@ -185,6 +216,7 @@
   }
   const worker = new Worker('sim-worker.js', { type: 'module' })
   const frames = [...document.querySelectorAll('iframe')]
+  const $ = (id) => document.getElementById(id)
 
   // Dark or light, the page and both screens together. A first visit follows the visitor's own setting;
   // a pick is remembered in this browser. Switching reloads only the screens: the printer lives in this
@@ -215,7 +247,7 @@
     worker.postMessage({ t: 'connect' }, [ev.ports[0]])
   })
 
-  // this page's own line to the printer: the scenario buttons
+  // this page's own line to the printer: the moments and the playing line
   const ch = new MessageChannel()
   worker.postMessage({ t: 'connect' }, [ch.port2])
   const port = ch.port1
@@ -227,9 +259,46 @@
     port.postMessage({ t: 'ctl', id, op, arg })
   })
 
-  const buttons = () => [...document.querySelectorAll('.moment')]
-  const mark = (name) => buttons().forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === name)))
-  const loaders = [document.getElementById('load-panel'), document.getElementById('load-phone')]
+  const moments = [...document.querySelectorAll('.moment[data-s]')]
+  const pop = $('pop')
+  const more = $('more')
+  const loaders = [$('load-panel'), $('load-phone')]
+  let docs = {}
+  const pretty = (name) => { const n = name.replace(/_/g, ' '); return n[0].toUpperCase() + n.slice(1) }
+
+  // the scenario's own wait (sim.wait_for) is what a person has to do next
+  const YOUR_TURN = {
+    resume: 'The print is waiting for you. Answer on either screen to carry on.',
+    restart: 'Klipper has stopped. Restart it from either screen.',
+  }
+  const PHASE = { playing: 'Playing', waiting: 'Your turn', done: 'Done' }
+  let shown = ''
+  let current = null
+  let answered = false
+  const say = (st) => {
+    if (st.running !== current || !docs[current]) return
+    const key = `${st.running}/${st.phase}/${st.waiting_for}`
+    if (key === shown) return
+    if (shown.startsWith(`${st.running}/waiting/`)) answered = true
+    shown = key
+    document.querySelectorAll('[data-s]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === st.running)))
+    const m = moments.find((b) => b.dataset.s === st.running)
+    more.setAttribute('aria-pressed', String(!m))
+    $('state').hidden = false
+    $('state').dataset.phase = st.phase
+    $('state').textContent = PHASE[st.phase]
+    const p = $('said')
+    p.replaceChildren(Object.assign(document.createElement('b'), { textContent: m ? m.textContent : pretty(st.running) }), ' ')
+    p.append(st.phase === 'waiting' ? YOUR_TURN[st.waiting_for] ?? 'Waiting for you on the screens.'
+      : answered ? 'You answered it, and the printer carries on from here.'
+        : m ? m.dataset.look : docs[st.running].split('\n')[0])
+    $('again').hidden = false
+  }
+  // the printer doesn't announce a change of phase, so the page asks twice a second while it's in view
+  const watch = () => setInterval(async () => {
+    if (document.hidden) return
+    try { say(await ctl('state')) } catch {}
+  }, 500)
 
   port.onmessage = async (ev) => {
     const m = ev.data
@@ -245,18 +314,19 @@
       })
       if (m.phase === 'ready') {
         const r = await ctl('scenarios')
-        const all = document.getElementById('all')
+        docs = r.scenarios
+        const items = $('items')
         for (const [name, doc] of Object.entries(r.scenarios)) {
+          if (moments.some((b) => b.dataset.s === name)) continue
           const b = document.createElement('button')
-          b.className = 'moment'
           b.dataset.s = name
           b.innerHTML = '<b></b><span></span>'
-          b.querySelector('b').textContent = name.replace(/_/g, ' ')
+          b.querySelector('b').textContent = pretty(name)
           b.querySelector('span').textContent = doc.split('\n')[0]
-          all.appendChild(b)
+          items.appendChild(b)
         }
-        buttons().forEach((b) => { b.disabled = false })
-        mark(r.running)
+        document.querySelectorAll('.moment').forEach((b) => { b.disabled = false })
+        watch()
         // screens start once the printer is up; the boot picture covers the wait on the panel
         frames.forEach((f) => { f.src = f.dataset.src })
         frames.forEach((f, i) => f.addEventListener('load', () => setTimeout(() => loaders[i].classList.add('done'), 600), { once: true }))
@@ -264,12 +334,35 @@
     }
   }
 
-  document.querySelector('.stage aside').addEventListener('click', async (ev) => {
+  const openPop = (open) => {
+    pop.hidden = !open
+    more.setAttribute('aria-expanded', String(open))
+    if (open) $('filter').focus()
+  }
+  const play = async (name) => {
+    current = name
+    answered = false
+    shown = ''
+    openPop(false)
+    try { await ctl('run', name); say(await ctl('state')) } catch (e) { console.error(e) }
+  }
+  $('groups').addEventListener('click', (ev) => {
     const b = ev.target.closest('.moment')
     if (!b || b.disabled) return
-    mark(b.dataset.s)
-    try { await ctl('run', b.dataset.s) } catch (e) { console.error(e) }
+    if (b === more) openPop(pop.hidden)
+    else play(b.dataset.s)
   })
+  pop.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-s]')
+    if (b) play(b.dataset.s)
+  })
+  $('filter').addEventListener('input', (ev) => {
+    const q = ev.target.value.toLowerCase()
+    pop.querySelectorAll('button[data-s]').forEach((b) => { b.hidden = q && !b.textContent.toLowerCase().includes(q) })
+  })
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !pop.hidden) { openPop(false); more.focus() } })
+  document.addEventListener('click', (ev) => { if (!pop.hidden && !ev.target.closest('.remote')) openPop(false) })
+  $('again').addEventListener('click', () => { if (current) play(current) })
 
   // each screen is drawn at its real size and scaled to fit its frame
   const fit = () => document.querySelectorAll('.viewport').forEach((v) => {

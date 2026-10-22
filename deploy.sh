@@ -4,6 +4,7 @@
 #   ./deploy.sh workshop.local               # build, copy, `elyir-bench apply <release>` there
 #   ./deploy.sh workshop.local plan          # just show what apply would change there
 #   ./deploy.sh workshop.local doctor        # check the printer without changing anything
+#   ./deploy.sh biqu@desk.local          # another user (or SSH_USER=biqu)
 #
 # The printer runs exactly what the bootstrap would run; this script only builds and copies.
 
@@ -11,30 +12,37 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 HOST="${1:?usage: $0 <host> [apply|plan|doctor]}"
 CMD="${2:-apply}"
-DEST="${SSH_USER:-pi}@${HOST}"
+DEST="$HOST"; [[ "$HOST" == *@* ]] || DEST="${SSH_USER:-pi}@${HOST}"
 # ConnectTimeout: without it, ssh to a .local name from this Mac sometimes hangs before connecting (15 October 2026)
 OPTS=(-4 -o BatchMode=yes -o ConnectTimeout=15)
 SSH=(ssh "${OPTS[@]}" "$DEST")
 # a terminal lets the installer ask for the sudo password on printers that need one
 [ -t 0 ] && SSH=(ssh "${OPTS[@]}" -t "$DEST")
 
-if [ "$CMD" != "apply" ]; then
+DIR=elyir-bench INSTALLER=installer/elyir_bench.py BUILD="$ROOT/scripts/build-release.sh"
+# A printer on Elyir Bench's own names (~/elyir-bench, scripts/move-to-public.py) takes the public build, as testers' do
+if [ -x "$ROOT/scripts/release/build-public.sh" ] && ssh "${OPTS[@]}" "$DEST" 'test -d ~/elyir-bench'; then
+  DIR=elyir-bench INSTALLER=installer/elyir_bench.py BUILD="$ROOT/scripts/release/build-public.sh"
+fi
+
+if [ "$CMD" != "apply" ] && [ "$DIR" = elyir-bench ]; then
   # use the installer from the release being built, so new checks show up before deploying
-  scp "${OPTS[@]}" -q "$ROOT/installer/elyir_bench.py" "$DEST:/tmp/elyir-bench-installer.py"
-  exec "${SSH[@]}" "python3 /tmp/elyir-bench-installer.py $CMD"
+  scp "${OPTS[@]}" -q "$ROOT/$INSTALLER" "$DEST:/tmp/$DIR-installer.py"
+  exec "${SSH[@]}" "python3 /tmp/$DIR-installer.py $CMD"
 fi
 
 echo "== build"
-TARBALL="$("$ROOT/scripts/build-release.sh" | tail -1)"
+TARBALL="$("$BUILD" | tail -1)"
 echo "   $(basename "$TARBALL")"
 
 echo "== copy to $DEST"
-"${SSH[@]}" 'mkdir -p ~/elyir-bench/incoming'
-scp "${OPTS[@]}" -q "$TARBALL" "$DEST:elyir-bench/incoming/"
+"${SSH[@]}" "mkdir -p ~/$DIR/incoming"
+scp "${OPTS[@]}" -q "$TARBALL" "$DEST:$DIR/incoming/"
 
-echo "== apply"
+echo "== $CMD"
 NAME="$(basename "$TARBALL")"
-"${SSH[@]}" "cd ~/elyir-bench/incoming &&
-  rm -rf .installer && mkdir .installer && tar -xzf '$NAME' -C .installer installer/elyir_bench.py &&
-  { python3 .installer/installer/elyir_bench.py apply '$NAME'; rc=\$?
-    ls -t elyir-bench-*.tar.gz | tail -n +4 | xargs -r rm -f; exit \$rc; }"
+ARGS="$CMD"; [ "$CMD" = apply ] && ARGS="apply '$NAME'"
+"${SSH[@]}" "cd ~/$DIR/incoming &&
+  rm -rf .installer && mkdir .installer && tar -xzf '$NAME' -C .installer $INSTALLER &&
+  { python3 .installer/$INSTALLER $ARGS; rc=\$?
+    ls -t $DIR-*.tar.gz | tail -n +4 | xargs -r rm -f; exit \$rc; }"

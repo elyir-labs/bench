@@ -41,6 +41,7 @@ import library  # noqa: E402
 import setup_card  # noqa: E402
 import bring  # noqa: E402
 import slicer_profile  # noqa: E402
+import unit_skins  # noqa: E402
 
 
 # --------------------------------------------------------------------------
@@ -93,8 +94,9 @@ SIM_TUBE_MM = 900   # pulled back this far, the slot's sensor no longer sees the
 
 
 class SimPrinter:
-    def __init__(self, name: str, speed: float, ace: bool = True, light: str = "pin"):
+    def __init__(self, name: str, speed: float, ace: bool = True, light: str = "pin", skin: Optional[str] = None):
         self.name = name
+        self.skin = skin   # --units afc / happy_hare: the pretend ACEs shown as AFC's lanes or Happy Hare's gates
         self.light = light   # the chamber light (--light): pin (an on/off light), strip (status LEDs), both, none
         self.speed = speed
         self.port = 7126   # main() sets the one it serves on: the Advanced door's stand-in page is there
@@ -113,9 +115,10 @@ class SimPrinter:
         self.klippy_message = "Printer is ready"
         self.tracker = self.new_tracker()
         self.fail_next_swap = False
+        self.fail_check_slot: Optional[int] = None   # this slot's motor test fails once (the unit check, --units afc|happy_hare)
         self.pulled: Dict[int, int] = {}   # mm each slot has been pulled back since it last had filament
         self.tracker.set_klippy_state("ready")
-        self.tracker.update_status(deepcopy(self.status))
+        self.tracker.update_status(self.seen(deepcopy(self.status)))
         self.clients: Set[web.WebSocketResponse] = set()
         # Turned off or restarting (design/power/): nothing answers until then (inf: until the sim restarts)
         self.down_until: Optional[float] = None
@@ -168,9 +171,12 @@ class SimPrinter:
     def apply_first_layer(self) -> None:
         """The shared PRINT_START's last step (common/print_start.cfg): the kept first layer."""
         sv = (self.status.get("save_variables") or {}).get("variables") or {}
-        if "first_layer_z" not in sv:
+        if "first_layer_z" not in sv and "first_layer_sheets" not in sv:
             return
-        z = float(sv["first_layer_z"] or 0)
+        z = float(sv.get("first_layer_z") or 0)
+        sheets, sheet = sv.get("first_layer_sheets") or {}, str(sv.get("first_layer_sheet") or "")
+        if sheet and sheet in sheets:
+            z = float(sheets[sheet]["z"])
         if str(sv.get("first_layer_against", "scan")) != ("tap" if self.tap else "scan") or abs(z) > 0.5:
             z = 0.0
         if z:
@@ -269,7 +275,7 @@ class SimPrinter:
 
     def new_tracker(self) -> Any:
         t = engine.IntentTracker(self.name)
-        t.set_units_on_usb(2 if self.ace else 0)   # two filament units plugged in, like workshop
+        t.set_units_on_usb(2 if self.ace and not self.skin else 0)   # two ACE Pros on USB, like workshop
         t.head_sensor = "filament_switch_sensor extruder_sensor"
         t.has_unit = self.ace
         t.light_objects = engine.light_candidates(list(self.status))
@@ -295,8 +301,8 @@ class SimPrinter:
             cur = self.status.setdefault(obj, {})
             for k, v in fields.items():
                 cur[k] = deepcopy(v)
-        self.tracker.update_status(deepcopy(patch))
-        self.broadcast("notify_status_update", [deepcopy(patch), time.time()])
+        self.tracker.update_status(self.seen(deepcopy(patch)))
+        self.broadcast("notify_status_update", [self.seen(deepcopy(patch)), time.time()])
         self.publish()
 
     def set_klippy(self, state: str, message: str = "") -> None:
@@ -309,6 +315,34 @@ class SimPrinter:
         if notif:
             self.broadcast(notif, [])
         self.publish(force=True)
+
+    def seen(self, status: Dict[str, Any]) -> Dict[str, Any]:
+        """Status as Bench and the console get it: with --units afc or happy_hare, the unit's objects in `ace`'s place."""
+        if not self.skin or "ace" not in status or "ace" not in self.status:
+            return status
+        return {**{k: v for k, v in status.items() if k != "ace"}, **unit_skins.view(self.skin, self.status["ace"])}
+
+    def unskin(self, script: str) -> Optional[str]:
+        """AFC's or Happy Hare's commands as the pretend ACE's; a spool's details go straight into its lists.
+        None when nothing is left to run."""
+        if not self.skin:
+            return script
+        left = []
+        for line in script.splitlines():
+            ace, spool = unit_skins.to_ace(self.skin, line)
+            if spool:
+                g, fields = spool
+                lists = {k: list(self.status["ace"][k]) for k in ("gate_color", "gate_material", "gate_temp")}
+                if fields.get("color"):
+                    lists["gate_color"][g] = fields["color"].upper()
+                if fields.get("material"):
+                    lists["gate_material"][g] = fields["material"]
+                if fields.get("temp"):
+                    lists["gate_temp"][g] = int(fields["temp"])
+                self.patch({"ace": lists})
+            elif ace:
+                left.append(ace)
+        return "\n".join(left) or None
 
     def gcode_response(self, line: str) -> None:
         self.log.append(line)
@@ -724,6 +758,7 @@ class SimPrinter:
                     raise web.HTTPBadRequest(text=str(e))
             elif kind == P.GCODE:
                 self.gcode_response(f"// {payload}")
+                payload = self.unskin(str(payload)) or ""
                 if str(payload).startswith("ACE_CHANGE_TOOL"):
                     slot = int(str(payload).split("=")[-1])
                     self.patch({"ace": {"selected_gate": slot}})
@@ -756,7 +791,7 @@ class SimPrinter:
                 self.set_klippy("startup", "Klipper is starting")
                 await asyncio.sleep(2 / self.speed)
                 self.status = self.fresh()
-                self.tracker.update_status(deepcopy(self.status))
+                self.tracker.update_status(self.seen(deepcopy(self.status)))
                 self.set_klippy("ready", "Printer is ready")
                 self._release("restart")
             elif kind == P.START_LAST:
@@ -784,7 +819,7 @@ class SimPrinter:
                     status["ace"]["devices"] = [dict(deepcopy(devs[i % 2]), name=f"ACE_{i + 1}", gate_offset=i * 4) for i in range(units)]
                     status["ace"]["num_devices"], status["ace"]["total_gates"] = units, units * 4
                 self.status = status
-                self.tracker.update_status(deepcopy(self.status))
+                self.tracker.update_status(self.seen(deepcopy(self.status)))
                 self.set_klippy("ready", "Printer is ready")
             elif kind == P.START_FILE:
                 self.tracker.acknowledge_finished()
@@ -822,6 +857,9 @@ class SimPrinter:
             elif kind == P.SLOT:
                 self.tracker.slot_input(payload)
                 self.drive()
+            elif kind == P.UNIT_CHECK:
+                self.tracker.unit_check_input(payload)
+                self.drive()
             elif kind == P.COLOUR:
                 self.tracker.colour_input(payload)
                 self.publish()
@@ -833,6 +871,14 @@ class SimPrinter:
 
     def drive(self) -> None:
         for kind, script in self.tracker.work():
+            if kind == "macro" and unit_skins.is_check(self.skin, script):
+                asyncio.get_event_loop().create_task(self._check_macro(script))
+                continue
+            if kind in ("macro", "gcode"):
+                shown, script = script, self.unskin(script)
+                if script is None:
+                    self.gcode_response(f"// {shown}")
+                    continue
             if kind == "macro":
                 asyncio.get_event_loop().create_task(self._change_macro(script))
             elif kind in ("unit", "unit_macro"):
@@ -949,6 +995,28 @@ class SimPrinter:
             self.patch({"pause_resume": {"is_paused": False}, "print_stats": {"state": "printing"}})
             self._release("resume")
 
+    async def _check_macro(self, script: str) -> None:
+        """A step of the unit check (printer/unit_check.py), answered the way Happy Hare or AFC would."""
+        tracker = self.tracker
+        for line in script.splitlines():
+            self.gcode_response(f"// {line}")
+            seconds, said, measured = unit_skins.check_answer(self.skin, line, unit_skins._slot_states(self.status["ace"]),
+                                                              self.fail_check_slot)
+            await asyncio.sleep(seconds / self.speed)
+            if any(x.startswith("!!") for x in said):
+                self.fail_check_slot = None   # once: Try again passes
+            for x in said:
+                self.gcode_response(x)
+            if "tube" in measured:
+                self.patch({"ace": {"sim_bowden": measured["tube"]}})
+            if "hub" in measured:
+                g, mm = measured["hub"]
+                self.patch({"ace": {"sim_dist_hub": dict(self.status["ace"].get("sim_dist_hub") or {}, **{str(g): mm})}})
+        if self.tracker is tracker:
+            self.tracker.change_done(None)
+        self.drive()
+        self.publish(force=True)
+
     async def _heat_to(self, t: float) -> None:
         self.patch({"extruder": {"target": t}})
         while self.status["extruder"]["temperature"] < t - 3:
@@ -1034,7 +1102,7 @@ class SimPrinter:
         if self.units is not None:
             await self._swap_on_service(payload)
             return
-        self.gcode_response(f"// {engine.swap_gcode(payload)}")
+        self.gcode_response(f"// {engine.swap_gcode(payload, self.tracker.unit_commands())}")
         self.gcode_response(f"// ACE: Tool change {frm if frm is not None else -1} => {to}")
         try:
             if frm is not None:
@@ -1108,6 +1176,7 @@ class SimPrinter:
         self.klippy_message = "Printer is ready"
         self.tracker = self.new_tracker()
         self.fail_next_swap = False
+        self.fail_check_slot = None
         for task in self._setup_tasks:
             task.cancel()
         self._setup_tasks = []
@@ -1119,8 +1188,8 @@ class SimPrinter:
         if self._history_kept is not None:
             self.history, self._history_kept = self._history_kept, None
         self.tracker.set_klippy_state("ready")
-        self.tracker.update_status(deepcopy(self.status))
-        self.broadcast("notify_status_update", [deepcopy(self.status), time.time()])
+        self.tracker.update_status(self.seen(deepcopy(self.status)))
+        self.broadcast("notify_status_update", [self.seen(deepcopy(self.status)), time.time()])
         self.broadcast("notify_klippy_ready", [])
         self.publish(force=True)
 
@@ -1146,6 +1215,13 @@ class SimPrinter:
             raise
         except Exception as e:  # keep the sim alive
             self.gcode_response(f"!! simulator scenario error: {e}")
+
+    def scenario_state(self) -> Dict[str, Any]:
+        """For the demo's playing line: playing while the script still moves the printer, waiting while it
+        waits for a person (waiting_for says for what), done once it has nothing more to do."""
+        task = self._scenario_task
+        phase = "waiting" if self._waiting_for else "done" if task is None or task.done() else "playing"
+        return {"running": self.scenario_name, "phase": phase, "waiting_for": self._waiting_for}
 
     async def sleep(self, seconds: float) -> None:
         await asyncio.sleep(seconds / self.speed)
@@ -1183,13 +1259,14 @@ async def dispatch(sim: SimPrinter, method: str, params: Any) -> Any:
         return {"state": sim.klippy_state, "state_message": sim.klippy_message, "hostname": sim.name.lower(),
                 "software_version": "sim", "cpu_info": "simulated"}
     if method == "printer.objects.list":
-        return {"objects": list(sim.status.keys())}
+        return {"objects": list(sim.seen(sim.status).keys())}
     if method in ("printer.objects.query", "printer.objects.subscribe"):
         objs = params.get("objects", {})
         out: Dict[str, Any] = {}
+        status = sim.seen(sim.status)
         for name, fields in objs.items():
-            if name in sim.status:
-                out[name] = deepcopy(sim.status[name]) if not fields else {f: deepcopy(sim.status[name].get(f)) for f in fields if f in sim.status[name]}
+            if name in status:
+                out[name] = deepcopy(status[name]) if not fields else {f: deepcopy(status[name].get(f)) for f in fields if f in status[name]}
         return {"eventtime": time.time(), "status": out}
     if method == "printer.intent":
         return sim.intent()
@@ -1347,7 +1424,7 @@ async def sim_control(request: web.Request) -> web.Response:
         await sim.start_scenario(name, **{k: request.query[k] for k in ("filename", "skipped") if request.query.get(k)})
         return web.json_response({"ok": True, "scenario": name})
     return web.json_response({"scenarios": {k: (v.__doc__ or "").strip() for k, v in SCENARIOS.items()},
-                             "running": sim.scenario_name, "speed": sim.speed, "waiting_for": sim._waiting_for})
+                             "speed": sim.speed, **sim.scenario_state()})
 
 
 async def sim_insert(request: web.Request) -> web.Response:
@@ -1626,9 +1703,10 @@ def main() -> None:
     ap.add_argument("--config", help="a folder served as the printer's config files, like Moonraker's config root "
                     "(a slicer elsewhere copies elyir-bench-slicer/ from it: docs/slicer.md)")
     ap.add_argument("--tap", action="store_true", help="PRINT_START's tap stage runs: the printer finds its own first layer")
-    ap.add_argument("--units", choices=["klipperace", "service"], default="klipperace",
+    ap.add_argument("--units", choices=["klipperace", "service", *unit_skins.SKINS], default="klipperace",
                     help="service: two pretend ACE Pros behind the real filament-unit service (units/), instead of a "
-                    "pretend KlipperACE; scenarios that play with KlipperACE's own status (runout, colour) need klipperace")
+                    "pretend KlipperACE; scenarios that play with KlipperACE's own status (runout, colour) need klipperace. "
+                    "afc, happy_hare: the pretend units shown to Bench as AFC's lanes or Happy Hare's gates")
     a = ap.parse_args()
     if a.no_files:
         FILES.clear()
@@ -1636,7 +1714,8 @@ def main() -> None:
     global CONFIG_DIR
     CONFIG_DIR = Path(a.config).expanduser() if a.config else None
     app = web.Application(middlewares=[cors], client_max_size=256 * 1024 * 1024)   # G-code uploads
-    app["sim"] = SimPrinter(a.name, a.speed, ace=not a.no_ace, light=a.light)
+    app["sim"] = SimPrinter(a.name, a.speed, ace=not a.no_ace, light=a.light,
+                            skin=a.units if a.units in unit_skins.SKINS and not a.no_ace else None)
     app["sim"].port = a.port
     if a.tap:
         app["sim"].tap = app["sim"].tap_default = True

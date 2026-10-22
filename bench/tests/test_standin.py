@@ -433,6 +433,7 @@ COMBO_MMU = {
 def test_an_ace_pro_as_rinkhals_reports_it_is_the_engines_unit():
     t = S.engine.IntentTracker("Kobra 3")
     t.has_unit = True
+    t.units_watch_only = True   # as the stand-in sets it: Rinkhals takes none of Happy Hare's commands
     t.set_klippy_state("ready")
     t.update_status(COMBO_MMU)
     assert t.unit_state()["driver"] == "happy_hare" and t.unit_commands() is None
@@ -447,6 +448,7 @@ async def test_a_kobra_combo_shows_its_slots_and_takes_no_unit_commands(rig):
     rig.kobra.inject = COMBO_MMU
     await rig.kobra.push({"extruder": {"temperature": 30.0}, **COMBO_MMU})
     await until(lambda: rig.s.tracker.has_unit is True)
+    assert rig.s.tracker.units_watch_only and rig.s.tracker.unit_commands() is None
     i = rig.s.intent()
     assert len(i["spools"]) == 4 and i["spools"][1]["in_use"]
     assert not set(all_action_ids(i)) & S.NOT_HERE

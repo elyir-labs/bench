@@ -1589,7 +1589,7 @@ class Legacy(Step):
 
 class Component(Step):
     name = "moonraker component"
-    FILES = ["elyir_bench_intent.py", "filament_units.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py"]
+    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py"]
     def check(self, c):
         comp = Path(c.facts["moonraker"]["components"])
         wrong = [f for f in self.FILES
@@ -1896,6 +1896,17 @@ def klipperace_here(facts: dict) -> bool:
     return any(line in KLIPPERACE_INCLUDES for line in printer_cfg_lines(facts))
 
 
+def other_unit_driver(facts: dict) -> str | None:
+    """AFC or Happy Hare included in printer.cfg: they drive the printer's units, an ACE Pro among them, and Bench
+    talks to them instead (filament_units.py). Our driver would fight them for the ACE's port."""
+    for line in printer_cfg_lines(facts):
+        if line.startswith("[include AFC/"):
+            return "AFC"
+        if line.startswith("[include mmu/"):
+            return "Happy Hare"
+    return None
+
+
 def resolve_units(facts: dict, s: dict) -> dict:
     """filament_units: auto, made concrete for this apply: Bench's own driver for an ACE Pro that nothing else drives
     and whose head sensor Klipper knows, otherwise KlipperACE's way (a printer on KlipperACE is asked, ask_units).
@@ -1903,7 +1914,8 @@ def resolve_units(facts: dict, s: dict) -> dict:
     if s.get("filament_units", "auto") != "auto":
         return s
     ours = UNITS_INCLUDE in printer_cfg_lines(facts)
-    on = ours or (bool(facts.get("ace_units")) and not klipperace_here(facts) and units_sensor_pin(facts, s) is not None)
+    on = ours or (bool(facts.get("ace_units")) and not klipperace_here(facts) and not other_unit_driver(facts)
+                  and units_sensor_pin(facts, s) is not None)
     return {**s, "units_auto": True, "filament_units": "elyir" if on else "klipperace"}
 
 
@@ -1911,7 +1923,7 @@ def ask_units(facts: dict, s: dict) -> dict:
     """Once per printer, at an apply from a terminal: an ACE Pro on KlipperACE may move to Bench's own driver."""
     st = load_state()
     if (units_on(s) or st.get("units_asked") or not facts.get("ace_units") or not sys.stdin.isatty()
-            or units_sensor_pin(facts, s) is None):
+            or other_unit_driver(facts) or units_sensor_pin(facts, s) is None):
         return s
     now = "runs on KlipperACE" if klipperace_here(facts) else "has no driver in printer.cfg"
     print(f"  This printer's ACE Pro {now}. Elyir Bench has its own ACE Pro driver, free and open source,\n"

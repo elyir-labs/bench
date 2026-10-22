@@ -445,7 +445,13 @@ class PrinterIntent:
         try:
             objects = await self.klippy_apis.get_object_list()
             self._objects = list(objects or [])
-            self._unit_in_klipper = any(o in (objects or []) for o in ("ace", "mmu"))
+            self._unit_in_klipper = any(o in (objects or []) for o in ("ace", "mmu", "AFC"))
+            if "AFC" in (objects or []):
+                subs["AFC"] = ["lanes", "current_load", "current_state", "error_state"]
+                for o in engine.filament_units.afc_lane_objects(list(objects or [])):
+                    subs[o] = None
+            for o in engine.filament_units.check_objects(list(objects or [])):
+                subs[o] = ["filament_detected"] if o.startswith("filament_switch_sensor ") else None
             self.tracker.has_unit = self._unit_present()
             chamber = self.tracker.chamber_sensor_name(list(objects or []))
             if chamber:
@@ -1956,6 +1962,9 @@ class PrinterIntent:
             self._drive()
         elif kind == P.SLOT:
             self.tracker.slot_input(payload)
+            self._drive()
+        elif kind == P.UNIT_CHECK:
+            self.tracker.unit_check_input(payload)
             self._drive()
         elif kind == P.COLOUR:
             self.tracker.colour_input(payload)

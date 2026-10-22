@@ -125,6 +125,10 @@ def scenarios():
                        "running": printer.scenario_name, "ace": printer.ace})
 
 
+def state():
+    return json.dumps(printer.scenario_state())
+
+
 async def run(name):
     await printer.start_scenario(name)
     return json.dumps({"ok": True, "scenario": name})

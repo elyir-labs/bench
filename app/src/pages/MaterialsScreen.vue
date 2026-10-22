@@ -88,6 +88,14 @@
         <span v-else-if="!g.unit.connected">Not connected</span>
         <span v-else-if="g.unit.temp != null" class="a-num">{{ g.unit.temp }}°</span>
         <span class="spacer"></span>
+        <!-- Happy Hare or AFC: check each slot and measure the tube (design/unit-setup/, B) -->
+        <button
+          v-if="g.unit.check && !door.away"
+          class="a-btn ghost unitbtn"
+          :disabled="!!g.unit.check.why || !!store.busyAction"
+          :title="g.unit.check.why ?? undefined"
+          @click="store.act(g.unit.check.action)"
+        >{{ store.busyAction === 'unit_check_start' ? '…' : g.unit.check.action.label }}</button>
         <button
           v-if="g.unit.actions.length && !door.away"
           class="a-btn ghost unitbtn"

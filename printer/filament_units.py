@@ -5,8 +5,9 @@ for the commands it takes. A new kind of unit is a new reader and, if Bench may 
 commands. Nothing here talks to Klipper or Moonraker; UnitsLink talks to our own service.
 
 The shape, from read():
-    driver     "elyir" (our service, units/service.py, as `elyir_units`), "klipperace" (KlipperACE's `ace`) or
-               "happy_hare" (Happy Hare's `mmu`, which Rinkhals also reports)
+    driver     "elyir" (our service, units/service.py, as `elyir_units`), "klipperace" (KlipperACE's `ace`),
+               "happy_hare" (Happy Hare's `mmu`, which Rinkhals also reports) or "afc" (Armored Turtle's `AFC`)
+    lanes      AFC only: each slot's lane name, which AFC's commands take instead of a number
     selected   the slot feeding the head, or None
     known      how many units the driver knows about
     units      [{index, alias, offset, n, connected, temp, dryer}], dryer being the driver's own report
@@ -48,7 +49,15 @@ def read(status: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     mmu = status.get("mmu")
     if isinstance(mmu, dict):
         return _happy_hare(mmu, status.get("mmu_machine"))
+    afc = status.get("AFC")
+    if isinstance(afc, dict) and afc.get("lanes"):
+        return _afc(afc, status)
     return None
+
+
+def afc_lane_objects(objects: List[str]) -> List[str]:
+    """The Klipper objects AFC reports each lane as: `AFC_stepper <lane>` or `AFC_lane <lane>`."""
+    return [o for o in objects if o.startswith(("AFC_stepper ", "AFC_lane "))]
 
 
 def _at(lst: Any, i: int, default: Any = None) -> Any:
@@ -172,7 +181,8 @@ def _happy_hare(mmu: Dict[str, Any], machine: Any) -> Optional[Dict[str, Any]]:
     for k, u in enumerate(raw_units):
         first, count = int(u.get("first_gate") or 0), int(u.get("num_gates") or 4)
         left = int(u.get("dryer_remaining") or 0)
-        units.append({"index": k, "alias": None, "offset": first, "n": max(0, min(count, n - first)), "connected": True,
+        units.append({"index": k, "alias": u.get("display_name") or None, "offset": first, "n": max(0, min(count, n - first)),
+                      "connected": True,
                       "temp": u.get("dryer_temp"),
                       "dryer": {"status": u.get("dryer_status") or "stop", "remain_time": left,
                                 "target_temp": u.get("dryer_target_temp") or 0, "duration": max(left, 1)}})
@@ -185,6 +195,9 @@ def _happy_hare(mmu: Dict[str, Any], machine: Any) -> Optional[Dict[str, Any]]:
                       "material": material if loaded[g] and material.lower() not in ("", "unknown") else None,
                       "tagged": False, "remain": None})
     gate = mmu.get("gate")
+    if mmu.get("filament") == "Unloaded":
+        gate = None   # Happy Hare keeps the selector's gate with nothing in the head
+    carry = mmu.get("endless_spool_enabled", mmu.get("endless_spool"))
     return {
         "driver": "happy_hare",
         "selected": gate if isinstance(gate, int) and gate >= 0 else None,
@@ -192,8 +205,51 @@ def _happy_hare(mmu: Dict[str, Any], machine: Any) -> Optional[Dict[str, Any]]:
         "units": units,
         "slots": slots,
         "feed_assist": None,
+        "carry_on": bool(carry) if carry is not None else None,
+        "lists": {"color": [str(_at(mmu.get("gate_color"), g) or "") for g in range(n)],
+                  "material": [str(_at(mmu.get("gate_material"), g) or "") for g in range(n)],
+                  "temp": [_at(mmu.get("gate_temperature"), g, 0) for g in range(n)]},
+    }
+
+
+def _afc(afc: Dict[str, Any], status: Dict[str, Any]) -> Dict[str, Any]:
+    """AFC's `AFC` and one object per lane. Lanes are grouped by unit so each unit's slots are in a row; a lane's
+    load sensor says filament is there, its prep sensor alone that a spool went in but AFC hasn't taken it yet."""
+    lanes: List[tuple] = []
+    for name in afc["lanes"]:
+        raw = status.get(f"AFC_stepper {name}") or status.get(f"AFC_lane {name}") or {}
+        lanes.append((str(name), raw if isinstance(raw, dict) else {}))
+    order: List[str] = []
+    for _, raw in lanes:
+        unit = str(raw.get("unit") or "")
+        if unit not in order:
+            order.append(unit)
+    lanes.sort(key=lambda lane: order.index(str(lane[1].get("unit") or "")))
+    units, slots = [], []
+    for k, unit in enumerate(order):
+        mine = [g for g, (_, raw) in enumerate(lanes) if str(raw.get("unit") or "") == unit]
+        units.append({"index": k, "alias": unit.replace("_", " ") or None, "offset": mine[0], "n": len(mine),
+                      "connected": True, "temp": None, "dryer": None})
+    for g, (_, raw) in enumerate(lanes):
+        here = raw.get("load") is True or raw.get("tool_loaded") is True
+        st = "ready" if here else "unknown" if raw.get("prep") is True or not raw else "empty"
+        material = str(raw.get("material") or "")
+        slots.append({"slot": g, "status": st, "color": hex_color(raw.get("color")) if here else None,
+                      "material": material if here and material else None, "tagged": False, "remain": None})
+    names = [name for name, _ in lanes]
+    current = afc.get("current_load")
+    return {
+        "driver": "afc",
+        "selected": names.index(current) if current in names else None,
+        "known": len(units),
+        "units": units,
+        "slots": slots,
+        "feed_assist": None,
         "carry_on": None,
-        "lists": {"color": [], "material": [], "temp": [_at(mmu.get("gate_temperature"), g, 0) for g in range(n)]},
+        "lists": {"color": [str(raw.get("color") or "") for _, raw in lanes],
+                  "material": [str(raw.get("material") or "") for _, raw in lanes],
+                  "temp": [raw.get("extruder_temp") or 0 for _, raw in lanes]},
+        "lanes": names,
     }
 
 
@@ -201,6 +257,7 @@ class KlipperAce:
     """The G-code KlipperACE takes. kind is the step a quick command is sent as, long_kind one that takes a while."""
     name = "klipperace"
     kind, long_kind = "gcode", "macro"
+    check_slot = measure_slot = measure_tube = None   # the slot check (unit_check.py) is for Happy Hare and AFC
 
     @staticmethod
     def move(slot: int, mm: int) -> str:
@@ -269,6 +326,7 @@ class Elyir:
     """What our service takes (units/service.py), sent as "unit" steps: {"op", ...}."""
     name = "elyir"
     kind, long_kind = "unit", "unit_macro"
+    check_slot = measure_slot = measure_tube = None
 
     @staticmethod
     def change_tool(slot: int, purge: bool = True) -> Dict[str, Any]:
@@ -310,12 +368,168 @@ class Elyir:
         return [{"op": "set_spool", "slot": slot, "color": color, "material": material}]
 
 
-DRIVERS = {"klipperace": KlipperAce(), "elyir": Elyir()}
+class HappyHare:
+    """The G-code Happy Hare (v3 and v4) takes. It runs the whole tool change itself, prints use its T0..Tn, and a
+    command a unit can't take is None so nothing offers it: no moves (its own selector and gear do that) and no
+    drying, which only some units have."""
+    name = "happy_hare"
+    kind, long_kind = "gcode", "macro"
+    move = dry = stop_drying = feed_assist = None
+
+    @staticmethod
+    def change_tool(slot: int, purge: bool = True) -> str:
+        """Load a slot into the head; -1 unloads. STANDALONE: asked for from a screen, not by a slicer's file."""
+        if slot < 0:
+            return "MMU_UNLOAD"
+        return f"MMU_CHANGE_TOOL GATE={slot} STANDALONE=1" + ("" if purge else " SKIP_PURGE=1")
+
+    @staticmethod
+    def mark_loaded(slot: int) -> str:
+        return "MMU_RECOVER LOADED=0" if slot < 0 else f"MMU_RECOVER GATE={slot} LOADED=1"
+
+    @staticmethod
+    def carry_on(on: bool) -> str:
+        return f"MMU_ENDLESS_SPOOL ENABLE={1 if on else 0}"
+
+    @staticmethod
+    def set_spool(lists: Dict[str, List[Any]], n: int, slot: int, color: str, material: str,
+                  temps: Dict[str, int], same_material: Any) -> List[str]:
+        """MMU_GATE_MAP sets the temperature back to Happy Hare's default when TEMP is left out, so it's always sent:
+        the material's when the material changed, else what the gate had."""
+        was = _at(lists["material"], slot, "")
+        temp = _at(lists["temp"], slot, 0)
+        if (not same_material(was, material) and material in temps) or not temp:
+            temp = temps.get(material, 220)
+        return [f"MMU_GATE_MAP GATE={slot} COLOR={color.lstrip('#').lower()} MATERIAL={material} TEMP={int(temp)}"]
+
+    # The slot check and measuring (unit_check.py). Happy Hare 3 checks a gate only once the selector is homed;
+    # 4 homes it itself, so MMU_HOME goes first only when the status says it isn't.
+    measure_slot = None   # MMU_CALIBRATE_GATE measures each gate's gear against an encoder: not built
+
+    @staticmethod
+    def check_slot(slot: int, home: bool = False) -> str:
+        """Loads to the gate's endstop and parks: the gear motor turns and the gate sensor (or encoder) must see it."""
+        return ("MMU_HOME\n" if home else "") + f"MMU_CHECK_GATE GATE={slot} QUIET=1"
+
+    @staticmethod
+    def measure_tube(slot: int, home: bool = False) -> str:
+        """MMU_CALIBRATE_BOWDEN takes no gate: it measures with the one selected."""
+        return ("MMU_HOME\n" if home else "") + f"MMU_SELECT GATE={slot}\nMMU_CALIBRATE_BOWDEN"
+
+    @staticmethod
+    def needs_home(status: Dict[str, Any]) -> bool:
+        return (status.get("mmu") or {}).get("is_homed") is False
+
+    @staticmethod
+    def sees(status: Dict[str, Any], slot: int) -> Optional[bool]:
+        """The gate's own sensor (v4 mmu_entry_N, v3 mmu_pre_gate_N), or None on a unit without one."""
+        for name in (f"mmu_entry_{slot}", f"mmu_pre_gate_{slot}"):
+            st = status.get(f"filament_switch_sensor {name}")
+            if isinstance(st, dict) and "filament_detected" in st:
+                return bool(st["filament_detected"])
+        return None
+
+    @staticmethod
+    def believes(status: Dict[str, Any], slot: int) -> bool:
+        """Happy Hare marked the gate available (gate_status 1, or 2 from a buffer)."""
+        return _at((status.get("mmu") or {}).get("gate_status"), slot, -1) in (1, 2)
+
+    @staticmethod
+    def version(status: Dict[str, Any]) -> Optional[str]:
+        """Happy Hare 4 says its version in mmu_machine; 3 doesn't say."""
+        v = (status.get("mmu_machine") or {}).get("happy_hare_version")
+        if v is None:
+            return None
+        parts = str(v).split(".")
+        return "Happy Hare " + ".".join(parts[:2])
 
 
-def commands(units: Optional[Dict[str, Any]]) -> Optional[Any]:
-    """What Bench may tell this unit to do, or None when it can only watch (a Kobra's unit through Rinkhals)."""
-    return DRIVERS.get(units["driver"]) if units else None
+class Afc:
+    """The G-code Armored Turtle's AFC takes (Box Turtle, Night Owl and others). Its commands name a lane, not a
+    number. AFC has no dryers and no single carry-on switch (each lane names its own runout lane)."""
+    name = "afc"
+    kind, long_kind = "gcode", "macro"
+    dry = stop_drying = feed_assist = carry_on = None
+
+    def __init__(self, lanes: List[str]) -> None:
+        self.lanes = lanes
+
+    def change_tool(self, slot: int, purge: bool = True) -> str:
+        """Load a slot into the head; -1 unloads. AFC purges by its own settings, so purge isn't passed on."""
+        return "TOOL_UNLOAD" if slot < 0 else f"CHANGE_TOOL LANE={self.lanes[slot]}"
+
+    def move(self, slot: int, mm: int) -> str:
+        return f"LANE_MOVE LANE={self.lanes[slot]} DISTANCE={mm}"
+
+    def mark_loaded(self, slot: int) -> str:
+        return "UNSET_LANE_LOADED" if slot < 0 else f"SET_LANE_LOADED LANE={self.lanes[slot]}"
+
+    def set_spool(self, lists: Dict[str, List[Any]], n: int, slot: int, color: str, material: str,
+                  temps: Dict[str, int], same_material: Any) -> List[str]:
+        lane = self.lanes[slot]
+        return [f"SET_COLOR LANE={lane} COLOR={color.lstrip('#')}", f"SET_MATERIAL LANE={lane} MATERIAL={material}"]
+
+    # The slot check and measuring (unit_check.py). CALIBRATE_AFC ends by opening AFC's own dialog in Mainsail
+    # ("Would you like to do more calibrations?"), which Bench's screens don't show: it's closed again at once.
+    PROMPT_END = "RESPOND TYPE=command MSG=action:prompt_end"
+
+    def check_slot(self, slot: int, home: bool = False) -> str:
+        """Back 10 mm and forward again: the lane's motor turns and its load sensor must still see the filament."""
+        lane = self.lanes[slot]
+        return f"LANE_MOVE LANE={lane} DISTANCE=-10\nLANE_MOVE LANE={lane} DISTANCE=10"
+
+    def measure_slot(self, slot: int) -> str:
+        """The lane's load sensor to its hub (dist_hub)."""
+        return f"CALIBRATE_AFC LANE={self.lanes[slot]}\n{self.PROMPT_END}"
+
+    def measure_tube(self, slot: int, home: bool = False) -> str:
+        """The hub to the sensor where the head starts (the hub's afc_bowden_length), with this lane's filament."""
+        return f"CALIBRATE_AFC BOWDEN={self.lanes[slot]}\n{self.PROMPT_END}"
+
+    @staticmethod
+    def needs_home(status: Dict[str, Any]) -> bool:
+        return False
+
+    def lane(self, status: Dict[str, Any], slot: int) -> Dict[str, Any]:
+        name = self.lanes[slot]
+        raw = status.get(f"AFC_stepper {name}") or status.get(f"AFC_lane {name}") or {}
+        return raw if isinstance(raw, dict) else {}
+
+    def sees(self, status: Dict[str, Any], slot: int) -> Optional[bool]:
+        """The lane's load sensor; prep alone means AFC hasn't pulled it in yet."""
+        raw = self.lane(status, slot)
+        return bool(raw.get("load")) if "load" in raw else None
+
+    def believes(self, status: Dict[str, Any], slot: int) -> bool:
+        return self.sees(status, slot) is True
+
+    @staticmethod
+    def version(status: Dict[str, Any]) -> Optional[str]:
+        return None   # AFC keeps its version out of the status
+
+
+DRIVERS = {"klipperace": KlipperAce(), "elyir": Elyir(), "happy_hare": HappyHare()}
+
+
+def commands(units: Optional[Dict[str, Any]], watch_only: bool = False) -> Optional[Any]:
+    """What Bench may tell this unit to do, or None when it can only watch: a Kobra's unit through Rinkhals reports
+    Happy Hare's shape but takes none of its commands."""
+    if not units or watch_only:
+        return None
+    if units["driver"] == "afc":
+        return Afc(units.get("lanes") or [])
+    return DRIVERS.get(units["driver"])
+
+
+def can(cmds: Optional[Any], what: str) -> bool:
+    """Whether the unit's driver takes this command (move, dry, feed_assist...)."""
+    return cmds is not None and getattr(cmds, what, None) is not None
+
+
+def check_objects(objects: List[str]) -> List[str]:
+    """Klipper objects the slot check reads besides the unit's own: Happy Hare's gate sensors and AFC's hubs."""
+    return [o for o in objects
+            if re.fullmatch(r"filament_switch_sensor mmu_(entry|pre_gate)_\d+", o) or o.startswith("AFC_hub ")]
 
 
 def can_change_tool(cmds: Optional[Any]) -> bool:

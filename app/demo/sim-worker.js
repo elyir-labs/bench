@@ -3,7 +3,7 @@
 //
 // Each screen connects with a MessagePort ({t: 'connect'} carrying the port). Over a port:
 //   screen -> worker  {t: 'rpc', text}                  a JSON-RPC request, as sent on Moonraker's websocket
-//                     {t: 'ctl', id, op, arg}           scenarios | run <name> | insert <slot>
+//                     {t: 'ctl', id, op, arg}           scenarios | state | run <name> | insert <slot>
 //   worker -> screen  {t: 'ws', text}                   a reply or a broadcast, as Moonraker would send it
 //                     {t: 'ctl', id, result, error}
 //                     {t: 'status', phase, detail}      loading | ready | error
@@ -36,6 +36,7 @@ async function handle(port, m) {
     try {
       let result
       if (m.op === 'scenarios') result = bridge.scenarios()
+      else if (m.op === 'state') result = bridge.state()
       else if (m.op === 'run') result = await bridge.run(String(m.arg))
       else if (m.op === 'insert') result = bridge.insert(Number(m.arg))
       else throw new Error(`unknown op ${m.op}`)

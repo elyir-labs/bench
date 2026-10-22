@@ -670,6 +670,7 @@ class Door:
         app["role"] = role
         app.on_response_prepare.append(self._headers)
         app.router.add_get("/door/me", self.me)
+        app.router.add_delete("/door/me", self.forget_me)
         app.router.add_put("/door/me/origins", self.my_origins)
         app.router.add_get("/door/frames", self.frames)
         app.router.add_post("/door/pair", self.pair)
@@ -751,6 +752,16 @@ class Door:
                                   "actions": sorted(AWAY_ACTIONS) if role == "away" else None,
                                   # not secret: which pages the printer's screens may hand their token to
                                   "frames": sorted(self.origins())})
+
+    async def forget_me(self, request: web.Request) -> web.Response:
+        """The Printers app's Remove (design/printers-remove/, A): this phone takes itself off, home or away.
+        Only itself: taking other phones off stays at home (DELETE /door/phones/{id})."""
+        p = request["phone"]
+        if not p:
+            return web.json_response({"detail": "phone", "message": "This printer doesn't know this phone."}, status=401)
+        self.phones.remove(p["id"])
+        self._changed()
+        return web.Response(status=204)
 
     async def my_origins(self, request: web.Request) -> web.Response:
         """A Bench Box keeps its addresses current (a new IP from the router): PUT {origins}."""

@@ -4,6 +4,7 @@ import type { CareSummary } from './care'
 import type { PowerView } from './power'
 import type { LightView } from './light'
 import type { HandsView } from './hands'
+import type { UnitCheckOffer, UnitCheckView } from './unitCheck'
 
 // setup: Klipper has no printer.cfg yet, a fresh card (docs/bring-it-over.md): Now the printer itself, never Problem
 export type IntentState = 'ready' | 'preparing' | 'printing' | 'needs_you' | 'finished' | 'problem' | 'setup'
@@ -67,11 +68,17 @@ export interface IntentFirstLayer {
   can_keep: boolean
   /** Layers 1 to 3 of a print: Further / Closer (squish_less / squish_more), and where it is now. */
   adjust: { total: number; words: string; mm: string; moved: number; actions: IntentAction[] } | null
-  /** At the end, when this print was nudged: "Keep the new first layer for next time?" */
-  keep: { moved: number; total: number; headline: string; detail: string; actions: IntentAction[] } | null
+  /** At the end, when this print was nudged. `sheet`: the print ran on that sheet's value, so keeping goes to it;
+   *  otherwise `sheets` are the names "Only on this sheet" offers first (design/first-layer-sheets/, C). */
+  keep: { moved: number; total: number; headline: string; detail: string; actions: IntentAction[];
+          sheet?: string | null; sheets?: string[] } | null
   /** What's kept, for Care; `used` is false when it was kept against the other way of finding Z. */
   kept: (FirstLayerAmount & { against: 'scan' | 'tap' | null; used: boolean; at: string | null;
-          back: FirstLayerAmount | null; actions: IntentAction[] }) | null
+          back: FirstLayerAmount | null; actions: IntentAction[];
+          sheets?: (FirstLayerAmount & { name: string; at: string | null; on: boolean; actions: IntentAction[] })[];
+          sheet?: string }) | null
+  /** Which sheet is on: only when a sheet's value differs from every print's. `""` is any other sheet. */
+  sheet?: { on: string; options: { name: string; words: string; mm: string }[] } | null
   /** The way of finding Z changed (scan to tap): asked once, on Ready. */
   ask: { headline: string; detail: string; actions: IntentAction[] } | null
 }
@@ -267,6 +274,8 @@ export interface IntentUnit {
   dry: DryPlan
   /** dry_unit (args unit, hours) or stop_drying. */
   actions: IntentAction[]
+  /** Check and measure (design/unit-setup/, B): Happy Hare and AFC units only, else null (see ./unitCheck.ts). */
+  check?: UnitCheckOffer | null
 }
 
 /** A labelled part of the print (design/skip-objects/, A): Klipper's [exclude_object], numbered the way a person
@@ -354,6 +363,8 @@ export interface Intent {
   hands?: HandsView | null
   /** The chamber light (design/chamber-light/, A): null when the printer has none (see ./light.ts). */
   light?: LightView | null
+  /** Checking and measuring a Happy Hare or AFC unit (design/unit-setup/, B): the flow draws it (see ./unitCheck.ts). */
+  unit_check?: UnitCheckView | null
   head?: {
     loaded: boolean | null
     slot: number | null

@@ -3,7 +3,7 @@
 // side (when it's offered, what's saved) is pinned by printer/tests/test_first_layer.py.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BEADS, BEAD_VIEWBOX, SHEET_TITLE, beadShapes, canPress, checkShown, keptLine, sheetSub } from '../src/intent/firstLayer.ts'
+import { BEADS, BEAD_VIEWBOX, SHEET_TITLE, WHERE_KEPT, beadShapes, canPress, checkShown, keptLine, sheetChoice, sheetLine, sheetNote, sheetSub } from '../src/intent/firstLayer.ts'
 import type { Intent, IntentFirstLayer } from '../src/intent/types.ts'
 
 const act = (id: string, label: string) => ({ id, label, primary: false, style: 'default' as const })
@@ -63,4 +63,13 @@ test('Care says what is kept, in words first, and when it is not used', () => {
   assert.equal(keptLine(kept(0.3, 'A little further', '+0.300 mm', false), 'Workshop'),
     'A little further (+0.300 mm), kept 1 October. Not used: it was kept before Workshop found its own first layer.')
   assert.equal(keptLine(fl({ can_keep: false }), 'Desk'), "This printer can't keep a first layer yet.")
+})
+
+test('a sheet says its value and when it was kept; Print names the sheet, or any other', () => {
+  assert.equal(sheetLine({ words: 'A little closer', mm: '−0.050 mm', at: '2026-10-22T12:00:00Z' }), 'A little closer (−0.050 mm), kept 22 October.')
+  assert.equal(sheetChoice('Textured PEI'), 'Textured PEI')
+  assert.equal(sheetChoice(''), 'Another sheet')
+  assert.equal(sheetNote({ name: 'Textured PEI', words: 'A little closer', mm: '−0.050 mm' }, ['Textured PEI']), 'A little closer (−0.050 mm). Same as last time.')
+  assert.equal(sheetNote({ name: '', words: 'As the printer finds it', mm: '0.000 mm' }, ['Textured PEI']), 'As the printer finds it (0.000 mm): not Textured PEI.')
+  assert.match(WHERE_KEPT, /Klipper's variables file\. printer\.cfg isn't changed\./)
 })

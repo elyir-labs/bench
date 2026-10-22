@@ -15,6 +15,10 @@
         <router-link v-if="p && !chips.on.includes(p)" :to="`/p/${p.id}`" class="chip here tone-off"><i></i>{{ p.name }}</router-link>
         <span v-if="chips.off" class="more">+ {{ chips.off }} off</span>
       </nav>
+      <!-- the chips' ▾: the same menu as a phone's switcher, for Remove (design/printers-remove/, A) -->
+      <button v-if="wide && !single" class="chips-menu" @click="menu = !menu" :aria-expanded="menu" aria-haspopup="menu" aria-label="More">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button v-else class="switch" :class="{ alone: single && wide }" @click="menu = !menu" :aria-expanded="menu" aria-haspopup="menu">
         <span class="dot" :class="'tone-' + (p ? statusOf(p).tone : 'off')"></span>
         <span class="pname">{{ p?.name ?? '' }}</span>
@@ -49,29 +53,47 @@
           <router-link to="/look" class="menu-act" role="menuitem" @click="menu = false">Look at a model</router-link>
           <router-link to="/add" class="menu-act" role="menuitem" @click="menu = false">Add a printer</router-link>
         </div>
+        <button v-if="p" class="menu-rm" role="menuitem" @click="askRemove">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>
+          Remove {{ p.name }} from this phone…
+        </button>
       </div>
     </div>
 
-    <PrinterFrame v-for="k in kept" :key="k" v-show="k === id" :id="k" :current="k === id" @drop="emit('drop', k)" />
+    <PrinterFrame v-for="k in kept" :key="k" v-show="k === id" :id="k" :current="k === id" @drop="emit('drop', k)" @remove="askRemove" />
+    <RemoveSheet v-if="removing" :p="removing" @close="removing = null" @done="removed" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { benches, printerById, printers } from '../printers'
+import { useRoute, useRouter } from 'vue-router'
+import { benches, printerById, printers, type LivePrinter } from '../printers'
 import { statusOf } from '../status'
 import { chipsOf, grouped } from '../home'
 import PrinterFrame from '../PrinterFrame.vue'
 import YouLink from '../YouLink.vue'
+import RemoveSheet from '../RemoveSheet.vue'
 
 defineProps<{ wide?: boolean; kept: string[] }>()
 const emit = defineEmits<{ drop: [id: string] }>()
 const route = useRoute()
+const router = useRouter()
 const menu = ref(false)
+// held here, not read from the list: the entry is gone from it before the sheet says it's done
+const removing = ref<LivePrinter | null>(null)
 const id = computed(() => (route.params.id ? String(route.params.id) : null))
 const p = computed(() => (id.value ? printerById(id.value) : undefined))
-watch(id, () => { menu.value = false })
+watch(id, () => { menu.value = false; removing.value = null })
+
+function askRemove() {
+  menu.value = false
+  removing.value = p.value ?? null
+}
+function removed() {
+  removing.value = null
+  router.replace('/')
+}
 
 const single = computed(() => printers.length === 1 && benches.length === 0)
 const chips = computed(() => chipsOf(printers))
@@ -135,4 +157,10 @@ const other = computed(() => grouped(printers).find((g) => g.group === 'attentio
 .mi-state { color: var(--a-ink-3); font-size: 14px; }
 .menu-acts { display: flex; border-top: 1px solid var(--a-line); margin-top: 4px; }
 .menu-act { flex: 1; text-align: center; padding: 14px 8px; color: var(--a-accent-text); font-weight: 650; text-decoration: none; }
+.menu-rm { appearance: none; border: 0; border-top: 1px solid var(--a-line); background: none; font: inherit; width: 100%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 8px; color: var(--a-red-text); font-weight: 650; }
+.menu-rm svg { width: 18px; height: 18px; flex: none; }
+.chips-menu { appearance: none; border: 0; flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: var(--a-surface); color: var(--a-ink-2); }
+.chips-menu svg { width: 18px; height: 18px; }
 </style>

@@ -56,6 +56,25 @@ export function keptLine(fl: IntentFirstLayer | null | undefined, printer: strin
   return `${line} Not used: it was kept ${k.against === 'tap' ? 'while' : 'before'} ${printer} found its own first layer.`
 }
 
+/** Care says once where a kept first layer lives (design/first-layer-sheets/: the Reddit question). */
+export const WHERE_KEPT = "Saved on the printer, in Klipper's variables file. printer.cfg isn't changed."
+
+/** A sheet's value in Care: "A little closer (−0.050 mm), kept 22 October." */
+export function sheetLine(s: { words: string; mm: string; at: string | null }): string {
+  return `${s.words} (${s.mm})${s.at ? `, kept ${dayOf(s.at)}` : ''}.`
+}
+
+/** The Sheet row on Print: which sheet's first layer this print uses. `""` is any other sheet. */
+export function sheetChoice(name: string): string {
+  return name || 'Another sheet'
+}
+
+export function sheetNote(opt: { name: string; words: string; mm: string } | undefined, others: string[]): string {
+  if (!opt) return ''
+  const how = `${opt.words} (${opt.mm})`
+  return opt.name ? `${how}. Same as last time.` : `${how}: not ${others.join(' or ')}.`
+}
+
 function dayOf(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
 }

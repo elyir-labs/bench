@@ -123,7 +123,7 @@ class FakeConfig:
         return {"printer_name": "Studio"}.get(key, default)
 
 
-def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "elyir_bench_care.py", "orca_profile.py")):
+def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "elyir_bench_care.py", "orca_profile.py")):
     """Load printer_intent.py as moonraker.components.printer_intent, as Moonraker does."""
     pkg = tmp_path / "moonraker"
     (pkg / "components").mkdir(parents=True)
@@ -252,7 +252,7 @@ def test_care_seeds_once_comes_due_and_done_or_later_clear_it(component):
 
 
 def test_without_the_care_module_everything_else_still_works(tmp_path, monkeypatch):
-    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py"))
+    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py"))
     run(server.handlers["server:klippy_ready"]())
     server.kc.state = KlippyState.READY
     run(comp._refresh_care())
@@ -431,3 +431,20 @@ def test_a_switch_that_was_undone_is_told_in_care(component, tmp_path):
     Path(comp.cli).write_text("#!/bin/sh\necho '[]'\n")
     run(comp._switch_screen("klipperscreen"))
     assert comp._current()["printer"]["screen_switch_failed"] is None
+
+
+def test_the_unit_check_reads_happy_hares_gate_sensors_and_afcs_hubs(component):
+    server, comp = component
+    seen = {}
+
+    async def subscribe(objs, cb):
+        seen.update(objs)
+        return {"print_stats": {"state": "standby", "filename": ""}, "webhooks": {"state": "ready"}}
+    comp.klippy_apis.subscribe_objects = subscribe
+    comp.klippy_apis.objects = ["mmu", "filament_switch_sensor mmu_entry_0", "filament_switch_sensor mmu_pre_gate_1",
+                                "filament_switch_sensor runout", "AFC", "AFC_stepper lane1", "AFC_hub Turtle_1"]
+    run(server.handlers["server:klippy_ready"]())
+    assert seen["filament_switch_sensor mmu_entry_0"] == ["filament_detected"]
+    assert seen["filament_switch_sensor mmu_pre_gate_1"] == ["filament_detected"]
+    assert "filament_switch_sensor runout" not in seen
+    assert "AFC_hub Turtle_1" in seen and seen["AFC_hub Turtle_1"] is None
