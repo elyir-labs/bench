@@ -185,6 +185,7 @@
     <div class="card" id="ask">
       <h2>Ask to test</h2>
       <form id="ask-form" novalidate>
+        <input type="hidden" name="from">
         <label>Your email<input type="email" name="email" required autocomplete="email" inputmode="email" placeholder="you@example.net"></label>
         <label>Your printer<input type="text" name="printer" maxlength="80" autocomplete="off" placeholder="Voron 2.4, Trident with an ACE…"></label>
         <fieldset>
@@ -275,6 +276,8 @@
   const said = document.getElementById('ask-said')
   const say = (words, bad) => { said.textContent = words; said.hidden = false; said.classList.toggle('bad', !!bad) }
   const back = new URLSearchParams(location.search)
+  // which page sent them (/units, /box): kept with their place on the list
+  if (/^[a-z]{1,12}$/.test(back.get('from') || '')) form.elements.from.value = back.get('from')
   if (back.get('joined') === '1') { form.hidden = true; say("You're on the list. We'll write when there's a place for your printer.") }
   if (back.get('joined') === '0') say("That link didn't work. Ask again and use the newest email.", true)
   if (back.get('left') === '1') { form.hidden = true; say("You're off the list. Nothing more will come.") }

@@ -43,6 +43,7 @@
   nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
   nav .links a, nav .end a.quiet { color: var(--quiet); text-decoration: none }
   nav .links a:hover, nav .end a.quiet:hover, nav .links a[aria-current] { color: var(--ink) }
+  @media (max-width: 900px) { nav .links a.more { display: none } }
   nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
   nav .go { display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 10px; background: var(--accent); color: var(--ground); text-decoration: none; font-weight: 700 }
   header { padding-top: 4px; display: grid; gap: 8px }
@@ -136,7 +137,7 @@
 <div class="wrap">
   <nav>
     <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
-    <span class="links"><a href="try" aria-current="page">Try it</a><a href="install">Install</a><a href="./#plans">Plans</a></span>
+    <span class="links"><a href="try" aria-current="page">Try it</a><a class="more" href="units">Units</a><a class="more" href="slicing">Slicing</a><a class="more" href="box">Bench Box</a><a href="install">Install</a><a href="./#plans">Plans</a><a href="testers">Testers</a></span>
     <span class="end"><a class="quiet" href="https://printers.elyir.app/you">Sign in</a><a class="go" href="install">Put it on your printer</a></span>
   </nav>
   <header>
@@ -214,7 +215,8 @@
     document.documentElement.classList.add('embed')
     new ResizeObserver(() => window.parent.postMessage({ t: 'try-height', h: document.documentElement.scrollHeight }, '*')).observe(document.body)
   }
-  const worker = new Worker('sim-worker.js', { type: 'module' })
+  const units = new URLSearchParams(location.search).get('units')
+  const worker = new Worker('sim-worker.js' + (['happy_hare', 'afc'].includes(units) ? `?units=${units}` : ''), { type: 'module' })
   const frames = [...document.querySelectorAll('iframe')]
   const $ = (id) => document.getElementById(id)
 

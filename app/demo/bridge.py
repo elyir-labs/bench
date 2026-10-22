@@ -86,12 +86,13 @@ async def _ticker():
         last = now
 
 
-async def start(base, send, scenario="day", speed=4.0, name="Workshop"):
-    """base: the demo's address ending in '/'; send(text): to every open screen."""
+async def start(base, send, scenario="day", speed=4.0, name="Workshop", units=None):
+    """base: the demo's address ending in '/'; send(text): to every open screen. units: afc or happy_hare shows the
+    pretend units as AFC's lanes or Happy Hare's gates (bench.elyir.com/units: Try an ERCF live)."""
     global printer, send_all
     send_all = send
     DemoPrinter.base = base
-    printer = DemoPrinter(name, speed)
+    printer = DemoPrinter(name, speed, skin=units if units in S.unit_skins.SKINS else None)
     printer.webcams = [{
         "name": "Main", "enabled": True, "service": "mjpegstreamer-adaptive",
         # an animated picture of the same frames sim.py streams; an <img> shows both the same way

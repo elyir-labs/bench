@@ -94,7 +94,8 @@ async function boot() {
   PY.forEach(([, dest], i) => pyodide.FS.writeFile(dest, files[i]))
   pyodide.runPython('import sys; sys.path.insert(0, "/sim/simulator")')
   const b = pyodide.pyimport('bridge')
-  await b.start(base, (text) => sendAll(text), params.get('scenario') || 'day', Number(params.get('speed') || 4))
+  await b.start(base, (text) => sendAll(text), params.get('scenario') || 'day', Number(params.get('speed') || 4),
+    'Workshop', params.get('units'))
   bridge = b
   setStatus('ready', '')
   for (const [port, m] of queue.splice(0)) handle(port, m)

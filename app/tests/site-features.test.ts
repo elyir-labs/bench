@@ -42,9 +42,11 @@ test('a new Pi is offered as /install offers it, and the Bench Box can be had no
   const card = front.slice(front.indexOf('A new Pi, or a fresh start') - 80, front.indexOf('A printer that can\'t run it'))
   assert.ok(card.includes('New · help us test it') && card.includes('href="install"'))
   const get = pages.box.slice(pages.box.indexOf('id="get"'), pages.box.indexOf('A box you can buy'))
-  assert.ok(get.includes('New · help us test it') && get.includes('href="install"') && get.includes('href="testers"'))
+  assert.ok(get.includes('New · help us test it') && get.includes('href="install"') && get.includes('href="testers?from=box#ask"'))
   assert.match(pages.box, /A box you can buy[\s\S]*?Coming/)
-  assert.match(pages.units, /Try an ERCF live <span class="pill coming">Coming<\/span>/)
+  assert.match(pages.units, /href="try\?units=happy_hare"><svg[^>]*>.*?<\/svg>Try an ERCF live<\/a>/)
+  assert.match(pages.units, /href="testers\?from=units#ask"/)
+  assert.match(pages.box, /href="testers\?from=box#ask"/)
 })
 
 test('the Bench Box is a capture of the Bench app, not a drawing, and nothing public says a price or date', () => {
