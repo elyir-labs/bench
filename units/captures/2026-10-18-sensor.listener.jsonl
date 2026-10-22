@@ -1,0 +1,114 @@
+{"t": 1792341391.2532728, "raw": 1022243.665018621, "kind": "reply", "data": {"connection_id": 140735531821136}}
+{"t": 1792341391.2534015, "raw": 1022243.665142139, "kind": "reply", "data": "ok"}
+{"t": 1792341391.437204, "raw": 1022243.848945954, "kind": "reply", "data": {"eventtime": 1022243.845116602, "status": {"filament_switch_sensor extruder_sensor": {"filament_detected": true}, "ace": {"selected_gate": 1}, "print_stats": {"state": "standby"}, "extruder": {"target": 0.0}}}}
+{"t": 1792341393.263497, "raw": 1022245.675250583, "kind": "console", "data": ["// ACE: Tool change 1 => 3"]}
+{"t": 1792341411.3909605, "raw": 1022263.802824572, "kind": "console", "data": ["B:24.5 /0.0 T0:27.5 /250.0"]}
+{"t": 1792341411.4903603, "raw": 1022263.902225164, "kind": "status", "data": [{"extruder": {"target": 250.0}}, 1022263.900196683]}
+{"t": 1792341412.3916442, "raw": 1022264.803514608, "kind": "console", "data": ["B:24.5 /0.0 T0:27.5 /250.0"]}
+{"t": 1792341413.3914444, "raw": 1022265.803320904, "kind": "console", "data": ["B:24.5 /0.0 T0:28.2 /250.0"]}
+{"t": 1792341414.39187, "raw": 1022266.803752403, "kind": "console", "data": ["B:24.5 /0.0 T0:30.2 /250.0"]}
+{"t": 1792341415.392575, "raw": 1022267.804463199, "kind": "console", "data": ["B:24.5 /0.0 T0:34.4 /250.0"]}
+{"t": 1792341416.393737, "raw": 1022268.805631384, "kind": "console", "data": ["B:24.6 /0.0 T0:38.2 /250.0"]}
+{"t": 1792341417.393664, "raw": 1022269.80556429, "kind": "console", "data": ["B:24.5 /0.0 T0:42.3 /250.0"]}
+{"t": 1792341418.393976, "raw": 1022270.805882475, "kind": "console", "data": ["B:24.5 /0.0 T0:48.1 /250.0"]}
+{"t": 1792341419.3940263, "raw": 1022271.805938548, "kind": "console", "data": ["B:24.6 /0.0 T0:52.6 /250.0"]}
+{"t": 1792341420.3949404, "raw": 1022272.806858696, "kind": "console", "data": ["B:24.5 /0.0 T0:57.0 /250.0"]}
+{"t": 1792341421.3952808, "raw": 1022273.807205084, "kind": "console", "data": ["B:24.6 /0.0 T0:62.9 /250.0"]}
+{"t": 1792341422.3961058, "raw": 1022274.808035991, "kind": "console", "data": ["B:24.6 /0.0 T0:67.4 /250.0"]}
+{"t": 1792341423.3969097, "raw": 1022275.808846639, "kind": "console", "data": ["B:24.5 /0.0 T0:71.8 /250.0"]}
+{"t": 1792341424.397145, "raw": 1022276.809087527, "kind": "console", "data": ["B:24.6 /0.0 T0:77.7 /250.0"]}
+{"t": 1792341425.397142, "raw": 1022277.8090901, "kind": "console", "data": ["B:24.5 /0.0 T0:82.0 /250.0"]}
+{"t": 1792341426.3983996, "raw": 1022278.810353396, "kind": "console", "data": ["B:24.6 /0.0 T0:86.3 /250.0"]}
+{"t": 1792341427.3981059, "raw": 1022279.810065692, "kind": "console", "data": ["B:24.5 /0.0 T0:91.9 /250.0"]}
+{"t": 1792341428.3984413, "raw": 1022280.81040708, "kind": "console", "data": ["B:24.6 /0.0 T0:96.0 /250.0"]}
+{"t": 1792341429.3994367, "raw": 1022281.811408487, "kind": "console", "data": ["B:24.5 /0.0 T0:100.0 /250.0"]}
+{"t": 1792341430.3992586, "raw": 1022282.811236301, "kind": "console", "data": ["B:24.6 /0.0 T0:105.4 /250.0"]}
+{"t": 1792341431.4004812, "raw": 1022283.812464875, "kind": "console", "data": ["B:24.6 /0.0 T0:109.4 /250.0"]}
+{"t": 1792341432.4008386, "raw": 1022284.812827967, "kind": "console", "data": ["B:24.6 /0.0 T0:113.3 /250.0"]}
+{"t": 1792341433.4017198, "raw": 1022285.813715133, "kind": "console", "data": ["B:24.6 /0.0 T0:118.5 /250.0"]}
+{"t": 1792341434.4016721, "raw": 1022286.813673188, "kind": "console", "data": ["B:24.6 /0.0 T0:122.3 /250.0"]}
+{"t": 1792341435.4026127, "raw": 1022287.814619817, "kind": "console", "data": ["B:24.6 /0.0 T0:126.1 /250.0"]}
+{"t": 1792341436.4026213, "raw": 1022288.814633946, "kind": "console", "data": ["B:24.6 /0.0 T0:131.1 /250.0"]}
+{"t": 1792341437.40274, "raw": 1022289.814758371, "kind": "console", "data": ["B:24.6 /0.0 T0:134.8 /250.0"]}
+{"t": 1792341438.4036458, "raw": 1022290.81567037, "kind": "console", "data": ["B:24.6 /0.0 T0:138.5 /250.0"]}
+{"t": 1792341439.4049478, "raw": 1022291.816978203, "kind": "console", "data": ["B:24.6 /0.0 T0:143.3 /250.0"]}
+{"t": 1792341440.4049435, "raw": 1022292.816979462, "kind": "console", "data": ["B:24.6 /0.0 T0:146.8 /250.0"]}
+{"t": 1792341441.4059353, "raw": 1022293.817977498, "kind": "console", "data": ["B:24.5 /0.0 T0:150.3 /250.0"]}
+{"t": 1792341442.4068234, "raw": 1022294.818870812, "kind": "console", "data": ["B:24.5 /0.0 T0:155.0 /250.0"]}
+{"t": 1792341443.4078798, "raw": 1022295.819933256, "kind": "console", "data": ["B:24.5 /0.0 T0:158.4 /250.0"]}
+{"t": 1792341444.4082208, "raw": 1022296.820279848, "kind": "console", "data": ["B:24.5 /0.0 T0:161.8 /250.0"]}
+{"t": 1792341445.4092317, "raw": 1022297.821296477, "kind": "console", "data": ["B:24.5 /0.0 T0:166.2 /250.0"]}
+{"t": 1792341446.4102535, "raw": 1022298.822324106, "kind": "console", "data": ["B:24.5 /0.0 T0:169.6 /250.0"]}
+{"t": 1792341447.410769, "raw": 1022299.82284518, "kind": "console", "data": ["B:24.5 /0.0 T0:172.9 /250.0"]}
+{"t": 1792341448.4112353, "raw": 1022300.823317605, "kind": "console", "data": ["B:24.6 /0.0 T0:177.2 /250.0"]}
+{"t": 1792341449.4125862, "raw": 1022301.82467416, "kind": "console", "data": ["B:24.6 /0.0 T0:180.4 /250.0"]}
+{"t": 1792341450.4133534, "raw": 1022302.82544703, "kind": "console", "data": ["B:24.5 /0.0 T0:183.5 /250.0"]}
+{"t": 1792341451.4138782, "raw": 1022303.825977622, "kind": "console", "data": ["B:24.5 /0.0 T0:187.7 /250.0"]}
+{"t": 1792341452.4145613, "raw": 1022304.826666677, "kind": "console", "data": ["B:24.6 /0.0 T0:190.8 /250.0"]}
+{"t": 1792341453.4156632, "raw": 1022305.827774417, "kind": "console", "data": ["B:24.6 /0.0 T0:193.9 /250.0"]}
+{"t": 1792341454.4167385, "raw": 1022306.828854991, "kind": "console", "data": ["B:24.6 /0.0 T0:197.9 /250.0"]}
+{"t": 1792341455.4172032, "raw": 1022307.829325434, "kind": "console", "data": ["B:24.6 /0.0 T0:200.9 /250.0"]}
+{"t": 1792341456.4178326, "raw": 1022308.829960823, "kind": "console", "data": ["B:24.6 /0.0 T0:203.8 /250.0"]}
+{"t": 1792341457.4177446, "raw": 1022309.829878248, "kind": "console", "data": ["B:24.6 /0.0 T0:207.6 /250.0"]}
+{"t": 1792341458.4186761, "raw": 1022310.830815618, "kind": "console", "data": ["B:24.5 /0.0 T0:210.5 /250.0"]}
+{"t": 1792341459.418661, "raw": 1022311.830806395, "kind": "console", "data": ["B:24.6 /0.0 T0:213.4 /250.0"]}
+{"t": 1792341460.4188626, "raw": 1022312.831013172, "kind": "console", "data": ["B:24.6 /0.0 T0:217.1 /250.0"]}
+{"t": 1792341461.419103, "raw": 1022313.831259097, "kind": "console", "data": ["B:24.5 /0.0 T0:219.9 /250.0"]}
+{"t": 1792341462.4200473, "raw": 1022314.832209264, "kind": "console", "data": ["B:24.5 /0.0 T0:222.7 /250.0"]}
+{"t": 1792341463.4200249, "raw": 1022315.8321923, "kind": "console", "data": ["B:24.6 /0.0 T0:226.3 /250.0"]}
+{"t": 1792341464.4203665, "raw": 1022316.832539614, "kind": "console", "data": ["B:24.6 /0.0 T0:228.9 /250.0"]}
+{"t": 1792341465.4205084, "raw": 1022317.832687577, "kind": "console", "data": ["B:24.5 /0.0 T0:231.6 /250.0"]}
+{"t": 1792341466.4214022, "raw": 1022318.833586409, "kind": "console", "data": ["B:24.5 /0.0 T0:235.1 /250.0"]}
+{"t": 1792341467.4216986, "raw": 1022319.833888483, "kind": "console", "data": ["B:24.5 /0.0 T0:237.7 /250.0"]}
+{"t": 1792341468.4223266, "raw": 1022320.834522186, "kind": "console", "data": ["B:24.5 /0.0 T0:240.2 /250.0"]}
+{"t": 1792341469.4231796, "raw": 1022321.835380667, "kind": "console", "data": ["B:24.6 /0.0 T0:243.1 /250.0"]}
+{"t": 1792341470.423895, "raw": 1022322.836101555, "kind": "console", "data": ["B:24.6 /0.0 T0:244.8 /250.0"]}
+{"t": 1792341471.4244425, "raw": 1022323.836654999, "kind": "console", "data": ["B:24.6 /0.0 T0:246.2 /250.0"]}
+{"t": 1792341472.42563, "raw": 1022324.837848832, "kind": "console", "data": ["B:24.6 /0.0 T0:247.7 /250.0"]}
+{"t": 1792341473.4261425, "raw": 1022325.838366183, "kind": "console", "data": ["B:24.6 /0.0 T0:248.6 /250.0"]}
+{"t": 1792341474.4282367, "raw": 1022326.840465793, "kind": "console", "data": ["B:24.6 /0.0 T0:249.4 /250.0"]}
+{"t": 1792341475.427323, "raw": 1022327.839557534, "kind": "console", "data": ["// pressure_advance: 0.000000\n// pressure_advance_smooth_time: 0.040000"]}
+{"t": 1792341478.8334284, "raw": 1022331.245681883, "kind": "console", "data": ["// pressure_advance: 0.040000\n// pressure_advance_smooth_time: 0.040000"]}
+{"t": 1792341478.835058, "raw": 1022331.247310976, "kind": "console", "data": ["echo: Tip cut complete"]}
+{"t": 1792341479.94526, "raw": 1022332.357519346, "kind": "console", "data": ["// ACE: Unloading tool 1..."]}
+{"t": 1792341479.9453282, "raw": 1022332.35758666, "kind": "console", "data": ["// ACE: Executing cut macro: _ACE_CUT_TIP_STUB"]}
+{"t": 1792341479.9453516, "raw": 1022332.357610105, "kind": "console", "data": ["// ACE: Retracting to clear extruder sensor (sequential)"]}
+{"t": 1792341494.9447231, "raw": 1022347.35706454, "kind": "console", "data": ["// ACE: Sensor not clear after attempt 1, retrying..."]}
+{"t": 1792341497.485964, "raw": 1022349.898318631, "kind": "push", "data": {"state": "released"}}
+{"t": 1792341497.4997602, "raw": 1022349.912114317, "kind": "status", "data": [{"filament_switch_sensor extruder_sensor": {"filament_detected": false}}, 1022349.910144854]}
+{"t": 1792341509.8924828, "raw": 1022362.304903698, "kind": "console", "data": ["// ACE: Sensor cleared after 2 attempt(s)"]}
+{"t": 1792341509.8937094, "raw": 1022362.306129828, "kind": "console", "data": ["// ACE: Retracting to gate (170mm)"]}
+{"t": 1792341520.2249267, "raw": 1022372.637402025, "kind": "console", "data": ["// ACE: Unload complete"]}
+{"t": 1792341525.2378416, "raw": 1022377.650342985, "kind": "console", "data": ["// ACE: Loading tool 3..."]}
+{"t": 1792341525.2395666, "raw": 1022377.652068041, "kind": "console", "data": ["// ACE: Feeding from gate to extruder"]}
+{"t": 1792341535.1617947, "raw": 1022387.57434685, "kind": "push", "data": {"state": "pressed"}}
+{"t": 1792341535.3521745, "raw": 1022387.764727905, "kind": "status", "data": [{"filament_switch_sensor extruder_sensor": {"filament_detected": true}}, 1022387.762666683]}
+{"t": 1792341538.3697007, "raw": 1022390.782269755, "kind": "console", "data": ["// ACE: Feeding to nozzle (single sensor mode)"]}
+{"t": 1792341538.3712256, "raw": 1022390.783794311, "kind": "console", "data": ["// ACE: Executing poop macro: _POOP"]}
+{"t": 1792341538.3724613, "raw": 1022390.785029737, "kind": "console", "data": ["// ACE: Load complete"]}
+{"t": 1792341538.3747048, "raw": 1022390.787273515, "kind": "console", "data": ["echo: \ud83e\udebf Initiating purge. Requested purge of 150.0 mm (360.8 mm3) filament"]}
+{"t": 1792341595.9741423, "raw": 1022448.386994314, "kind": "console", "data": ["echo: \ud83e\udebf Purge completed! Purged 150.0 mm (360.8 mm3) of filament in 5 segment(s). Rounding up active."]}
+{"t": 1792341605.7943377, "raw": 1022458.207237789, "kind": "status", "data": [{"ace": {"selected_gate": 3}}, 1022458.204401622]}
+{"t": 1792341606.107722, "raw": 1022458.520621382, "kind": "console", "data": ["// ACE: Tool change 3 => 1"]}
+{"t": 1792341608.2708871, "raw": 1022460.683796954, "kind": "console", "data": ["// pressure_advance: 0.000000\n// pressure_advance_smooth_time: 0.040000"]}
+{"t": 1792341611.8368328, "raw": 1022464.249759193, "kind": "console", "data": ["// pressure_advance: 0.040000\n// pressure_advance_smooth_time: 0.040000"]}
+{"t": 1792341611.8388622, "raw": 1022464.251788286, "kind": "console", "data": ["echo: Tip cut complete"]}
+{"t": 1792341612.9464886, "raw": 1022465.359420044, "kind": "console", "data": ["// ACE: Unloading tool 3..."]}
+{"t": 1792341612.949363, "raw": 1022465.362293877, "kind": "console", "data": ["// ACE: Executing cut macro: _ACE_CUT_TIP_STUB"]}
+{"t": 1792341612.9494116, "raw": 1022465.3623421, "kind": "console", "data": ["// ACE: Retracting to clear extruder sensor (sequential)"]}
+{"t": 1792341627.949887, "raw": 1022480.362887609, "kind": "console", "data": ["// ACE: Sensor not clear after attempt 1, retrying..."]}
+{"t": 1792341628.8258002, "raw": 1022481.238804961, "kind": "push", "data": {"state": "released"}}
+{"t": 1792341628.8494983, "raw": 1022481.262502942, "kind": "status", "data": [{"filament_switch_sensor extruder_sensor": {"filament_detected": false}}, 1022481.258605498]}
+{"t": 1792341641.3373234, "raw": 1022493.750384749, "kind": "console", "data": ["// ACE: Sensor cleared after 2 attempt(s)"]}
+{"t": 1792341641.3382697, "raw": 1022493.751330101, "kind": "console", "data": ["// ACE: Retracting to gate (170mm)"]}
+{"t": 1792341647.855645, "raw": 1022500.26873519, "kind": "console", "data": ["// ACE: Unload complete"]}
+{"t": 1792341652.8746378, "raw": 1022505.28775028, "kind": "console", "data": ["// ACE: Loading tool 1..."]}
+{"t": 1792341652.875615, "raw": 1022505.288727169, "kind": "console", "data": ["// ACE: Feeding from gate to extruder"]}
+{"t": 1792341661.13181, "raw": 1022513.544958923, "kind": "push", "data": {"state": "pressed"}}
+{"t": 1792341661.1899471, "raw": 1022513.60309633, "kind": "status", "data": [{"filament_switch_sensor extruder_sensor": {"filament_detected": true}}, 1022513.60120096]}
+{"t": 1792341663.8414543, "raw": 1022516.254615088, "kind": "console", "data": ["// ACE: Feeding to nozzle (single sensor mode)"]}
+{"t": 1792341663.84404, "raw": 1022516.257200495, "kind": "console", "data": ["// ACE: Executing poop macro: _POOP"]}
+{"t": 1792341663.8440948, "raw": 1022516.257254755, "kind": "console", "data": ["// ACE: Load complete"]}
+{"t": 1792341663.8459814, "raw": 1022516.259141995, "kind": "console", "data": ["echo: \ud83e\udebf Initiating purge. Requested purge of 150.0 mm (360.8 mm3) filament"]}
+{"t": 1792341721.4459496, "raw": 1022573.859353683, "kind": "console", "data": ["echo: \ud83e\udebf Purge completed! Purged 150.0 mm (360.8 mm3) of filament in 5 segment(s). Rounding up active."]}
+{"t": 1792341731.3849714, "raw": 1022583.798416066, "kind": "status", "data": [{"ace": {"selected_gate": 1}}, 1022583.795978733]}

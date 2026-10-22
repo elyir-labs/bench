@@ -48,4 +48,8 @@ const dots = computed<Record<string, boolean>>(() => ({
   .btabs { height: 64px; } .tab { font-size: 12px; gap: 2px; } .icon { width: 24px; height: 24px; }
   .tab.dot::after { top: 8px; right: calc(50% - 18px); width: 8px; height: 8px; }
 }
+@media (max-height: 540px) and (min-width: 600px) {
+  .btabs { height: 60px; } .tab { font-size: 14px; gap: 2px; } .icon { width: 24px; height: 24px; }
+  .tab.dot::after { top: 7px; right: calc(50% - 18px); width: 8px; height: 8px; }
+}
 </style>

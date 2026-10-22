@@ -1,6 +1,7 @@
-// The Bench Box's screen (design/bench-box/, D). Light or dark follows the screen it's on, as the printer app does.
+// The Bench Box's screen (design/bench-box/, D). Light or dark is set on Care, as the printer app's is.
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
+import '@/theme'  // sets html[data-theme] before the first paint
 import '@/styles/elyir-bench.css'
 import App from '@/bench-app/App.vue'
 import HomePage from '@/bench-app/pages/HomePage.vue'
@@ -17,10 +18,6 @@ import AwayModel from '@/bench-app/pages/AwayModel.vue'
 import { startBench } from '@/bench-app/live'
 import { checkHere, here } from '@/bench-app/here'
 import { tabsFor } from '@/bench-app/away'
-
-const want = new URLSearchParams(location.search).get('theme')
-const light = want ? want === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches
-document.documentElement.dataset.theme = light ? 'light' : 'dark'
 
 const router = createRouter({
   history: createWebHistory(),

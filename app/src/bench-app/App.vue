@@ -32,6 +32,13 @@ html, body { margin: 0; background: var(--a-bg); color: var(--a-ink); font-famil
 .bench-app > .page { flex: 1; min-height: 0; overflow: auto; }
 .bench-app .first { box-sizing: border-box; padding: 76px 40px 28px; }
 @media (max-width: 599px) { .bench-app .first { padding: 64px 16px 20px; } }
+/* a short panel (800x480, the BTT TFT70): every page's frame and headline tighter, so the page fits above the tabs.
+   Here, not in each page, which keeps its own sizes for the 1024x600 box and for phones. */
+@media (max-height: 540px) and (min-width: 600px) {
+  .bench-app .page :is(.bpage, .home) { padding-top: 12px; padding-left: 24px; padding-right: 24px; gap: 10px; }
+  .bench-app .page :is(.bpage, .home) :is(.say, h1.name) { font-size: 27px; margin-top: 0; }
+  .bench-app .first { padding: 40px 24px 16px; }
+}
 /* The box's buttons are given their height (a tile's Print a model, a sheet's answers): the label in the middle, and
    none of the shared button's top and bottom padding, which grows with the screen and pushed it down and the button
    taller (7 October, on a Mac). Every button here keeps the shared 48px minimum. Sheets render outside

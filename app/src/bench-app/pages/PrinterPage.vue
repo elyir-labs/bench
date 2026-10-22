@@ -28,6 +28,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Vitals from '@/components/now/Vitals.vue'
+import { theme } from '@/theme'
 import { bench } from '../live'
 import { ordered, tileOf } from '../bench'
 import { here } from '../here'
@@ -53,10 +54,9 @@ watch(id, () => { start.value = area.value })
 const src = computed(() => {
   const r = p.value?.record
   if (!r || !p.value?.live) return null
-  const theme = document.documentElement.dataset.theme ?? 'light'
   // on a real box the printer's own app talks to its own Moonraker; in dev one app draws every simulator
   const dev = /^https?:/.test(r.moonraker) ? (() => { const m = new URL(r.moonraker); return `&printer=${m.hostname}:${m.port || 80}` })() : ''
-  return `${r.app}${start.value === '/' ? '/' : start.value}?embed=1&chrome=bench&theme=${theme}${dev}`
+  return `${r.app}${start.value === '/' ? '/' : start.value}?embed=1&chrome=bench&theme=${theme.value}${dev}`
 })
 
 function go(path: string) {
@@ -96,7 +96,7 @@ void router
 .chip.tone-amber i { background: var(--a-amber); } .chip.tone-red i { background: var(--a-red); } .chip.tone-green i { background: var(--a-green); }
 .chip.here { background: var(--a-ink); color: var(--a-bg); }
 .more { color: var(--a-ink-3); font-size: 15px; white-space: nowrap; }
-.clock { margin-left: auto; color: var(--a-ink-3); font-size: 21px; }
+.clock { margin-left: auto; flex: none; white-space: nowrap; color: var(--a-ink-3); font-size: 21px; }
 .end { margin-left: auto; flex: none; }
 .sub { display: flex; align-items: center; gap: 22px; padding: 14px 40px 0; }
 .who { display: inline-flex; align-items: center; gap: 10px; font-size: 22px; color: var(--a-ink-3); white-space: nowrap; }
@@ -109,6 +109,18 @@ void router
 .vit { margin-left: auto; }
 .frame { width: 100%; height: 100%; border: 0; display: block; background: var(--a-bg); }
 .gone { padding: 40px; color: var(--a-ink-3); font-size: 22px; }
+@media (max-height: 540px) and (min-width: 600px) {
+  .printer { padding-top: 8px; }
+  .top { padding: 0 20px 0 16px; gap: 12px; }
+  .back { height: 40px; padding: 0 14px 0 8px; font-size: 16px; }
+  .chip { padding: 5px 11px; font-size: 14px; }
+  .more { font-size: 13px; }
+  .clock { font-size: 17px; }
+  .sub { padding: 8px 20px 0; gap: 14px; }
+  .who { font-size: 18px; }
+  .seg button { padding: 6px 14px; font-size: 15px; }
+  .gone { padding: 24px; font-size: 18px; }
+}
 @media (max-width: 599px) {
   .top { padding: 0 12px; gap: 10px; } .clock { display: none; }
   .away .switch { display: none; }

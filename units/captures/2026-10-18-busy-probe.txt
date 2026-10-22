@@ -1,0 +1,13 @@
+Probe on the real unit (firmware V1.3.856) with our client (units/ace_link.py), the service stopped, slot 0 parked.
+Each command 1.6 s after the one before. Replies, without "result" unless it said something:
+
+get_status None -> {'code': 0, 'msg': 'success'}
+unwind_filament {'index': 0, 'length': 10, 'speed': 5} -> {'code': 0, 'msg': 'success'} {}
+feed_filament {'index': 0, 'length': 10, 'speed': 5} -> {'code': 0, 'msg': 'FORBIDDEN'} {}     (still busy with the unwind)
+unwind_filament {'index': 0, 'length': 10, 'speed': 10} -> {'code': 0, 'msg': 'FORBIDDEN'} {}
+feed_filament {'index': 0, 'length': 10, 'speed': 10} -> {'code': 0, 'msg': 'FORBIDDEN'} {}
+start_feed_assist {'index': 1} -> {'code': 0, 'msg': 'success'} {}
+stop_feed_assist {'index': 1} -> {'code': 0, 'msg': ''} {}
+
+Earlier the same day, during the first tool change through the service, stop_feed_assist on the slot in the
+head (feed assist running) also answered msg '' and the service took it for a refusal.

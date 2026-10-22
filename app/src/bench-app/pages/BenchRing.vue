@@ -22,7 +22,7 @@ import { bench } from '../live'
 
 const props = defineProps<{ tile: Tile; printer: LiveBenchPrinter; small?: boolean }>()
 const on = computed(() => bench.printers.filter((p) => p.live).length)
-const d = computed(() => (props.small ? 44 : window.innerWidth < 600 ? 52 : sizeFor(on.value) === 'big' ? 196 : 112))
+const d = computed(() => (props.small ? 44 : window.innerWidth < 600 ? 52 : window.innerHeight <= 540 ? 76 : sizeFor(on.value) === 'big' ? 196 : 112))
 const w = computed(() => Math.max(5, Math.round(d.value / 20)))
 const r = computed(() => d.value / 2 - w.value)
 const L = computed(() => 2 * Math.PI * r.value)

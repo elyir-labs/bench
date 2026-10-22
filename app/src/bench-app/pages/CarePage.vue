@@ -15,6 +15,15 @@
     <!-- phones, guests and invites (design/bench-remote/, C): the box's own screen and phones at home only -->
     <PhonesSection v-if="!here.away" @remote="remote?.refresh()" />
 
+    <div class="card">
+      <span class="t"><b>{{ isPanel ? 'Box screen' : 'This screen' }}</b>
+        <span>{{ isPanel ? 'Light is easier to read under bright shop lights.' : "Only here. The box's own screen keeps its setting." }}</span></span>
+      <span class="seg" role="radiogroup" :aria-label="isPanel ? 'Box screen' : 'This screen'">
+        <button v-for="o in themes" :key="o.value" class="seg-opt" role="radio" :aria-checked="chosen === o.value"
+          :class="{ on: chosen === o.value }" @click="choose(o.value)">{{ o.label }}</button>
+      </span>
+    </div>
+
     <!-- the box itself (design/power/, A; design/role/'s way back): From away, Turn off with Restart, and Make it a printer -->
     <template v-if="box">
       <h2 class="group">{{ BOX_HEAD }}</h2>
@@ -92,11 +101,24 @@ import BenchTop from './BenchTop.vue'
 import PhonesSection from './PhonesSection.vue'
 import RemoteRow from './RemoteRow.vue'
 import { here } from '../here'
+import { isPanel, keepPanelTheme, panelTheme, screenTheme, setScreenTheme, type ScreenTheme } from '@/theme'
 
 const router = useRouter()
 const remote = ref<InstanceType<typeof RemoteRow> | null>(null)
 const rows = computed(() => careRows(bench.printers))
 const line = computed(() => (bench.loaded ? careSentence(rows.value) : ''))
+
+// light or dark: the box's own screen keeps it in the kiosk's profile; a phone or laptop keeps its own (Auto follows the OS)
+const themes: { value: ScreenTheme; label: string }[] = [
+  ...(isPanel ? [] : [{ value: 'auto' as const, label: 'Auto' }]),
+  { value: 'dark', label: 'Dark' },
+  { value: 'light', label: 'Light' },
+]
+const chosen = computed<ScreenTheme>(() => (isPanel ? panelTheme.value : screenTheme.value))
+function choose(t: ScreenTheme) {
+  if (!isPanel) setScreenTheme(t)
+  else if (t !== 'auto') keepPanelTheme(t)
+}
 
 // the box itself (bench/box.py): null on a service too old to say
 const NAME = 'the Bench Box'
@@ -174,6 +196,11 @@ async function becomePrinter() {
 .card .acts { display: flex; gap: 10px; flex: none; }
 .card .acts .a-btn { height: 52px; padding: 0 24px; border-radius: 999px; font-size: 18px; white-space: nowrap; }
 .card .t { flex: 1; }
+.seg { display: flex; flex: none; padding: 4px; gap: 4px; border-radius: 999px; background: var(--a-surface-2); }
+.seg-opt { appearance: none; border: 0; margin: 0; font: inherit; font-weight: 600; font-size: 18px; height: 48px; min-width: 100px; padding: 0 22px;
+           border-radius: 999px; background: transparent; color: var(--a-ink-2); cursor: pointer; transition: background 160ms ease, color 160ms ease; }
+.seg-opt.on { background: var(--a-surface); color: var(--a-ink); box-shadow: var(--a-card-shadow); }
+.seg-opt:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
 .becoming { flex-direction: column; align-items: stretch; }
 .steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; }
 .steps li { display: flex; align-items: center; gap: 12px; font-size: 18px; }
@@ -195,6 +222,15 @@ async function becomePrinter() {
 .bar i { display: block; height: 100%; border-radius: 4px; background: var(--a-accent); }
 .row.due .bar i { background: var(--a-amber); }
 .who { justify-self: end; font-weight: 650; font-size: 18px; color: var(--a-ink-2); }
+@media (max-height: 540px) and (min-width: 600px) {
+  .rows { gap: 8px; }
+  .row { grid-template-columns: minmax(0, 1fr) 140px 90px; gap: 16px; padding: 10px 16px; border-radius: 14px; }
+  .t b { font-size: 17px; } .t span { font-size: 14px; } .who { font-size: 15px; }
+  .group { margin-top: 8px; }
+  .card { gap: 16px; padding: 12px 16px; border-radius: 14px; }
+  .card .acts .a-btn { height: 44px; padding: 0 18px; font-size: 16px; }
+  .seg-opt { height: 40px; min-width: 76px; padding: 0 16px; font-size: 16px; }
+}
 @media (max-width: 599px) {
   .bpage { padding: 14px 16px 24px; gap: 10px; }
   .say { font-size: 25px; }
@@ -204,6 +240,7 @@ async function becomePrinter() {
   /* the box's rows: the buttons under the words, not squeezing them to a word a line */
   .card { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 16px; border-radius: 14px; }
   .card .acts .a-btn { height: 46px; padding: 0 20px; font-size: 16px; }
+  .seg-opt { flex: 1; height: 42px; min-width: 0; font-size: 16px; }
   .keylist { padding-left: 0; }
   .keylist .t b { font-size: 16px; } .keylist .t span { font-size: 13px; }
 }

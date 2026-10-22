@@ -62,7 +62,22 @@ away behind an **Advanced** door that opens Mainsail.
 a 7" DSI panel or an HDMI touchscreen, some with Anycubic ACE Pro filament units). Expect rough
 edges, missing hardware support and interfaces that change.
 
-## The six parts
+## The Anycubic ACE Pro, built in
+
+Elyir Bench has its own ACE Pro driver, free and open source (AGPL-3.0-only) like the rest, and it's part of every
+install: nothing extra to set up, no Klipper add-on.
+
+- **Load and unload from the screen**, with the spool's color and material kept per slot.
+- **Multi-color prints switch spools by themselves.** The print pauses quietly, the unit swaps through your
+  printer's own macros, and the print carries on where it stopped.
+- **Drying and feed assist** from the slot.
+
+An ACE Pro that nothing drives yet just works once Elyir Bench is installed. A printer on KlipperACE keeps it until
+you switch: the install command asks once, and one setting switches back. The driver was written from scratch
+from USB captures of a real unit ([`units/ace-protocol.md`](units/ace-protocol.md); every fact names its
+capture), with no code from another ACE project. More: [docs/filament-units.md](docs/filament-units.md).
+
+## The parts
 
 | Part | Where | What |
 |---|---|---|
@@ -72,6 +87,7 @@ edges, missing hardware support and interfaces that change.
 | Slicer | `slicer/` | A model, a purpose and a spool in; G-code and every setting it changed out. Wraps OrcaSlicer's command line. See [docs/slicer.md](docs/slicer.md). |
 | Installer | `installer/`, `kiosk/` | Runs on the printer: detects the hardware, installs Elyir Bench, keeps it correct, rolls back a bad release. See [docs/installer.md](docs/installer.md). |
 | Door | `door/` | Phone pairing, HTTPS on the printer's own name, reaching it from away, Web Push. See [docs/door.md](docs/door.md). |
+| Filament units | `units/` | Its own driver for filament units, the Anycubic ACE Pro first: a small service that talks to each unit over USB and to Klipper through Moonraker. See [docs/filament-units.md](docs/filament-units.md). |
 
 Where it is heading: [docs/vision.md](docs/vision.md).
 
@@ -123,7 +139,9 @@ before it is unpacked. More, with the table of boards: [bench.elyir.com/install]
 
 - **It adds** Elyir Bench at `http://<printer>.local:8088/`, on the printer's touchscreen if you say so, and a
   name on Elyir's relay (`<printer>.elyir.app`) for notifications and your phone away from home.
-- **It leaves alone** printer.cfg and your macros, Mainsail or Fluidd (still on port 80), your files and print
+- **An ACE Pro** gets Elyir Bench's own driver, with one include line in printer.cfg; a printer on KlipperACE is
+  asked first ([docs/filament-units.md](docs/filament-units.md)).
+- **It leaves alone** printer.cfg (apart from that line) and your macros, Mainsail or Fluidd (still on port 80), your files and print
   history. KlipperScreen stays installed.
 - **Will it work on my printer?** A Raspberry Pi 4 or 5 on Debian 13 gets everything. On Debian 11 or 12, or a
   BTT Pi or CB1, everything works except slicing on the printer itself (another printer running Elyir Bench on
@@ -182,7 +200,7 @@ them to phones.
 ## Tests
 
 ```bash
-for d in printer door installer slicer; do (cd $d && ~/.venvs/elyir-bench/bin/python -m pytest -q tests); done
+for d in printer door installer slicer units; do (cd $d && ~/.venvs/elyir-bench/bin/python -m pytest -q tests); done
 cd app && npm test && npm run build
 ```
 

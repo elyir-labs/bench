@@ -1,7 +1,8 @@
 // Light or dark, set as html[data-theme] (tokens in styles/elyir-bench.css).
 //
 // The printer's own panel uses the theme stored on the printer (Moonraker database), so it
-// survives kiosk restarts. Any other screen, like a phone, keeps its own choice in this browser
+// survives kiosk restarts. The Bench Box has no Moonraker: its screen keeps the choice in the
+// kiosk's own browser profile (keepPanelTheme). Any other screen, like a phone, keeps its own choice in this browser
 // (Auto follows the OS) and never changes the panel's.
 //   ?theme=light|dark     force a theme on this page (screenshots, demos)
 //   ?screen=panel|phone   say which kind of screen this is; otherwise localhost is the panel
@@ -109,6 +110,10 @@ export function followPanelTheme(call: Call): () => void {
   fetch()
   const timer = window.setInterval(fetch, POLL_MS)
   return () => window.clearInterval(timer)
+}
+
+export function keepPanelTheme(t: Theme): void {
+  received(t)
 }
 
 export async function setPanelTheme(call: Call, t: Theme): Promise<void> {

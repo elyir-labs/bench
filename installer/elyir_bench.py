@@ -808,9 +808,12 @@ def check_report(facts: dict, s: dict) -> tuple[list[str], int]:
         if have:
             lines.append(f"Elyir Bench {have} is already here; this updates it.")
         else:
-            kept = ["printer.cfg"] + ([ui["name"]] if ui.get("name") else []) + \
+            ace = units_on(s) and facts.get("ace_units")
+            kept = ([] if ace else ["printer.cfg"]) + ([ui["name"]] if ui.get("name") else []) + \
                    (["KlipperScreen"] if facts["klipperscreen"]["installed"] else [])
             lines.append(f"It adds Elyir Bench at http://{host}.local:{s['port']}")
+            if ace:
+                lines.append("It drives your ACE Pro with Elyir Bench's own driver (one include line in printer.cfg)")
             if s.get("remote") == "relay":
                 lines.append(f"It asks Elyir's relay for {s.get('remote_name') or host}.elyir.app, for notifications and your phone away from home")
             lines.append(f"It leaves {', '.join(kept[:-1]) + ' and ' + kept[-1] if len(kept) > 1 else kept[0]} as they are")
@@ -873,7 +876,7 @@ def default_settings(facts: dict) -> dict:
     return {"printer_name": name, "panel": panel, "panel_output": "auto", "panel_rotation": "auto",
             "panel_backend": "auto", "panel_render": "auto", "boot_screen": "elyir-bench", "port": "8088",
             "remote": "relay", "slicer": "auto", "slice_for_others": "off", "role": "auto", "start_macro": "off",
-            "network_wait": "off", "filament_units": "klipperace",
+            "network_wait": "off", "filament_units": "auto",
             "remote_name": facts.get("public_name") or re.sub(r"[^a-z0-9-]+", "-", facts["host"].split(".")[0].lower()).strip("-")}
 
 
@@ -928,8 +931,9 @@ def save_settings(facts: dict, s: dict) -> Path:
         f"start_macro: {s.get('start_macro', 'off')}\n"
         "# off: the printer starts without waiting for the Wi-Fi (about 6 s sooner to the screen) | on: it waits\n"
         f"network_wait: {s.get('network_wait', 'off')}\n"
-        "# The filament unit's driver (design/ace-driver/): klipperace | elyir (Bench's own service, in KlipperACE's place)\n"
-        f"filament_units: {s.get('filament_units', 'klipperace')}\n"
+        "# The filament unit's driver (design/ace-driver/): auto (Bench's own for an ACE Pro that KlipperACE doesn't\n"
+        "# drive) | elyir (Bench's own service, in KlipperACE's place) | klipperace\n"
+        f"filament_units: {'auto' if s.get('units_auto') else s.get('filament_units', 'auto')}\n"
         + "".join(f"{k}: {s[k]}\n" for k in (*UNITS_SETTINGS, "units_sensor_pin") if s.get(k))
         # the ones set only by hand (a staging printer's cloud_api and printers_app, docs/cloud.md): kept when present
         + "".join(f"{k}: {s[k]}\n" for k in ("relay_api", "relay_addr", "relay_zone", "acme_ca", "cloud_api", "printers_app",
@@ -1880,6 +1884,43 @@ class StartMacro(Step):
 
 def units_on(s: dict) -> bool:
     return s.get("filament_units", "klipperace") == "elyir"
+
+
+def printer_cfg_lines(facts: dict) -> list[str]:
+    folder = config_dir(facts)
+    return [line.strip() for line in read(folder / "printer.cfg").split("\n")] if folder else []
+
+
+def klipperace_here(facts: dict) -> bool:
+    """KlipperACE's includes in printer.cfg, not switched off by us."""
+    return any(line in KLIPPERACE_INCLUDES for line in printer_cfg_lines(facts))
+
+
+def resolve_units(facts: dict, s: dict) -> dict:
+    """filament_units: auto, made concrete for this apply: Bench's own driver for an ACE Pro that nothing else drives
+    and whose head sensor Klipper knows, otherwise KlipperACE's way (a printer on KlipperACE is asked, ask_units).
+    Once switched on it stays on, so a Klipper that isn't up yet or an unplugged unit never tears it down."""
+    if s.get("filament_units", "auto") != "auto":
+        return s
+    ours = UNITS_INCLUDE in printer_cfg_lines(facts)
+    on = ours or (bool(facts.get("ace_units")) and not klipperace_here(facts) and units_sensor_pin(facts, s) is not None)
+    return {**s, "units_auto": True, "filament_units": "elyir" if on else "klipperace"}
+
+
+def ask_units(facts: dict, s: dict) -> dict:
+    """Once per printer, at an apply from a terminal: an ACE Pro on KlipperACE may move to Bench's own driver."""
+    st = load_state()
+    if (units_on(s) or st.get("units_asked") or not facts.get("ace_units") or not sys.stdin.isatty()
+            or units_sensor_pin(facts, s) is None):
+        return s
+    now = "runs on KlipperACE" if klipperace_here(facts) else "has no driver in printer.cfg"
+    print(f"  This printer's ACE Pro {now}. Elyir Bench has its own ACE Pro driver, free and open source,\n"
+          "  already in this release. Switching restarts Klipper; `filament_units: klipperace` in "
+          f"{settings_path(facts).name} switches back.")
+    ans = input("  Switch to Elyir Bench's own driver now? [y/N] ").strip().lower()
+    st["units_asked"] = True
+    save_state(st)
+    return {**s, "filament_units": "elyir", "units_auto": False} if ans in ("y", "yes") else s
 
 
 def render_units_printer_cfg(text: str, on: bool) -> str:
@@ -3849,7 +3890,7 @@ START_MACRO_STEPS: list[Step] = [StartMacro(), SlicerService()]
 REMOTE_STEPS: list[Step] = [DoorRuntime(), DoorBinaries(), RemoteName(), DoorServices()]
 
 # `elyir-bench remove`: the steps that turn themselves off, the start macro first (Klipper restarts without it)
-REMOVE_STEPS: list[Step] = [StartMacro(), Panel(), BootScreen(), NetworkWait(), DoorServices(), SlicerService()]
+REMOVE_STEPS: list[Step] = [StartMacro(), FilamentUnits(), Panel(), BootScreen(), NetworkWait(), DoorServices(), SlicerService()]
 
 
 # ── Bring it over (docs/bring-it-over.md, design/printer-setup/ A) ───────────────────────────────────────────
@@ -5755,7 +5796,7 @@ def remove(c: Ctx) -> bool:
             return False
     lines = []
     c.s = {**c.s, "panel": "klipperscreen" if f["klipperscreen"]["installed"] else "none", "boot_screen": "off", "network_wait": "on",
-           "remote": "off", "slicer": "off", "slice_for_others": "off", "start_macro": "off"}
+           "remote": "off", "slicer": "off", "slice_for_others": "off", "start_macro": "off", "filament_units": "klipperace"}
     for step in REMOVE_STEPS:
         c.undo = []
         try:
@@ -5780,7 +5821,8 @@ def remove(c: Ctx) -> bool:
     if unit_exists("elyir-bench-firstboot.service"):
         sudo("systemctl", "disable", "elyir-bench-firstboot.service", check=False)
         lines.append(("done", "first boot", "the card's first-boot install won't run again"))
-    units = [u for u in (KIOSK_UNIT, WIFI_UNIT, *DOOR_UNITS, *HOMECERT_UNITS, SLICER_UNIT, BENCH_UNIT, POWER_KEY_UNIT) if unit_exists(u)]
+    units = [u for u in (KIOSK_UNIT, WIFI_UNIT, *DOOR_UNITS, *HOMECERT_UNITS, SLICER_UNIT, BENCH_UNIT, POWER_KEY_UNIT, UNITS_UNIT)
+             if unit_exists(u)]
     for u in units:
         sudo("systemctl", "disable", "--now", u, check=False)
         sudo("rm", "-f", f"/etc/systemd/system/{u}", check=False)
@@ -5967,7 +6009,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(facts, indent=2))
         return 0
 
-    settings = resolve_slicer(facts, load_settings(facts))
+    settings = resolve_units(facts, resolve_slicer(facts, load_settings(facts)))
+    if args.cmd == "apply" and not args.json:
+        settings = ask_units(facts, settings)
     release = getattr(args, "release", None)
     c = Ctx(facts, settings, release.resolve() if release else None, getattr(args, "force", False))
 

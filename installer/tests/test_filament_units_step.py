@@ -143,17 +143,68 @@ def test_never_while_printing_and_not_without_a_head_sensor(tmp_path, monkeypatc
     assert a.FilamentUnits().check(c2) == (False, "no extruder filament sensor found in Klipper's config, or this release has no units/")
 
 
-def test_klipperace_is_the_default_and_the_setting_is_saved(tmp_path, monkeypatch):
+def test_auto_is_the_default_and_is_saved_as_auto(tmp_path, monkeypatch):
     c, config, *_ = rig(tmp_path, monkeypatch)
     c.s.pop("filament_units")
     assert not a.units_on(c.s)
     assert a.FilamentUnits().check(c) == (True, "KlipperACE")
     monkeypatch.setattr(a, "settings_path", lambda facts: config / "elyir-bench.conf")
     facts = dict(c.facts, kiosk={"enabled": False}, klipperscreen={"installed": False}, panel_output=None, host="workshop.local")
-    assert a.default_settings(facts)["filament_units"] == "klipperace"
+    assert a.default_settings(facts)["filament_units"] == "auto"
     a.save_settings(facts, dict(a.default_settings(facts), **c.s, filament_units="elyir"))
     text = (config / "elyir-bench.conf").read_text()
     assert "filament_units: elyir\n" in text and "units_before_macro: NOZZLE_PRE_TOOL_CHANGE\n" in text
+    a.save_settings(facts, a.resolve_units(dict(c.facts, ace_units=1), dict(a.default_settings(facts), **c.s, filament_units="auto")))
+    assert "filament_units: auto\n" in (config / "elyir-bench.conf").read_text()
+
+
+def test_auto_drives_an_ace_nothing_else_drives(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    auto = {**c.s, "filament_units": "auto"}
+    # KlipperACE's includes are in printer.cfg: it stays KlipperACE's (the person is asked instead)
+    assert a.resolve_units(dict(c.facts, ace_units=1), auto)["filament_units"] == "klipperace"
+    (config / "printer.cfg").write_text("[include mainsail.cfg]\n[printer]\nkinematics: corexy\n")
+    on = a.resolve_units(dict(c.facts, ace_units=1), auto)
+    assert on["filament_units"] == "elyir" and on["units_auto"] and a.units_on(on)
+    assert a.resolve_units(dict(c.facts, ace_units=0), auto)["filament_units"] == "klipperace"
+    # an explicit pick is never second-guessed
+    assert a.resolve_units(dict(c.facts, ace_units=1), {**c.s, "filament_units": "klipperace"})["filament_units"] == "klipperace"
+    c.s = on
+    a.FilamentUnits().apply(c)
+    # once on, a Klipper that doesn't answer or an unplugged unit doesn't switch it off again
+    monkeypatch.setattr(a, "http_json", lambda url, **kw: (_ for _ in ()).throw(OSError("down")))
+    assert a.resolve_units(dict(c.facts, ace_units=0), auto)["filament_units"] == "elyir"
+
+
+def test_auto_needs_the_head_sensor(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    (config / "printer.cfg").write_text("[printer]\nkinematics: corexy\n")
+    monkeypatch.setattr(a, "http_json", lambda url, **kw: {"result": {"status": {"configfile": {"settings": {}}}}})
+    assert a.resolve_units(dict(c.facts, ace_units=1), {**c.s, "filament_units": "auto"})["filament_units"] == "klipperace"
+
+
+def test_a_printer_on_klipperace_is_asked_once(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    state = {}
+    monkeypatch.setattr(a, "load_state", lambda: dict(state))
+    monkeypatch.setattr(a, "save_state", lambda st: state.update(st))
+    monkeypatch.setattr(a, "settings_path", lambda facts: config / "elyir-bench.conf")
+    monkeypatch.setattr(a.sys.stdin, "isatty", lambda: True)
+    answers = iter(["y"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(answers))
+    facts = dict(c.facts, ace_units=1)
+    s = a.resolve_units(facts, {**c.s, "filament_units": "auto"})
+    assert a.ask_units(facts, s)["filament_units"] == "elyir" and state["units_asked"]
+    assert a.ask_units(facts, s) == s                       # asked already: no second question
+    state.clear()
+    assert a.ask_units(dict(facts, ace_units=0), s) == s    # no unit, no question
+    monkeypatch.setattr(a.sys.stdin, "isatty", lambda: False)
+    assert a.ask_units(facts, s) == s                       # nobody at a terminal to answer
+    assert "units_asked" not in state
+
+
+def test_remove_takes_our_driver_off(tmp_path, monkeypatch):
+    assert any(isinstance(step, a.FilamentUnits) for step in a.REMOVE_STEPS)
 
 
 def test_once_switched_the_pin_comes_from_our_own_button_and_nothing_flips(tmp_path, monkeypatch):

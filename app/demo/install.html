@@ -141,8 +141,9 @@
       <h2>What it adds</h2>
       <p>Elyir Bench at <code>your-printer.local:8088</code>, and on the printer's screen if you say so.</p>
       <p>Away from home, with a plan: an address of its own on Elyir's relay, like <code>p-k7qx2mna.elyir.app</code>, opens it from anywhere. It never carries your printer's name. Testers have it free.</p>
+      <p>An ACE Pro: Elyir Bench's own driver, with one include line in printer.cfg. On KlipperACE, it asks first.</p>
       <h2>What it leaves alone</h2>
-      <p>printer.cfg and your macros, Mainsail or Fluidd, your files and print history. KlipperScreen stays installed.</p>
+      <p>printer.cfg (apart from that one line) and your macros, Mainsail or Fluidd, your files and print history. KlipperScreen stays installed.</p>
       <h2>Changed your mind?</h2>
       <p>On the printer, <code>elyir-bench remove</code> takes it off and puts KlipperScreen back.</p>
       <p class="foot muted">Needs a Raspberry Pi 4 or 5, a BTT Pi or a CB1, on a 64-bit system. Not during a print: it checks, and waits.</p>
@@ -171,7 +172,7 @@
       <div>
         <h3>Taking it off</h3>
         <p>On the printer: <code>elyir-bench remove</code>. The screen goes back to KlipperScreen, and Elyir Bench's own files go.</p>
-        <p>printer.cfg, Mainsail, your files and history were never changed. <code>elyir-bench.conf</code> stays, in case you come back.</p>
+        <p>printer.cfg goes back as it was; Mainsail, your files and history were never changed. <code>elyir-bench.conf</code> stays, in case you come back.</p>
       </div>
     </div>
   </section>

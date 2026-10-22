@@ -130,6 +130,24 @@ function open(t: Tile) {
 .pct { font-size: 18px; font-weight: 650; color: var(--a-accent-text); }
 .off { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--a-ink-3); font-size: 18px; }
 
+@media (max-height: 540px) and (min-width: 600px) {
+  .say { font-size: 27px; }
+  .add { font-size: 17px; }
+  .tiles, .size-compact .tiles { --cols: 2; gap: 10px; }
+  .tile { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; padding: 12px 14px; border-radius: 16px; align-content: start; }
+  .pic { grid-row: 1 / span 2; grid-column: 1; }
+  .head, .words { grid-column: 2; }
+  .name, .size-compact .name { font-size: 18px; }
+  .chip { font-size: 13px; padding: 3px 10px; }
+  .words b, .size-compact .words b { font-size: 16px; }
+  .words span, .size-compact .words span { font-size: 14px; }
+  .tile .a-btn, .size-compact .tile .a-btn { grid-column: 1 / -1; height: 44px; font-size: 16px; margin-top: 6px; }
+  .athome { grid-column: 1 / -1; font-size: 14px; }
+  .groups { gap: 12px; }
+  .off { font-size: 15px; gap: 10px; }
+  .guest { font-size: 15px; }
+}
+
 /* a phone: one list, whatever the size (design/bench-box/, D on a phone) */
 @media (max-width: 599px) {
   .home { padding: 14px 16px 24px; gap: 12px; }

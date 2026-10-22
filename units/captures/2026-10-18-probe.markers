@@ -1,0 +1,4 @@
+{"t": 1792338177.349067401, "start": "ACE_DEBUG METHOD=get_info"}
+{"t": 1792338177.865233478, "done": "ACE_DEBUG METHOD=get_info", "reply": {"result":"ok"}}
+{"t": 1792338178.867386490, "start": "ACE_DEBUG METHOD=no_such_method"}
+{"t": 1792338179.383426122, "done": "ACE_DEBUG METHOD=no_such_method", "reply": {"result":"ok"}}

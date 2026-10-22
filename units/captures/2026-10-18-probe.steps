@@ -1,0 +1,11 @@
+sleep 1
+gcode ACE_DEBUG METHOD=get_info
+sleep 1
+gcode ACE_DEBUG METHOD=no_such_method
+sleep 1
+gcode ACE_DEBUG METHOD=stop_feed_filament PARAMS={"index":3}
+sleep 1
+gcode ACE_DEBUG METHOD=stop_unwind_filament PARAMS={"index":3}
+sleep 1
+gcode ACE_DEBUG METHOD=get_status PARAMS={"bogus":1}
+sleep 1
