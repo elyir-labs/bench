@@ -12,6 +12,8 @@ import base from './vite.config'
 //   dist-demo/try.html        the showcase at /try: the 7" panel and a phone side by side, one printer
 //   dist-demo/write.html      the form a printer's code opens at /write (design/report/, B)
 //   dist-demo/testers.html    asking to test, and the steps once invited, at /testers (design/testers/, B)
+//   dist-demo/units.html      for filament unit owners, at /units; slicing.html at /slicing; box.html (the Bench Box) at /box
+//                             (design/site-features/, B)
 //   dist-demo/app/            the app, built with VITE_DEMO=1 (src/demo/socket.ts)
 //   dist-demo/sim-worker.js   the printer; pyodide/ and py/ beside it
 //   dist-demo/install         install/install.sh, for `curl -fsSL https://bench.elyir.com/install | sh`
@@ -40,7 +42,7 @@ function demoFiles(): Plugin {
       writeFileSync(path.join(OUT, 'index.html'), skeleton('front.html'))
       writeFileSync(path.join(OUT, 'try.html'), skeleton('showcase.html'))
       writeFileSync(path.join(OUT, 'write.html'), skeleton('write.html'))
-      writeFileSync(path.join(OUT, 'testers.html'), skeleton('testers.html'))
+      for (const f of ['testers.html', 'units.html', 'slicing.html', 'box.html']) writeFileSync(path.join(OUT, f), skeleton(f))
       for (const f of ['advanced.html', 'camera.webp', 'camera.jpg', '_headers', 'shots']) copy(`app/demo/${f}`, f)
       const worker = readFileSync(path.resolve(ROOT, 'app/demo/sim-worker.js'), 'utf8')
       writeFileSync(path.join(OUT, 'sim-worker.js'), STDLIB_MODULE ? worker.replace('const STDLIB_MODULE = false', 'const STDLIB_MODULE = true') : worker)

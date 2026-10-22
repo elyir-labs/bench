@@ -51,8 +51,17 @@
   .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
   nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
   nav .links a, nav .end a.quiet { color: var(--quiet); text-decoration: none }
-  nav .links a:hover, nav .end a.quiet:hover { color: var(--ink) }
+  nav .links a:hover, nav .end a.quiet:hover, nav .links a[aria-current] { color: var(--ink) }
   nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
+  .menu { display: none; position: relative }
+  .menu summary { list-style: none; cursor: pointer; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--quiet) }
+  .menu summary::-webkit-details-marker { display: none }
+  .menu summary svg { width: 22px; height: 22px }
+  .menu[open] summary { color: var(--ink); background: var(--surface) }
+  .menu .sheet { position: absolute; right: 0; top: calc(100% + 8px); z-index: 10; min-width: 220px; display: grid; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow) }
+  .menu .sheet a { color: var(--ink); text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 16px }
+  .menu .sheet a:hover { background: var(--raised) }
+  .menu .sheet a[aria-current] { color: var(--accent) }
 
   .btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 22px; border-radius: 12px; font-weight: 700; font-size: 16px; white-space: nowrap; border: 1px solid var(--line); color: var(--ink); background: var(--surface) }
   .btn:hover { background: var(--raised) }
@@ -62,28 +71,45 @@
   .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
   .btn svg { width: 16px; height: 16px; flex: none }
 
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: center; padding-block: 64px 56px }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 32px 48px; align-items: center; padding-block: 36px 48px }
   .say { display: grid; gap: 18px; align-content: start }
   .lbl { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet) }
-  h1 { margin: 0; font-size: clamp(36px, 5.2vw, 60px); line-height: 1.03; font-weight: 800; letter-spacing: -.025em; text-wrap: balance }
-  .lede { margin: 0; color: var(--quiet); font-size: 19px; line-height: 1.5; max-width: 46ch }
+  h1 { margin: 0; font-size: clamp(31px, 3.2vw, 52px); line-height: 1.03; font-weight: 800; letter-spacing: -.025em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 17px; line-height: 1.5; max-width: 52ch }
+  .lede .narrow { display: none }
   .lede b { color: var(--ink); font-weight: 600 }
   .doors { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px }
   .fine { margin: 0; color: var(--quiet); font-size: 14px }
   .ssh { display: none }
 
-  .pics { position: relative; aspect-ratio: 1.3 }
+  .pics { position: relative; aspect-ratio: 1.6 }
   .pics figure { margin: 0; position: absolute; background: var(--bezel); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden }
   .pics .printer { left: 0; top: 0; width: 86%; border: 0; background: none; box-shadow: none;
     -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 86%, transparent);
     -webkit-mask-composite: source-in;
     mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 86%, transparent);
     mask-composite: intersect }
-  .pics .phone { right: 0; top: 30%; width: 24%; border-radius: 28px; padding: 1.2% }
+  .pics .phone { right: 0; top: 14%; width: 22%; border-radius: 28px; padding: 1.2% }
   .pics img { display: block; width: 100%; height: auto }
   .pics .phone img { border-radius: 22px }
-  .pics figcaption { position: absolute; left: 0; bottom: 0; width: 66%; color: var(--quiet); font-size: 14px }
   :root[data-theme="light"] img.dark, :root:not([data-theme="light"]) img.light { display: none }
+
+  .teasers { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
+  .teaser { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 6px 16px; align-content: start; color: var(--ink); text-decoration: none }
+  .teaser:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)) }
+  .teaser .head { display: grid; gap: 6px; align-content: start }
+  .teaser h3 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.25 }
+  .teaser .pic { width: 112px; height: 70px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: var(--raised) }
+  .teaser .art { background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--ink) 9%, var(--surface)), var(--raised)) }
+  .teaser .secs { text-align: center; line-height: 1 }
+  .teaser .secs b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.03em }
+  .teaser .secs small { color: var(--quiet); font-size: 11px }
+  .teaser .pic img { width: 100%; height: 100%; object-fit: cover; object-position: left top }
+  .teaser .line { grid-column: 1 / -1; margin: 0; color: var(--quiet); font-size: 15px }
+  .teaser .foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-top: 4px }
+  .teaser .go { color: var(--accent); font-weight: 650; font-size: 15px; display: inline-flex; align-items: center; gap: 6px }
+  .teaser .go svg, .teaser .arrow { width: 15px; height: 15px; flex: none }
+  .teaser .short, .teaser .arrow { display: none }
 
   section { padding-block: 40px; border-top: 1px solid var(--line) }
   section > h2 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em }
@@ -118,10 +144,10 @@
   .way p { margin: 0; color: var(--quiet); font-size: 15px }
   .way a { font-weight: 650; font-size: 15px; text-decoration: none }
   .way a:hover { text-decoration: underline }
-  .pill { justify-self: start; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase }
-  .pill.now { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green) }
-  .pill.soon { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber) }
-  .pill.later { background: var(--raised); color: var(--quiet) }
+  .pill { justify-self: start; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap }
+  .pill.ok { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green) }
+  .pill.new { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber) }
+  .pill.coming { background: var(--raised); color: var(--quiet) }
 
   .plans { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px }
   .plans > div { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px 24px; display: grid; gap: 8px; align-content: start }
@@ -138,9 +164,15 @@
   footer a { color: var(--quiet) }
   footer .end { margin-left: auto }
 
+  @media (max-width: 1080px) {
+    nav .links { display: none }
+    .menu { display: block }
+  }
   @media (max-width: 960px) {
-    .hero { grid-template-columns: minmax(0, 1fr); gap: 40px; padding-block: 40px }
-    .ways, .plans, .screens, .wait { grid-template-columns: minmax(0, 1fr) }
+    .hero { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-block: 32px 40px }
+    .ways, .plans, .screens, .wait, .teasers { grid-template-columns: minmax(0, 1fr) }
+    .pics { aspect-ratio: 1.3 }
+    .pics .phone { top: 30%; width: 24% }
   }
   /* a phone: the command needs a computer with SSH, so trying it comes first; the demo opens as its own page */
   @media (max-width: 640px) {
@@ -151,9 +183,23 @@
     .doors .try-door { order: -1; background: var(--accent); border-color: transparent; color: var(--on-accent) }
     .doors .install-door { background: var(--surface); border-color: var(--line); color: var(--ink) }
     .ssh { display: block; text-align: center; margin-top: -2px }
-    .lede { font-size: 17px }
-    .pics { aspect-ratio: auto }
-    .pics .phone, .pics figcaption { display: none }
+    .say > .lbl { display: none }
+    .lede { font-size: 16px }
+    .lede .wide { display: none }
+    .lede .narrow { display: inline }
+    .teasers { gap: 10px; margin-top: -8px }
+    .teaser { grid-template-columns: 79px minmax(0, 1fr) 18px; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px }
+    .teaser .head, .teaser .line, .teaser .foot { display: none }
+    .teaser .pic { order: -1; width: 79px; height: 50px; border-radius: 9px }
+    .teaser .art svg { width: 64px; height: auto }
+    .teaser .secs b { font-size: 21px }
+    .teaser .secs small { font-size: 8px }
+    .teaser .short { display: grid; gap: 1px; min-width: 0 }
+    .teaser .short b { font-size: 16px }
+    .teaser .short span { color: var(--quiet); font-size: 14px; line-height: 1.35 }
+    .teaser .arrow { display: block; width: 18px; height: 18px; color: var(--quiet) }
+    .pics { aspect-ratio: auto; order: 3 }
+    .pics .phone { display: none }
     .pics .printer { position: relative; width: 100%; top: 0 }
     .try .ghost .phone-ghost { display: none }
     footer .end { margin-left: 0 }
@@ -167,16 +213,18 @@
 <div class="wrap">
   <nav>
     <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
-    <span class="links"><a href="#try">Try it</a><a href="install">Install</a><a href="#plans">Plans</a><a href="testers">Testers</a></span>
-    <span class="end"><a class="quiet" href="https://printers.elyir.app/you">Sign in</a><a class="btn sm pri" href="install">Put it on your printer</a></span>
+    <span class="links"><a href="#try">Try it</a><a href="units">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="install">Install</a><a href="#plans">Plans</a><a href="testers">Testers</a></span>
+    <span class="end"><a class="quiet" href="https://printers.elyir.app/you">Sign in</a><a class="btn sm pri" href="install">Put it on your printer</a>
+      <details class="menu"><summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+        <div class="sheet"><a href="#try">Try it</a><a href="units">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="install">Install</a><a href="#plans">Plans</a><a href="testers">Testers</a></div></details></span>
   </nav>
 
   <div class="hero">
     <div class="say">
       <p class="lbl">For Klipper printers</p>
       <h1>Your printer tells you what it needs, in one sentence.</h1>
-      <p class="lede">A touchscreen and phone app for the person printing, not the person tuning. It warms up, swaps spools
-        and asks when it needs you. <b>Mainsail stays one tap away.</b></p>
+      <p class="lede"><span class="wide">A touchscreen and phone app for the person printing, not the person tuning.</span><span class="narrow">For the person printing, not the person tuning.</span>
+        It slices on the printer, swaps spools on your ACE Pro, ERCF or Box Turtle, and asks when it needs you. <b class="wide">Mainsail stays one tap away.</b></p>
       <div class="doors">
         <a class="btn pri install-door" href="install">Put it on your printer
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
@@ -196,9 +244,48 @@
         <img class="dark" src="shots/phone-runout-dark.jpg" width="448" height="968" alt="The same moment on a phone">
         <img class="light" src="shots/phone-runout-light.jpg" width="448" height="968" alt="The same moment on a phone" loading="lazy">
       </figure>
-      <figcaption>On the printer's own screen if it has one, and on your phone: the moment a spool runs out, mid-print. Try it live just below.</figcaption>
+    </div>
+
+    <div class="teasers" id="ace">
+      <a class="teaser" href="units">
+        <span class="head"><span class="lbl">Filament units</span><h3>ACE Pro, ERCF, Tradrack, Box Turtle, Night Owl</h3></span>
+        <span class="short"><b>Filament units</b><span>ACE Pro, ERCF, Box Turtle and more</span></span>
+        <span class="pic art"><svg width="90" height="44" viewBox="0 0 90 44" aria-hidden="true"><line x1="9" y1="2" x2="9" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="5.5" y="27" width="7" height="9" rx="1.5" fill="#e0524a"/><line x1="19.5" y1="2" x2="19.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="16" y="27" width="7" height="9" rx="1.5" fill="#eee"/><line x1="30" y1="2" x2="30" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="26.5" y="27" width="7" height="9" rx="1.5" fill="#222"/><line x1="40.5" y1="2" x2="40.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="37" y="27" width="7" height="9" rx="1.5" fill="#3b82f6"/><line x1="51" y1="2" x2="51" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="47.5" y="27" width="7" height="9" rx="1.5" fill="#f5c542"/><line x1="61.5" y1="2" x2="61.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="58" y="27" width="7" height="9" rx="1.5" fill="#ddd"/><line x1="72" y1="2" x2="72" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="68.5" y="27" width="7" height="9" rx="1.5" fill="#8b5cf6"/><line x1="82.5" y1="2" x2="82.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="79" y="27" width="7" height="9" rx="1.5" fill="#22a35a"/><rect x="2" y="37" width="86" height="4" rx="2" fill="#5a6273"/></svg></span>
+        <p class="line">Load from the screen, and multi-color prints swap spools by themselves. Happy Hare and AFC units set up from the screen.</p>
+        <span class="foot"><span class="go">Your unit <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pill ok">ACE Pro: works today</span></span>
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="teaser" href="slicing">
+        <span class="head"><span class="lbl">Slicing</span><h3>Drop a model on your phone. The printer slices it.</h3></span>
+        <span class="short"><b>Slicing on the printer</b><span>A Pi 5 slices in seconds</span></span>
+        <span class="pic secs"><span><b>3 s</b><small>on a Pi 5</small></span></span>
+        <p class="line">OrcaSlicer's engine, on the printer. A Raspberry Pi 5 takes seconds, and slices for the other printers too.</p>
+        <span class="foot"><span class="go">How it slices <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pill ok">Works today</span></span>
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="teaser" href="box">
+        <span class="head"><span class="lbl">Bench Box</span><h3>No Pi? A Bench Box speaks for it.</h3></span>
+        <span class="short"><b>Bench Box</b><span>For Kobras and printers with no Pi</span></span>
+        <span class="pic"><img class="dark" src="shots/box-dark.jpg" width="2048" height="1200" alt=""><img class="light" src="shots/box-light.jpg" width="2048" height="1200" alt="" loading="lazy"></span>
+        <p class="line">Runs Elyir Bench for printers that can't: Anycubic Kobras today, over LAN mode, and slices for them.</p>
+        <span class="foot"><span class="go">What it is <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="pill new">New</span></span>
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
     </div>
   </div>
+
+  <section id="try">
+    <h2>Try it live</h2>
+    <p class="sub">The real screens, connected to a pretend printer running in your browser. Pick a moment and watch both react.</p>
+    <div class="try" id="try-box">
+      <div class="ghost" aria-hidden="true">
+        <img class="dark" src="shots/panel-runout-dark.jpg" style="width:52%" alt=""><img class="light" src="shots/panel-runout-light.jpg" style="width:52%" alt="" loading="lazy">
+        <img class="dark phone-ghost" src="shots/phone-runout-dark.jpg" style="width:15%" alt=""><img class="light phone-ghost" src="shots/phone-runout-light.jpg" style="width:15%" alt="" loading="lazy">
+      </div>
+      <div class="go">
+        <a class="btn pri" href="try" id="start"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>Start the pretend printer</a>
+        <p class="fine">About 16 MB, a few seconds. Everything works except the actual plastic.</p>
+      </div>
+      <iframe id="demo" title="Elyir Bench demo: the touchscreen and a phone, with one pretend printer"></iframe>
+    </div>
+  </section>
 
   <section class="screens">
     <div class="lines">
@@ -220,56 +307,22 @@
     </div>
   </section>
 
-  <section id="ace">
-    <h2>Filament units, built in</h2>
-    <p class="sub">Elyir Bench drives the Anycubic ACE Pro with its own driver, free and open source like the rest of it.
-      Nothing extra to install, and a unit already set up another way stays as it is until you say so.</p>
-    <div class="ways">
-      <div class="way">
-        <h3>Load from the screen</h3>
-        <p>Tap a slot and it feeds to the nozzle. The spool's color and material stay with the slot, and a unit with a dryer dries from there too.</p></div>
-      <div class="way">
-        <h3>Multi-color, by itself</h3>
-        <p>A color change swaps spools on its own, and the print carries on where it stopped.</p>
-        <a href="https://github.com/elyir-labs/bench/blob/main/docs/filament-units.md">How it works</a></div>
-      <div class="way"><span class="pill soon">New</span>
-        <h3>Happy Hare and AFC units</h3>
-        <p>ERCF, Tradrack, Box Turtle, Night Owl and others, through their own software, with a check and measure from the
-          screen. Not on a real unit yet: help us test it.</p>
-        <a href="testers">Test with your unit</a></div>
-    </div>
-  </section>
-
-  <section id="try">
-    <h2>Try it live</h2>
-    <p class="sub">The real screens, connected to a pretend printer running in your browser. Pick a moment and watch both react.</p>
-    <div class="try" id="try-box">
-      <div class="ghost" aria-hidden="true">
-        <img class="dark" src="shots/panel-runout-dark.jpg" style="width:52%" alt=""><img class="light" src="shots/panel-runout-light.jpg" style="width:52%" alt="" loading="lazy">
-        <img class="dark phone-ghost" src="shots/phone-runout-dark.jpg" style="width:15%" alt=""><img class="light phone-ghost" src="shots/phone-runout-light.jpg" style="width:15%" alt="" loading="lazy">
-      </div>
-      <div class="go">
-        <a class="btn pri" href="try" id="start"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>Start the pretend printer</a>
-        <p class="fine">About 16 MB, a few seconds. Everything works except the actual plastic.</p>
-      </div>
-      <iframe id="demo" title="Elyir Bench demo: the touchscreen and a phone, with one pretend printer"></iframe>
-    </div>
-  </section>
-
   <section>
     <h2>Put it on your printer</h2>
     <div class="ways">
-      <div class="way"><span class="pill now">Now</span>
+      <div class="way"><span class="pill ok">Works today</span>
         <h3>It already runs Klipper on a Pi</h3>
         <p>One command over SSH. It checks the printer first and asks once before it changes anything. Mainsail and your
           printer.cfg stay as they are.</p>
         <a href="install">The command, and will it work on mine</a></div>
-      <div class="way"><span class="pill soon">Soon</span>
+      <div class="way"><span class="pill new">New · help us test it</span>
         <h3>A new Pi, or a fresh start</h3>
-        <p>Flash a card, join its Wi-Fi from your phone, and bring your old printer's settings over.</p></div>
-      <div class="way"><span class="pill later">Later</span>
+        <p>Flash the Elyir Bench card on a Pi 4 or Pi 5, join its Wi-Fi from your phone, and bring your old printer's settings over.</p>
+        <a href="install">The card for a Pi 4 or Pi 5</a></div>
+      <div class="way"><span class="pill new">New · help us test it</span>
         <h3>A printer that can't run it</h3>
-        <p>A Bench Box speaks for Anycubic Kobras and other printers on your Wi-Fi.</p></div>
+        <p>A Bench Box speaks for Anycubic Kobra 3 and Kobra 3 Max over LAN mode, and slices for printers that can't.</p>
+        <a href="box">What a Bench Box is</a></div>
     </div>
   </section>
 
@@ -292,7 +345,7 @@
       <div>
         <h3>At home, free</h3>
         <p>Everything the printer does, on its touchscreen and on any phone or computer on your Wi-Fi.</p>
-        <ul><li>No account</li><li>Keeps working without the internet</li><li>Slicing on the printer, on boards that can</li></ul>
+        <ul><li>No account</li><li>Keeps working without the internet</li><li><a href="slicing">Slicing on the printer</a>, on boards that can</li></ul>
       </div>
       <div>
         <h3>Away, with a plan</h3>
@@ -304,7 +357,7 @@
 
   <footer>
     <span>Elyir Bench is made by <a class="elyir" href="https://elyir.com"><svg viewBox="0 0 1884 958" role="img" aria-label="Elyir"><path fill="currentColor" d="M283 758Q209 758 152.0 724.5Q95 691 62.5 632.0Q30 573 30 496Q30 419 63.5 360.0Q97 301 155.5 267.5Q214 234 290 234Q356 234 411.5 268.5Q467 303 500.5 369.5Q534 436 534 531H168Q173 581 211.0 610.5Q249 640 297 640Q338 640 364.0 622.5Q390 605 404 577L522 623Q501 665 467.5 695.5Q434 726 388.0 742.0Q342 758 283 758ZM175 433H391Q388 402 371.0 383.0Q354 364 331.0 355.0Q308 346 286 346Q265 346 240.5 354.5Q216 363 197.5 382.0Q179 401 175 433ZM581.000732421875 746.0V46.0H712.997802734375V746.0ZM897.1976318359375 958.0Q869.798095703125 958.0 837.5985107421875 947.5001831054688Q805.39892578125 937.0003662109375 779.998779296875 923.200439453125L828.9976806640625 815.802734375Q845.998046875 825.2027587890625 860.6981811523438 830.5027465820312Q875.3983154296875 835.802734375 885.998291015625 835.802734375Q907.1986083984375 835.802734375 923.2987060546875 824.6025390625Q939.3988037109375 813.40234375 948.9989013671875 790.8021240234375L969.7996826171875 740.000244140625L744.4002685546875 246.0H889.1968994140625L1030.7984619140625 590.6033935546875L1166.80029296875 246.0H1311.9969482421875L1084.9962158203125 788.801513671875Q1063.996337890625 839.201171875 1041.1964721679688 877.4008178710938Q1018.3966064453125 915.6004638671875 984.8968505859375 936.8002319335938Q951.3970947265625 958.0 897.1976318359375 958.0ZM1350.6005859375 746.0V246.0H1482.59765625V746.0ZM1575.000732421875 746.0V246.0H1706.997802734375V337.599853515625Q1737.7977294921875 290.599853515625 1785.4977416992188 267.2999267578125Q1833.19775390625 244.0 1883.997802734375 244.0V371.5970458984375Q1838.1978759765625 371.5970458984375 1797.6978759765625 382.897216796875Q1757.1978759765625 394.1973876953125 1732.0978393554688 418.99786376953125Q1706.997802734375 443.79833984375 1706.997802734375 483.3992919921875V746.0Z"/><circle class="elyir-dot" cx="1416.6" cy="84" r="84"/></svg></a></span>
-    <a href="install">Install</a><a href="try">Try it</a><a href="testers">Testers</a><a href="https://github.com/elyir-labs/bench">Source code</a><a href="https://discord.gg/FhJFYqwHfZ">Discord</a><a href="https://printers.elyir.app/you">Sign in</a>
+    <a href="install">Install</a><a href="try">Try it</a><a href="units">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="testers">Testers</a><a href="https://github.com/elyir-labs/bench">Source code</a><a href="https://discord.gg/FhJFYqwHfZ">Discord</a><a href="https://printers.elyir.app/you">Sign in</a>
     <span class="end">Every release is signed, and checked before it's unpacked.</span>
   </footer>
 </div>
@@ -342,6 +395,10 @@
   if (back.get('joined') === '1') say("You're on the list. We'll write when there's a place for your printer.")
   if (back.get('joined') === '0') say("That link didn't work. Ask again on the testers page and use the newest email.", true)
   if (back.get('left') === '1') say("You're off the list. Nothing more will come.")
+
+  const menu = document.querySelector('.menu')
+  menu.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => { menu.open = false }))
+  document.addEventListener('click', (ev) => { if (!menu.contains(ev.target)) menu.open = false })
 
   window.addEventListener('message', (ev) => {
     if (ev.source !== frame.contentWindow) return

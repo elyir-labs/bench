@@ -1,0 +1,280 @@
+<title>Filament units on Elyir Bench</title>
+<meta name="description" content="Elyir Bench with an ACE Pro, ERCF, Tradrack, Box Turtle or Night Owl: load from the screen, multi-color prints that swap spools by themselves, and Happy Hare or AFC set up from the screen. Which units, and how sure we are.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* bench.elyir.com/units: design/site-features, B. Written for filament unit owners; every claim carries its label from the board's claims table. */
+  :root {
+    --ground: #0b0e13;
+    --surface: #131821;
+    --raised: #1a202b;
+    --line: #262e3b;
+    --ink: #eef1f6;
+    --quiet: #8d97a8;
+    --accent: #4da3ff;
+    --elyir-dot: #4da3ff;
+    --on-accent: #04101f;
+    --green: #4cc38a;
+    --amber: #f5a524;
+    --bezel: #05070a;
+    --shadow: 0 30px 70px rgba(0,0,0,.55);
+    --font: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --ground: #eceef2;
+    --surface: #ffffff;
+    --raised: #f3f5f8;
+    --line: #d5dae2;
+    --ink: #13171d;
+    --quiet: #5b6473;
+    --accent: #1f6fe0;
+    --elyir-dot: #1f7ae0;
+    --on-accent: #ffffff;
+    --green: #17804f;
+    --amber: #a35f00;
+    --bezel: #15181e;
+    --shadow: 0 24px 50px rgba(16,24,40,.2);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box }
+  html, body { background: var(--ground); color: var(--ink) }
+  body { margin: 0; font: 16px/1.5 var(--font); padding-inline: 16px; padding-block: 0 48px }
+  a { color: var(--accent) }
+  .wrap { max-width: 1240px; margin: 0 auto }
+
+  nav { display: flex; align-items: center; gap: 28px; padding-block: 18px; border-bottom: 1px solid var(--line) }
+  .mark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 13px; color: var(--quiet); text-decoration: none; flex: none }
+  .eye { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--accent); display: grid; place-items: center }
+  .eye::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+  nav .links { display: flex; gap: 24px; font-size: 15px; font-weight: 600 }
+  nav .links a, nav .end a.quiet { color: var(--quiet); text-decoration: none }
+  nav .links a:hover, nav .end a.quiet:hover, nav .links a[aria-current] { color: var(--ink) }
+  nav .end { margin-left: auto; display: flex; align-items: center; gap: 20px; font-size: 15px; font-weight: 600 }
+  .menu { display: none; position: relative }
+  .menu summary { list-style: none; cursor: pointer; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; color: var(--quiet) }
+  .menu summary::-webkit-details-marker { display: none }
+  .menu summary svg { width: 22px; height: 22px }
+  .menu[open] summary { color: var(--ink); background: var(--surface) }
+  .menu .sheet { position: absolute; right: 0; top: calc(100% + 8px); z-index: 10; min-width: 220px; display: grid; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow) }
+  .menu .sheet a { color: var(--ink); text-decoration: none; padding: 10px 12px; border-radius: 8px; font-size: 16px }
+  .menu .sheet a:hover { background: var(--raised) }
+  .menu .sheet a[aria-current] { color: var(--accent) }
+
+  .btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 50px; padding: 0 22px; border-radius: 12px; font-weight: 700; font-size: 16px; white-space: nowrap; border: 1px solid var(--line); color: var(--ink); background: var(--surface) }
+  .btn:hover { background: var(--raised) }
+  .btn.pri { background: var(--accent); border-color: transparent; color: var(--on-accent) }
+  .btn.pri:hover { filter: brightness(1.08) }
+  .btn.sm { height: 40px; padding: 0 16px; font-size: 15px; border-radius: 10px }
+  .btn.off { cursor: default; color: var(--quiet) }
+  .btn.off:hover { background: var(--surface) }
+  .btn:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+  .btn svg { width: 16px; height: 16px; flex: none }
+
+  .page { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 32px 48px; align-items: start; padding-block: 52px 40px }
+  .say { display: grid; gap: 16px; align-content: start }
+  .lbl { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet) }
+  h1 { margin: 0; font-size: clamp(30px, 3.4vw, 50px); line-height: 1.04; font-weight: 800; letter-spacing: -.025em; text-wrap: balance }
+  .lede { margin: 0; color: var(--quiet); font-size: 18px; line-height: 1.5; max-width: 52ch }
+  .lede b { color: var(--ink); font-weight: 600 }
+  .doors { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px }
+  .narrow { display: none }
+  :root[data-theme="light"] img.dark, :root:not([data-theme="light"]) img.light { display: none }
+
+  figure { margin: 0; display: grid; gap: 12px; align-content: start; min-width: 0 }
+  figcaption, .cap { margin: 0; color: var(--quiet); font-size: 14px }
+  .frame { background: var(--bezel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; box-shadow: var(--shadow) }
+  .frame.tablet { border-radius: 22px; padding: 12px }
+  .frame img { display: block; width: 100%; height: auto; border-radius: 4px }
+  .frame img.narrow { display: none }
+  .frame.tablet img { border-radius: 8px }
+  .phonef { background: var(--bezel); border: 1px solid var(--line); border-radius: 30px; padding: 5px; box-shadow: var(--shadow) }
+  .phonef img { display: block; width: 100%; height: auto; border-radius: 25px }
+
+  .pill { justify-self: start; display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap }
+  .pill.ok { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green) }
+  .pill.new { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber) }
+  .pill.coming { background: var(--raised); color: var(--quiet) }
+  .btn .pill { height: 22px; font-size: 11px; padding: 0 8px }
+  .key { margin: 0; color: var(--quiet); font-size: 15px }
+  .key b { font-weight: 650 }
+  .key .g { color: var(--green) }
+  .key .a { color: var(--amber) }
+
+  section { padding-block: 40px; border-top: 1px solid var(--line) }
+  section.flush { border-top: 0; padding-top: 8px }
+  section > h2 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em }
+  section > .sub { margin: 8px 0 0; color: var(--quiet); font-size: 17px; max-width: 70ch }
+  .cards { margin-top: 22px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
+  .page + .cards { margin-top: 0; padding-bottom: 40px }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px 22px; display: grid; gap: 8px; align-content: start; min-width: 0 }
+  .card h3 { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.25 }
+  .card p { margin: 0; color: var(--quiet); font-size: 15px }
+  .card .go { display: flex; flex-wrap: wrap; gap: 6px 18px }
+  .card .go a { font-weight: 650; font-size: 15px; text-decoration: none }
+  .card .go a:hover { text-decoration: underline }
+  .card .rows { display: grid; gap: 7px }
+  .card .rows div { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 7px }
+  .card .rows b { font-weight: 600; font-size: 15px }
+  .card .rows span { color: var(--quiet); font-size: 14px; text-align: right }
+
+  .ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: center }
+  .ask .sub { margin: 8px 0 0; color: var(--quiet); font-size: 17px; max-width: 64ch }
+
+  footer { border-top: 1px solid var(--line); padding-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--quiet); font-size: 14px }
+  footer a { color: var(--quiet) }
+  footer .end { margin-left: auto }
+
+  @media (max-width: 1080px) {
+    nav .links { display: none }
+    .menu { display: block }
+  }
+  @media (max-width: 960px) {
+    .page, .cards, .ask { grid-template-columns: minmax(0, 1fr) }
+    .page { padding-block: 36px 32px }
+  }
+  @media (max-width: 640px) {
+    nav { gap: 16px }
+    nav .end .btn { display: none }
+    .page { padding-block: 22px 28px; gap: 20px }
+    .say { gap: 12px }
+    .lede { font-size: 16px }
+    .wide { display: none }
+    .narrow { display: revert }
+    .frame img.wide { display: none }
+    .frame img.narrow { display: block }
+    :root[data-theme="light"] img.narrow.dark, :root:not([data-theme="light"]) img.narrow.light { display: none }
+    .doors { display: grid }
+    .doors .btn.off { display: none }
+    footer .end { margin-left: 0 }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+  footer .elyir { color: var(--ink) }
+  footer .elyir svg { height: 1.3em; width: auto; vertical-align: -.29em }
+  .elyir-dot { fill: var(--elyir-dot) }
+  .units { margin-top: 18px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px }
+  .unit { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 10px; display: grid; gap: 6px; align-content: start; min-width: 0 }
+  .unit .art { height: 58px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--ink) 9%, var(--surface)), var(--raised)) }
+  .unit .art.more { background: none; border: 1.5px dashed var(--line); color: var(--quiet); font-size: 22px; font-weight: 700 }
+  .unit b { font-size: 15px; line-height: 1.2; padding-inline: 2px }
+  .unit .sw { font-size: 13px; color: var(--quiet); line-height: 1.3; padding-inline: 2px }
+  .unit .pill { margin: 2px 0 2px 2px }
+  .which-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 24px }
+  .which-head h2 { margin: 0; font-size: 19px; font-weight: 700 }
+  .setup { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 24px 48px; align-items: center }
+  .setup .say { gap: 12px }
+  .setup h2 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; font-weight: 800; letter-spacing: -.02em }
+  .setup p { margin: 0; color: var(--quiet); font-size: 17px }
+  @media (max-width: 1080px) { .units { grid-template-columns: repeat(3, minmax(0, 1fr)) } }
+  @media (max-width: 960px) { .setup { grid-template-columns: minmax(0, 1fr) } }
+  @media (max-width: 640px) {
+    .which-head h2 { font-size: 18px }
+    .units { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 10px }
+    .unit { display: flex; align-items: center; gap: 10px; background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 9px 0 }
+    .unit .art { display: none }
+    .unit b { font-size: 16px; padding: 0; flex: none }
+    .unit .sw { font-size: 15px; padding: 0; min-width: 0 }
+    .unit .pill { margin: 0 0 0 auto; flex: none }
+  }
+</style>
+
+<div class="wrap">
+  <nav>
+    <a class="mark" href="./"><span class="eye" aria-hidden="true"></span>Elyir Bench</a>
+    <span class="links"><a href="./#try">Try it</a><a href="units" aria-current="page">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="install">Install</a><a href="./#plans">Plans</a><a href="testers">Testers</a></span>
+    <span class="end"><a class="quiet" href="https://printers.elyir.app/you">Sign in</a><a class="btn sm pri" href="install">Put it on your printer</a>
+      <details class="menu"><summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+        <div class="sheet"><a href="./#try">Try it</a><a href="units" aria-current="page">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="install">Install</a><a href="./#plans">Plans</a><a href="testers">Testers</a></div></details></span>
+  </nav>
+  <div class="page">
+    <div class="say">
+      <p class="lbl"><span class="wide">For ACE Pro, ERCF, Tradrack, Box Turtle and Night Owl owners</span><span class="narrow">For filament unit owners</span></p>
+      <h1>Your filament unit, on a screen that says what it needs.</h1>
+      <p class="lede"><span class="wide">Load a slot from the screen, and multi-color prints swap spools by themselves. Units on Happy Hare or AFC keep
+        their own software: Bench reads it and sends its commands, and <b>can set it up from the screen</b>, then check and measure every slot.</span><span class="narrow">Load
+        from the screen, and multi-color prints swap spools by themselves. Happy Hare and AFC units set up from the screen too.</span></p>
+      <div class="doors">
+        <a class="btn pri" href="testers">Test with your unit <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <span class="btn off" aria-disabled="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>Try an ERCF live <span class="pill coming">Coming</span></span>
+      </div>
+    </div>
+    <figure>
+      <div class="frame">
+        <img class="wide" src="shots/units-ercf.jpg" width="1600" height="960" alt="Elyir Bench's Materials screen for an ERCF on Happy Hare: eight slots with their spools, five loaded, and carry on with a matching spool when one runs out">
+        <img class="narrow" src="shots/unit-pick.jpg" width="1600" height="960" alt="Setting up a filament unit on Elyir Bench: which unit is it? Box Turtle, Night Owl, ERCF v2, Tradrack or something else" loading="lazy">
+      </div>
+      <figcaption><span class="wide">An ERCF on Happy Hare, from the simulator: the same screen an ACE Pro gets.</span><span class="narrow">Setting up a unit, from the simulator.</span></figcaption>
+    </figure>
+  </div>
+
+  <section class="flush" id="which">
+    <div class="which-head"><h2>Which units, and how sure we are</h2>
+      <p class="key"><b class="g">Works today</b>: run on a real unit. <b class="a">New</b>: built and run in the simulator; yours could be the first.</p></div>
+    <div class="units">
+      <div class="unit"><span class="art"><svg width="86" height="44" viewBox="0 0 86 44" aria-hidden="true"><rect x="1" y="6" width="84" height="36" rx="7" fill="#3a4252"/><g transform="translate(7,12)"><circle cx="11" cy="11" r="9" fill="#e0524a" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="11" cy="11" r="2.88" fill="#fff"/><circle cx="31" cy="11" r="9" fill="#eee" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="31" cy="11" r="2.88" fill="#fff"/><circle cx="51" cy="11" r="9" fill="#2b2f36" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="51" cy="11" r="2.88" fill="#fff"/><circle cx="71" cy="11" r="9" fill="#3b82f6" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="71" cy="11" r="2.88" fill="#fff"/></g></svg></span><b>ACE Pro</b><span class="sw">Bench's own driver<span class="wide"> · loads, swaps, two-color prints</span></span><span class="pill ok">Works today</span></div>
+      <div class="unit"><span class="art"><svg width="90" height="44" viewBox="0 0 90 44" aria-hidden="true"><line x1="9" y1="2" x2="9" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="5.5" y="27" width="7" height="9" rx="1.5" fill="#e0524a"/><line x1="19.5" y1="2" x2="19.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="16" y="27" width="7" height="9" rx="1.5" fill="#eee"/><line x1="30" y1="2" x2="30" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="26.5" y="27" width="7" height="9" rx="1.5" fill="#222"/><line x1="40.5" y1="2" x2="40.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="37" y="27" width="7" height="9" rx="1.5" fill="#3b82f6"/><line x1="51" y1="2" x2="51" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="47.5" y="27" width="7" height="9" rx="1.5" fill="#f5c542"/><line x1="61.5" y1="2" x2="61.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="58" y="27" width="7" height="9" rx="1.5" fill="#ddd"/><line x1="72" y1="2" x2="72" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="68.5" y="27" width="7" height="9" rx="1.5" fill="#8b5cf6"/><line x1="82.5" y1="2" x2="82.5" y2="34" stroke="#8d97a8" stroke-width="1.2"/><rect x="79" y="27" width="7" height="9" rx="1.5" fill="#22a35a"/><rect x="2" y="37" width="86" height="4" rx="2" fill="#5a6273"/></svg></span><b>ERCF v2</b><span class="sw">Happy Hare<span class="wide"> 4.1 · 6 to 12 slots</span></span><span class="pill new">New</span></div>
+      <div class="unit"><span class="art"><svg width="90" height="44" viewBox="0 0 90 44" aria-hidden="true"><line x1="12" y1="10" x2="12" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="9.5" y="21" width="5" height="6" rx="1" fill="#e0524a"/><line x1="21.5" y1="10" x2="21.5" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="19" y="21" width="5" height="6" rx="1" fill="#eee"/><line x1="31" y1="10" x2="31" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="28.5" y="21" width="5" height="6" rx="1" fill="#222"/><line x1="40.5" y1="10" x2="40.5" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="38" y="21" width="5" height="6" rx="1" fill="#3b82f6"/><line x1="50" y1="10" x2="50" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="47.5" y="21" width="5" height="6" rx="1" fill="#f5c542"/><line x1="59.5" y1="10" x2="59.5" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="57" y="21" width="5" height="6" rx="1" fill="#ddd"/><line x1="69" y1="10" x2="69" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="66.5" y="21" width="5" height="6" rx="1" fill="#8b5cf6"/><line x1="78.5" y1="10" x2="78.5" y2="26" stroke="#8d97a8" stroke-width="1.2"/><rect x="76" y="21" width="5" height="6" rx="1" fill="#22a35a"/><rect x="4" y="26" width="82" height="13" rx="4" fill="#5a6273"/></svg></span><b>Tradrack</b><span class="sw">Happy Hare<span class="wide"> 4.1 · 6 to 12 slots</span></span><span class="pill new">New</span></div>
+      <div class="unit"><span class="art"><svg width="86" height="44" viewBox="0 0 86 44" aria-hidden="true"><rect x="2" y="24" width="82" height="14" rx="6" fill="#5a6273"/><g transform="translate(6,8)"><circle cx="10" cy="10" r="8" fill="#e0524a" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="10" cy="10" r="2.56" fill="#fff"/><circle cx="30" cy="10" r="8" fill="#eee" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="30" cy="10" r="2.56" fill="#fff"/><circle cx="50" cy="10" r="8" fill="#2b2f36" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="50" cy="10" r="2.56" fill="#fff"/><circle cx="70" cy="10" r="8" fill="#3b82f6" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="70" cy="10" r="2.56" fill="#fff"/></g></svg></span><b>Box Turtle</b><span class="sw">AFC<span class="wide"> 1.2 · 4 or 8 slots</span></span><span class="pill new">New</span></div>
+      <div class="unit"><span class="art"><svg width="86" height="44" viewBox="0 0 86 44" aria-hidden="true"><rect x="8" y="26" width="70" height="13" rx="6" fill="#5a6273"/><g transform="translate(18,3)"><circle cx="15" cy="15" r="13" fill="#e0524a" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="15" cy="15" r="4.16" fill="#fff"/><circle cx="45" cy="15" r="13" fill="#eee" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/><circle cx="45" cy="15" r="4.16" fill="#fff"/></g></svg></span><b>Night Owl</b><span class="sw">AFC<span class="wide"> 1.2 · 2 slots</span></span><span class="pill new">New</span></div>
+      <div class="unit"><span class="art more">+</span><b>Something else</b><span class="sw">Any unit Happy Hare or AFC runs<span class="wide"></span></span><span class="pill new">New</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What you get</h2>
+    <div class="cards">
+      <div class="card"><h3>The ACE Pro, with Bench's own driver</h3>
+        <p>Load and unload from the screen. Multi-color prints swap spools by themselves. Drying and feed assist from the slot.</p><span class="pill ok">Works today</span></div>
+      <div class="card"><h3>Free and open source</h3>
+        <p>The driver is written from scratch, from USB captures of a real unit.</p>
+        <span class="go"><a href="https://github.com/elyir-labs/bench/blob/main/docs/filament-units.md">How it works</a></span><span class="pill ok">Works today</span></div>
+      <div class="card"><h3>Two ACE Pros on one printer</h3>
+        <p>Built, and not tried on real units yet.</p><span class="pill new">New · help us test it</span></div>
+      <div class="card"><h3>ERCF v2, Tradrack, Box Turtle, Night Owl</h3>
+        <p>On Happy Hare 4.1 or AFC 1.2 they show and work the same way, through their own software.</p><span class="pill new">New · help us test it</span></div>
+      <div class="card"><h3>Try an ERCF in the live demo</h3>
+        <p>The pretend printer in your browser, with an ERCF on it.</p><span class="pill coming">Coming</span></div>
+    </div>
+  </section>
+
+  <section class="setup">
+    <div class="say">
+      <h2>Set one up from the screen</h2>
+      <p>Pick the unit and its board, and Bench installs its software at a tested version. Then it checks each slot's sensor and motor, and
+        measures the tube to the head. Put it back undoes it.</p>
+      <span class="pill new">New · help us test it</span>
+    </div>
+    <figure>
+      <div class="frame"><img src="shots/unit-check.jpg" width="1600" height="960" alt="Elyir Bench checking an ERCF: push filament into slot 3. Slots 1 and 2 passed their sensor and motor checks." loading="lazy"></div>
+      <figcaption>Checking an ERCF, slot by slot, from the simulator.</figcaption>
+    </figure>
+  </section>
+
+  <section class="ask">
+    <div>
+      <h2 style="margin:0;font-size:clamp(26px, 3vw, 34px);line-height:1.1;font-weight:800;letter-spacing:-.02em">Test with your unit</h2>
+      <p class="sub">Happy Hare and AFC units haven't run Elyir Bench on a real unit yet. Tell us which one you have, and yours could be the first.</p>
+    </div>
+    <a class="btn pri" href="testers">Ask to test <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </section>
+
+  <footer>
+    <span>Elyir Bench is made by <a class="elyir" href="https://elyir.com"><svg viewBox="0 0 1884 958" role="img" aria-label="Elyir"><path fill="currentColor" d="M283 758Q209 758 152.0 724.5Q95 691 62.5 632.0Q30 573 30 496Q30 419 63.5 360.0Q97 301 155.5 267.5Q214 234 290 234Q356 234 411.5 268.5Q467 303 500.5 369.5Q534 436 534 531H168Q173 581 211.0 610.5Q249 640 297 640Q338 640 364.0 622.5Q390 605 404 577L522 623Q501 665 467.5 695.5Q434 726 388.0 742.0Q342 758 283 758ZM175 433H391Q388 402 371.0 383.0Q354 364 331.0 355.0Q308 346 286 346Q265 346 240.5 354.5Q216 363 197.5 382.0Q179 401 175 433ZM581.000732421875 746.0V46.0H712.997802734375V746.0ZM897.1976318359375 958.0Q869.798095703125 958.0 837.5985107421875 947.5001831054688Q805.39892578125 937.0003662109375 779.998779296875 923.200439453125L828.9976806640625 815.802734375Q845.998046875 825.2027587890625 860.6981811523438 830.5027465820312Q875.3983154296875 835.802734375 885.998291015625 835.802734375Q907.1986083984375 835.802734375 923.2987060546875 824.6025390625Q939.3988037109375 813.40234375 948.9989013671875 790.8021240234375L969.7996826171875 740.000244140625L744.4002685546875 246.0H889.1968994140625L1030.7984619140625 590.6033935546875L1166.80029296875 246.0H1311.9969482421875L1084.9962158203125 788.801513671875Q1063.996337890625 839.201171875 1041.1964721679688 877.4008178710938Q1018.3966064453125 915.6004638671875 984.8968505859375 936.8002319335938Q951.3970947265625 958.0 897.1976318359375 958.0ZM1350.6005859375 746.0V246.0H1482.59765625V746.0ZM1575.000732421875 746.0V246.0H1706.997802734375V337.599853515625Q1737.7977294921875 290.599853515625 1785.4977416992188 267.2999267578125Q1833.19775390625 244.0 1883.997802734375 244.0V371.5970458984375Q1838.1978759765625 371.5970458984375 1797.6978759765625 382.897216796875Q1757.1978759765625 394.1973876953125 1732.0978393554688 418.99786376953125Q1706.997802734375 443.79833984375 1706.997802734375 483.3992919921875V746.0Z"/><circle class="elyir-dot" cx="1416.6" cy="84" r="84"/></svg></a></span>
+    <a href="install">Install</a><a href="try">Try it</a><a href="units">Units</a><a href="slicing">Slicing</a><a href="box">Bench Box</a><a href="testers">Testers</a><a href="https://github.com/elyir-labs/bench">Source code</a><a href="https://discord.gg/FhJFYqwHfZ">Discord</a><a href="https://printers.elyir.app/you">Sign in</a>
+    <span class="end">Every release is signed, and checked before it's unpacked.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  let saved = null
+  try { saved = localStorage.getItem('demo.theme') } catch {}
+  document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved
+    : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+
+  const menu = document.querySelector('.menu')
+  menu.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => { menu.open = false }))
+  document.addEventListener('click', (ev) => { if (!menu.contains(ev.target)) menu.open = false })
+})()
+</script>
