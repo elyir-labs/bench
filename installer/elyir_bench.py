@@ -705,7 +705,8 @@ def expectations(facts: dict, s: dict, here: bool = True) -> dict:
         lender = s.get("slicer_name") if slicer_remote(s) else None
         out["differences"].append("It can't slice by itself. " + (
             f"{lender}, on your Wi-Fi, slices for it." if lender else
-            "Another printer with Elyir Bench on your Wi-Fi can slice for it; files from your own slicer print as always."))
+            "Another printer running Elyir Bench, or a Bench Box (bench.elyir.com/box), on your Wi-Fi can slice for it; "
+            "files from your own slicer print as always."))
     if out["differences"]:
         out["verdict"] = "differences"
     if facts.get("os_version") == "11":
@@ -749,7 +750,7 @@ def site_table() -> list[dict]:
         else:
             row["screen"] = {"simpler": "Yes, simpler animations", "klipperscreen": "Stays on KlipperScreen"}.get(
                 e["screen"], "Yes, the way KlipperScreen runs" if kiosk_backend(facts, s) == "x11" else "Yes")
-            row["slicing"] = "Another printer running Elyir Bench slices for it" if e["slicing"] else slices
+            row["slicing"] = "Another printer running Elyir Bench, or a Bench Box, on your Wi-Fi slices for it" if e["slicing"] else slices
             row["get"] = "Everything else" if e["differences"] else "Everything"
             row["note"] = "Debian 11 itself gets no more updates." if e["note"] else ""
         rows.append(row)

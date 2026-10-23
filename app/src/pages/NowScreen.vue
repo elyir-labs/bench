@@ -350,6 +350,8 @@ watch(camFailed, (f) => { if (f) camRetry = window.setTimeout(() => (camFailed.v
 onBeforeUnmount(() => window.clearTimeout(camRetry))
 // Turning off or restarting (design/power/): the wait for the nozzle, drawn as a ring; no camera for it
 const powerWait = computed(() => intent.value?.phase === 'turning_off' || intent.value?.phase === 'restarting')
+// Warming up before a print (design/warm-up/, D): Ready shows it instead of the clock
+const warmOn = computed(() => !!intent.value?.warm?.active)
 const camWay = computed(() => nowCamera(intent.value?.state, { warming: warmOn.value }))
 const showCam = computed(() => lay.value !== 'panel' && !!camera.value && !camFailed.value && !!camWay.value && !powerWait.value)
 watch(showCam, (v) => { nowCameraShown.value = v }, { immediate: true })
@@ -441,8 +443,6 @@ const warmShort = computed(() => {
   return ms <= 0 ? 'Cooling down to stay safe' : `Kept warm for ${human(ms / 1000)} more`
 })
 const carriedColor = computed(() => intent.value?.spools.find((s) => s.slot === intent.value?.carried?.to)?.color || 'transparent')
-// Warming up before a print (design/warm-up/, D): Ready shows it instead of the clock
-const warmOn = computed(() => !!intent.value?.warm?.active)
 const handsChip = computed(() => heldChip(intent.value?.hands?.held ?? null, intent.value?.printer.nozzle.temperature ?? 0))
 const warmPicking = ref(false)
 const handsOpen = ref(false)

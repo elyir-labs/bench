@@ -68,6 +68,9 @@ function demoFiles(): Plugin {
         copy(`printer/${f}`, `py/printer/${f}`)
         py.push([`printer/${f}`, `/sim/printer/${f}`])
       }
+      // the unit setup's catalog and board scan are the installer's (one table); the demo calls only those
+      copy('installer/elyir_bench.py', 'py/installer/elyir_bench.py')
+      py.push(['installer/elyir_bench.py', '/sim/installer/elyir_bench.py'])
       copy('app/demo/bridge.py', 'py/bridge.py')
       py.push(['bridge.py', '/sim/simulator/bridge.py'])
       writeFileSync(path.join(OUT, 'py/files.json'), JSON.stringify(py) + '\n')
@@ -77,7 +80,8 @@ function demoFiles(): Plugin {
       // list the command checks with (install/boards.json, written by `elyir-bench boards`)
       const boards: Record<string, string>[] = JSON.parse(readFileSync(path.resolve(ROOT, 'install/boards.json'), 'utf8'))
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      const cell = (k: string, v: string) => v ? `<span role="cell"><span class="k">${k}: </span>${esc(v)}</span>` : '<span role="cell" class="blank"></span>'
+      const box = (t: string) => t.replace('Bench Box', '<a href="box">Bench Box</a>')
+      const cell = (k: string, v: string) => v ? `<span role="cell"><span class="k">${k}: </span>${box(esc(v))}</span>` : '<span role="cell" class="blank"></span>'
       const rows = boards.map((r) => `      <div class="row" role="row"><span role="cell"><b>${esc(r.board)}</b>${r.system ? `<small>${esc(r.system)}</small>` : ''}</span>`
         + cell('The screen', r.screen) + cell('Slicing on the printer', r.slicing)
         + `<span role="cell" class="get ${r.verdict}">${esc(r.get)}${r.note ? `<small>${esc(r.note)}</small>` : ''}</span></div>`).join('\n')

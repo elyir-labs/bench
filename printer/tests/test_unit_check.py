@@ -185,7 +185,7 @@ def test_a_failed_motor_test_then_try_again():
 
 def test_happy_hares_words_become_sentences():
     cases = [(["!! Warning: Calibration steps are not complete for MMU unit0:", "Required: - Use MMU_CALIBRATE_GEAR"],
-              "isn't calibrated yet"),
+              "until slot 1's gear is measured"),
              (["// Gate 0 marked EMPTY (no filament detected during homing)"], "never felt the filament"),
              (["!! Operation not possible. MMU selector is not homed"], "couldn't find its home")]
     for lines, words in cases:

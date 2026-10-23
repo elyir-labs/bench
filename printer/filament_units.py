@@ -404,7 +404,7 @@ class HappyHare:
 
     # The slot check and measuring (unit_check.py). Happy Hare 3 checks a gate only once the selector is homed;
     # 4 homes it itself, so MMU_HOME goes first only when the status says it isn't.
-    measure_slot = None   # MMU_CALIBRATE_GATE measures each gate's gear against an encoder: not built
+    measure_slot = None   # each gate's gear against the encoder is part of measuring the gear, below
 
     @staticmethod
     def check_slot(slot: int, home: bool = False) -> str:
@@ -419,6 +419,77 @@ class HappyHare:
     @staticmethod
     def needs_home(status: Dict[str, Any]) -> bool:
         return (status.get("mmu") or {}).get("is_homed") is False
+
+    # Measuring the gear (unit_check.py, design/unit-setup/ "Gear calibration", C with B's mark). MMU_CALIBRATE_GEAR
+    # only does arithmetic on the selected gate, so the push before it is Bench's and the ruler is the person's.
+
+    @staticmethod
+    def gear_select(slot: int, home: bool = False) -> str:
+        return ("MMU_HOME\n" if home else "") + f"MMU_SELECT GATE={slot}"
+
+    @staticmethod
+    def gear_push(mm: int, v4: bool) -> str:
+        """GRIP=1 (Happy Hare 4) keeps an ERCF's servo down after the move; 3 has no GRIP and grips only while moving."""
+        return f"MMU_TEST_MOVE MOVE={mm}" + (" GRIP=1" if v4 else "")
+
+    @staticmethod
+    def calibrate_gear(measured: float) -> str:
+        return f"MMU_CALIBRATE_GEAR LENGTH=100 MEASURED={measured:g}"
+
+    @staticmethod
+    def calibrate_encoder() -> str:
+        """3 x 400 mm out and back with the selected gate: the encoder's scale, in the gear's own steps."""
+        return "MMU_CALIBRATE_ENCODER"
+
+    @staticmethod
+    def calibrate_gate(slot: int, v4: bool) -> str:
+        """One gate's gear against the encoder. One at a time, so a slot left out of the check isn't run; on 4,
+        MMU_CALIBRATE_GATES is a macro that runs every gate."""
+        return f"MMU_CALIBRATE_GATE GATE={slot}" if v4 else f"MMU_CALIBRATE_GATES GATE={slot}"
+
+    @staticmethod
+    def gear_state(status: Dict[str, Any], unit: Dict[str, Any]) -> Dict[str, Any]:
+        """The unit's gear and encoder, and what Happy Hare has measured, from Klipper's saved variables (the mmu
+        status has no calibration field); measured, encoder_ok and needed are None when there are none to read.
+        Happy Hare 3 saves mmu_gear_rotation_distances (one per gate) and mmu_encoder_resolution; 4 puts the unit's
+        name after mmu_ (its encoder's name, which defaults to the unit's). -1 (or 0) is a gate not measured."""
+        sv = status.get("save_variables")
+        variables = sv.get("variables") if isinstance(sv, dict) else None
+        known = isinstance(variables, dict)
+        variables = variables if known else {}
+        machine = status.get("mmu_machine") if isinstance(status.get("mmu_machine"), dict) else {}
+        raw = machine.get(f"unit_{unit['index']}") if isinstance(machine.get(f"unit_{unit['index']}"), dict) else {}
+        mmu = status.get("mmu") if isinstance(status.get("mmu"), dict) else {}
+        vendor = str(raw.get("vendor") or "")
+        name = str(raw.get("name") or "")
+
+        def pick(kind: str) -> Optional[str]:
+            if name and f"mmu_{name}_{kind}" in variables:
+                return f"mmu_{name}_{kind}"
+            if f"mmu_{kind}" in variables:
+                return f"mmu_{kind}"
+            found = [k for k in variables if re.fullmatch(rf"mmu_\w+_{kind}", k)]
+            return found[0] if len(found) == 1 else None
+
+        key = pick("gear_rotation_distances")
+        rds = variables.get(key) if key else None
+        rds = rds if isinstance(rds, list) else []
+        first = 0 if key and key != "mmu_gear_rotation_distances" else unit["offset"]
+        gear0 = _at(rds, first)
+        measured = isinstance(gear0, (int, float)) and gear0 > 0
+        if "encoder" in mmu:
+            encoder = bool(mmu["encoder"])   # 4 always reports it (None without one); 3 only with one
+        else:
+            encoder = vendor.lower() == "ercf" or "mmu_encoder mmu_encoder" in status
+        ekey = pick("encoder_resolution")
+        encoder_ok = bool(ekey and variables.get(ekey))
+        per_gate = raw.get("variable_rotation_distances")
+        if per_gate is None:
+            per_gate = vendor.lower() != "tradrack"
+        return {"measured": measured if known else None, "gear0": gear0 if measured else None, "encoder": encoder,
+                "encoder_ok": encoder_ok if known else None, "per_gate": bool(per_gate),
+                "v4": machine.get("happy_hare_version") is not None, "vendor": vendor or None,
+                "needed": (not measured or (encoder and not encoder_ok)) if known else None}
 
     @staticmethod
     def sees(status: Dict[str, Any], slot: int) -> Optional[bool]:

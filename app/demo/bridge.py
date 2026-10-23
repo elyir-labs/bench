@@ -127,7 +127,17 @@ def scenarios():
 
 
 def state():
-    return json.dumps(printer.scenario_state())
+    st = printer.scenario_state()
+    t = printer.tracker
+    if st["phase"] == "done" and (t._checking() or t._setup is not None):
+        st["phase"] = "playing"   # the moment's script is over, but the setup or check it started runs on the screens
+    return json.dumps(st)
+
+
+async def act(name):
+    """Press an action as a person on the screens would (the unit moments start Check and measure)."""
+    await printer.run_action(name, {"unit": 0})
+    return json.dumps({"ok": True, "action": name})
 
 
 async def run(name):

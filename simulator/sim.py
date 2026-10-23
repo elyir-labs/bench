@@ -131,6 +131,7 @@ class SimPrinter:
         self.tracker = self.new_tracker()
         self.fail_next_swap = False
         self.fail_check_slot: Optional[int] = None   # this slot's motor test fails once (the unit check, --units afc|happy_hare)
+        self.fail_gear_gate: Optional[int] = None    # this gate's encoder run is thrown out once (measuring the gear)
         self.pulled: Dict[int, int] = {}   # mm each slot has been pulled back since it last had filament
         self.tracker.set_klippy_state("ready")
         self.tracker.update_status(self.seen(deepcopy(self.status)))
@@ -1098,10 +1099,15 @@ class SimPrinter:
         for line in script.splitlines():
             self.gcode_response(f"// {line}")
             seconds, said, measured = unit_skins.check_answer(self.skin, line, unit_skins._slot_states(self.status["ace"]),
-                                                              self.fail_check_slot)
+                                                              self.fail_check_slot, self.status["ace"], self.saved_vars,
+                                                              self.fail_gear_gate)
             await asyncio.sleep(seconds / self.speed)
             if any(x.startswith("!!") for x in said):
                 self.fail_check_slot = None   # once: Try again passes
+            if "failed_gate" in measured:
+                self.fail_gear_gate = None
+            if "save" in measured:
+                self.save_vars(measured["save"])
             for x in said:
                 self.gcode_response(x)
             if "tube" in measured:

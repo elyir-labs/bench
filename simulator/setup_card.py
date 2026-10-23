@@ -24,7 +24,7 @@ BOARD = {
     "board": "Raspberry Pi 4, 2 GB, Debian 12",
     "verdict": "differences",
     "why_not": None,
-    "differences": ["It can't slice by itself. Another printer with Elyir Bench on your Wi-Fi can slice for it; "
+    "differences": ["It can't slice by itself. Another printer running Elyir Bench, or a Bench Box (bench.elyir.com/box), on your Wi-Fi can slice for it; "
                     "files from your own slicer print as always."],
     "note": None,
 }

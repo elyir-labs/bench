@@ -1,5 +1,6 @@
 <template>
-  <!-- Check and measure a Happy Hare or AFC unit (design/unit-setup/, B, stage 1): boards b-test, a-measure, b-ready -->
+  <!-- Check and measure a Happy Hare or AFC unit (design/unit-setup/, B, stage 1): boards b-test, a-measure, b-ready;
+       Happy Hare's gear in GearStep (the section "Gear calibration") -->
   <section class="flow" :class="'step-' + uc.step" aria-live="polite">
     <header class="fhead">
       <button class="back" :disabled="!back || !!store.busyAction" :aria-label="uc.step === 'ready' ? 'Done' : 'Stop checking'" @click="back && act(back)">
@@ -24,6 +25,8 @@
         </div>
       </div>
     </div>
+
+    <GearStep v-else-if="uc.step === 'gear' && uc.gear" :uc="uc" />
 
     <div v-else-if="uc.step === 'measure'" class="body two">
       <div class="words">
@@ -63,7 +66,7 @@
       </div>
     </div>
 
-    <footer class="fbar">
+    <footer v-if="uc.step !== 'gear'" class="fbar">
       <span v-if="uc.step === 'measure' && uc.measure && !failed" class="t prog">
         <span class="bar"><i :style="{ width: pct * 100 + '%' }"></i></span>{{ prog.words }}
       </span>
@@ -81,6 +84,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useIntentStore } from '@/intent/store'
 import type { IntentAction } from '@/intent/types'
+import GearStep from './GearStep.vue'
 import {
   FLOW_TITLE, backAction, barButtons, cardLines, dots, progress, stepLabel,
   type UnitCheckCard, type UnitCheckView,

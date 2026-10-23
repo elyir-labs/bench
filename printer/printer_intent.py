@@ -477,6 +477,7 @@ class PrinterIntent:
                     if o.startswith("led_effect "):
                         subs[o] = ["enabled"]   # the status effects a strip gets back when its light goes off
             await self._restore_light()
+            await self._restore_gear_skipped()
         except Exception:
             pass
         try:
@@ -577,6 +578,22 @@ class PrinterIntent:
             self.tracker.light_choice = await db.get_item("elyir-bench", "light", None)
         except Exception:
             logging.exception("intent: reading the light failed")
+
+    async def _restore_gear_skipped(self) -> None:
+        try:
+            db = self.server.lookup_component("database")
+            saved = await db.get_item("elyir-bench", "gear_skipped", [])
+            self.tracker.gear_skipped = [n for n in saved or [] if isinstance(n, str)]
+        except Exception:
+            logging.exception("intent: reading the skipped gears failed")
+
+    async def _save_gear_skipped(self) -> None:
+        self.tracker.gear_skipped_dirty = False
+        try:
+            db = self.server.lookup_component("database")
+            await db.insert_item("elyir-bench", "gear_skipped", self.tracker.gear_skipped)
+        except Exception:
+            logging.exception("intent: saving the skipped gears failed")
 
     async def _save_light(self) -> None:
         self.tracker.light_choice_dirty = False
@@ -2032,6 +2049,8 @@ class PrinterIntent:
             self._drive()
         elif kind == P.UNIT_CHECK:
             self.tracker.unit_check_input(payload)
+            if self.tracker.gear_skipped_dirty:
+                await self._save_gear_skipped()
             self._drive()
         elif kind == P.UNIT_SETUP:
             self.tracker.unit_setup_input(payload)

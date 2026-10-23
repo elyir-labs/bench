@@ -78,10 +78,44 @@ homed (Happy Hare 3 needs it); AFC's is `LANE_MOVE` back and forward 10 mm. Both
 files, as their own commands do.
 
 Neither raises an error for most failures: the command returns and says so on the console, so the result of each
-step is read from those lines and the status (`printer/unit_check.py`). Happy Hare's gear, encoder, selector and
-per-gate calibration aren't on the screen: Happy Hare refuses the check until its gear and selector are calibrated,
-and the screen says to do that from Advanced. The simulator shows it all with `--units happy_hare` or `--units afc`
-and the `unit_check` scenario.
+step is read from those lines and the status (`printer/unit_check.py`). The simulator shows it all with
+`--units happy_hare` or `--units afc` and the `unit_check` scenario.
+
+#### Check and measure: the gear (Happy Hare)
+
+Happy Hare scales every move by its gear's rotation distance, and a fresh unit only has the design value. When
+Klipper's saved variables say slot 1's gear or the unit's encoder isn't measured (`mmu_gear_rotation_distances`, or
+`mmu_<unit>_gear_rotation_distances` on Happy Hare 4, -1 for a gate not measured; `…encoder_resolution` once the
+encoder is calibrated; the `mmu` status has no calibration field), Check and measure adds a step between the slots
+and the tube (design/unit-setup/, "Gear calibration", C with B's mark). Care's **Measure the gear (again)** runs Check
+and measure with it even when it's measured.
+
+1. The plan, with **No ruler? Skip it** (the gear keeps its design value, and Ready says so).
+2. Take the tube off the outlet; Bench selects slot 1 and pushes 20 mm out (`MMU_SELECT GATE=…`, `MMU_TEST_MOVE MOVE=20`,
+   with `GRIP=1` on Happy Hare 4 so an ERCF's servo stays down; **Push a bit more** pushes 20 more). Draw a line at the
+   outlet's edge.
+3. Bench pushes exactly 100 mm. Measure from the outlet's edge to the mark and type it on the number pad: 90 to 110 is
+   taken, 80 to 90 and 110 to 120 ask **Measure again** (back 100, out 100) or **Use**, past that it can't be the gear.
+4. Bench pulls back everything it pushed, then `MMU_CALIBRATE_GEAR LENGTH=100 MEASURED=<mm>` (it only does arithmetic,
+   on the selected gate). Put the tube back on.
+5. With an encoder: `MMU_CALIBRATE_ENCODER` (3 x 400 mm, slot 1 selected), which learns its scale from slot 1's gear;
+   then on a unit with a gear per gate (an ERCF) each other slot that passed its check by the encoder, one at a time:
+   `MMU_CALIBRATE_GATE GATE=n` (Happy Hare 3: `MMU_CALIBRATE_GATES GATE=n`). One thrown out (more than 20% from slot 1)
+   or stopped partway can be tried again or kept at its design value.
+6. Then the tube to the head, as before.
+
+A Tradrack (one gear for every gate, `variable_rotation_distances` off in `mmu_machine`) needs only the ruler step;
+with its encoder mod, the encoder learns from slot 1 too, with no per-slot runs. Whether there's an encoder comes from
+`mmu.encoder`. Stop with filament out of the outlet pulls it back first. Never for AFC or an ACE Pro, never while
+printing.
+
+Happy Hare checks its essential calibration before `MMU_CHECK_GATE` as well as before `MMU_CALIBRATE_BOWDEN`, so a
+fresh unit can refuse at slot 1. Either refusal says what's actually missing, from the `Required:` list in Happy
+Hare's "Calibration steps are not complete" (or, when it names nothing Bench knows, from the saved variables): slot
+1's gear, the encoder, the selector. When measuring the gear clears it, the failure offers **Measure the gear** and
+the slots or the tube carry on after; the selector is still done from Advanced. The simulator plays the gear with the
+`unit_check_gear` scenario (an ERCF whose gear isn't measured; slot 3's encoder run is thrown out once) and
+`unit_check_tradrack`.
 
 ### Setting one up from the screen
 
@@ -143,5 +177,5 @@ In the same file, all optional:
 
 Tested on hardware with one ACE Pro: loads, unloads, changes from the screen and two-color prints. Not tried on
 hardware yet: two ACE Pros on one printer, and Happy Hare and AFC (built from their documented status and
-commands, tried in the simulator), including Check and measure and setting one up from the screen (the simulator's
-`unit_setup` and `unit_setup_fails` scenarios). See `units/README.md` for how the service is put together.
+commands, tried in the simulator), including Check and measure, measuring Happy Hare's gear, and setting one up from the screen (the simulator's
+`unit_check_gear`, `unit_setup` and `unit_setup_fails` scenarios). See `units/README.md` for how the service is put together.

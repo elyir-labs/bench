@@ -8,8 +8,8 @@
       <button v-if="!door.away" class="a-btn ghost back" :disabled="!handsOk" @click="handsOpen = true">Open</button>
     </div>
     <!-- Filament unit (design/unit-setup/, B): check each slot and measure the tube, on Happy Hare or AFC -->
-    <div v-for="r in unitRows" :key="r.name" class="screen wrap unit-row" :class="{ off: !!r.why }">
-      <div class="screen-text"><span class="name">{{ unitRows.length > 1 ? `Filament unit · ${r.name}` : 'Filament unit' }}</span><span class="when">{{ r.why ? r.why : `${r.name}. ${r.line}` }}</span></div>
+    <div v-for="r in unitRows" :key="r.key" class="screen wrap unit-row" :class="{ off: !!r.why }">
+      <div class="screen-text"><span class="name">{{ unitName(r) }}</span><span class="when">{{ r.why ? r.why : `${r.name}. ${r.line}` }}</span></div>
       <button v-if="!door.away" class="a-btn ghost back" :disabled="!!r.why || store.busyAction !== null" @click="store.act(r.action)">{{ r.action.label }}</button>
     </div>
     <!-- No unit yet: Set one up; a unit Bench set up: the old settings, kept (design/unit-setup/, B, stage 2) -->
@@ -192,6 +192,11 @@ const intent = computed(() => store.intent)
 const handsOpen = ref(false)
 const handsOk = computed(() => !!intent.value?.hands && !intent.value.hands.why_not)
 const unitRows = computed(() => careRows(intent.value?.units?.list))
+const unitName = (r: { name: string; gear: boolean }) => {
+  const many = unitRows.value.filter((x) => !x.gear).length > 1
+  const base = many ? `Filament unit · ${r.name}` : 'Filament unit'
+  return r.gear ? `${base} · The gear` : base
+}
 const setupRows = computed(() => careSetupRows(intent.value?.unit_setup_offer, intent.value?.unit_putback))
 
 // slicing for this printer elsewhere, or for others here (design/slicing-elsewhere/, A)

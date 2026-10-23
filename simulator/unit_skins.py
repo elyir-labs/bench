@@ -5,6 +5,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 SKINS = ("afc", "happy_hare")
 SIM_TUBE_MM = 742.0   # what the pretend unit's tube to the head measures (the check, design/unit-setup/)
+SIM_GEAR_RD = 22.7    # the pretend gear's design rotation distance; the encoder's design resolution is 1.0
+
+
+def hh_unit(ace: Dict[str, Any]) -> Dict[str, Any]:
+    """The Happy Hare unit the pretend plays: an ERCF (an encoder, a gear per gate) or, with sim_hh_unit
+    "tradrack", a Tradrack without its encoder mod (one gear for every gate)."""
+    if ace.get("sim_hh_unit") == "tradrack":
+        return {"name": "tradrack_1", "display_name": "Tradrack 1", "vendor": "Tradrack", "encoder": False,
+                "variable_rotation_distances": False}
+    return {"name": "ercf_1", "display_name": "ERCF 1", "vendor": "ERCF", "encoder": True,
+            "variable_rotation_distances": True}
 
 
 def _slot_states(ace: Dict[str, Any]) -> List[str]:
@@ -27,7 +38,8 @@ def view(skin: str, ace: Dict[str, Any]) -> Dict[str, Any]:
     sel = sel if isinstance(sel, int) and sel >= 0 else None
     at = lambda lst, g, d="": lst[g] if g < len(lst) else d
     if skin == "happy_hare":
-        # one ERCF with a gate for every pretend slot, as an ERCF is one unit of 4 to 12 gates
+        # one ERCF (or Tradrack) with a gate for every pretend slot, as one is a unit of 4 to 12 gates
+        unit = hh_unit(ace)
         return {
             "mmu": {"enabled": True, "num_gates": n, "gate": -1 if sel is None else sel, "tool": -1 if sel is None else sel,
                     "filament": "Unloaded" if sel is None else "Loaded", "action": "Idle", "print_state": "idle",
@@ -35,10 +47,13 @@ def view(skin: str, ace: Dict[str, Any]) -> Dict[str, Any]:
                     "gate_material": [str(at(mats, g)).upper() for g in range(n)],
                     "gate_color": [str(at(colors, g)).lower() for g in range(n)],
                     "gate_temperature": [int(at(temps, g, 210)) for g in range(n)],
-                    "endless_spool_enabled": 1 if ace.get("endless_spool") else 0, "is_homed": True},
+                    "endless_spool_enabled": 1 if ace.get("endless_spool") else 0, "is_homed": True,
+                    "encoder": {"enabled": True, "encoder_pos": 0.0} if unit["encoder"] else None},
             "mmu_machine": {"happy_hare_version": 4.1, "num_units": 1, "num_gates": n,
-                            "unit_0": {"name": "ercf_1", "display_name": "ERCF 1", "first_gate": 0, "num_gates": n,
-                                       "selector_type": "LinearSelector"}},
+                            "unit_0": {"name": unit["name"], "display_name": unit["display_name"],
+                                       "vendor": unit["vendor"], "first_gate": 0, "num_gates": n,
+                                       "selector_type": "LinearSelector",
+                                       "variable_rotation_distances": unit["variable_rotation_distances"]}},
             # an ERCF with a sensor at each gate's entry (Happy Hare 4 names them mmu_entry_N)
             **{f"filament_switch_sensor mmu_entry_{g}": {"filament_detected": st != "empty", "enabled": True}
                for g, st in enumerate(states)},
@@ -103,7 +118,9 @@ def to_ace(skin: str, line: str) -> Tuple[Optional[str], Optional[Tuple[int, Dic
 
 # ---- the slot check and measuring (printer/unit_check.py): what the unit says, and how long it takes ----------------
 
-CHECK_COMMANDS = ("MMU_HOME", "MMU_CHECK_GATE", "MMU_SELECT", "MMU_CALIBRATE_BOWDEN", "CALIBRATE_AFC", "RESPOND")
+CHECK_COMMANDS = ("MMU_HOME", "MMU_CHECK_GATE", "MMU_SELECT", "MMU_CALIBRATE_BOWDEN", "CALIBRATE_AFC", "RESPOND",
+                  "MMU_TEST_MOVE", "MMU_CALIBRATE_GEAR", "MMU_CALIBRATE_ENCODER", "MMU_CALIBRATE_GATE",
+                  "MMU_CALIBRATE_GATES")
 
 
 def is_check(skin: Optional[str], script: str) -> bool:
@@ -112,13 +129,66 @@ def is_check(skin: Optional[str], script: str) -> bool:
     return bool(skin) and (first in CHECK_COMMANDS or (first == "LANE_MOVE" and "\n" in script))
 
 
-def check_answer(skin: str, line: str, states: List[str], failing: Optional[int]) -> Tuple[float, List[str], Dict[str, Any]]:
-    """(seconds it takes, console lines, what it measured: {"tube": mm} or {"hub": (slot, mm)}) for one line.
-    failing: the slot whose motor test fails (once)."""
+def gear_vars(ace: Dict[str, Any], n: int, measured: bool) -> Dict[str, Any]:
+    """Happy Hare 4's saved variables for the pretend unit: its gear (and encoder) measured, or fresh (-1)."""
+    unit = hh_unit(ace)["name"]
+    out: Dict[str, Any] = {f"mmu_{unit}_gear_rotation_distances": [SIM_GEAR_RD if measured else -1] * n}
+    if hh_unit(ace)["encoder"]:
+        out[f"mmu_{unit}_encoder_resolution"] = 1.41 if measured else None
+    return out
+
+
+def _gear_answer(cmd: str, p: Dict[str, str], states: List[str], ace: Dict[str, Any], saved: Dict[str, Any],
+                 failing_gate: Optional[int]) -> Tuple[float, List[str], Dict[str, Any]]:
+    """Measuring Happy Hare's gear: the push, the gear, the encoder and each gate, writing what Happy Hare saves."""
+    unit = hh_unit(ace)
+    key = f"mmu_{unit['name']}_gear_rotation_distances"
+    rds = list(saved.get(key) or [-1] * len(states))
+    rds += [-1] * (len(states) - len(rds))
+    if cmd == "MMU_TEST_MOVE":
+        mm = float(p.get("MOVE", 100))
+        return 0.5 + abs(mm) / 50, [f"// Moved {mm:.2f}mm", "// Filament position: 0.00"], {}
+    if cmd == "MMU_CALIBRATE_GEAR":
+        measured = float(p.get("MEASURED", 100))
+        was = rds[0] if rds[0] > 0 else SIM_GEAR_RD
+        rd = round(was * measured / float(p.get("LENGTH", 100)), 4)
+        where = "gate 0" if unit["variable_rotation_distances"] else f"gates 0-{len(states) - 1}"
+        rds = [rd] * len(rds) if not unit["variable_rotation_distances"] else [rd] + rds[1:]
+        return 1, [f"// MMU gear stepper for gate 0 'rotation_distance' calculated to be {rd:.4f} (currently: {was:.4f})",
+                   f"// Calibrated rotation distance ({rd:.4f}) has been saved for {where}"], {"save": {key: rds}}
+    if cmd == "MMU_CALIBRATE_ENCODER":
+        if not unit["encoder"]:
+            return 0.5, [f"!! No encoder fitted to {unit['name']}"], {}
+        return 30, ["// Checking for filament...", "// Calibrating over 400.0mm...", "//   + counts: 284",
+                    "//   - counts: 283", "// Before calibration measured length: 400.00mm",
+                    "// Calculated resolution of the encoder: 1.4100 (currently: 1.0000)",
+                    "// Encoder calibration has been saved"], {"save": {f"mmu_{unit['name']}_encoder_resolution": 1.41}}
+    g = int(p.get("GATE", 0))
+    if g == failing_gate:
+        return 35, [f"// Calibrating gate {g} over 400.0mm...",
+                    "// Calibration ignored because it is not considered valid (>20% difference from reference gate 0)"],             {"failed_gate": g}
+    if g >= len(states) or states[g] == "empty":
+        return 4, [f"!! Calibration for gate {g} failed. Aborting, because:", "Filament not detected at gate"], {}
+    rd = round(rds[0] * (1 + 0.004 * ((g % 3) - 1)) if rds[0] > 0 else SIM_GEAR_RD, 4)
+    rds[g] = rd
+    return 35, [f"// Calibrating gate {g} over 400.0mm...",
+                "// Calibration move of 6 x 400.0mm, average encoder measurement: 401.2mm - Ratio is 0.9970",
+                f"// Calculated gate {g} rotation_distance: {rd:.4f} (currently: {SIM_GEAR_RD:.4f})",
+                f"// Calibrated rotation distance ({rd:.4f}) has been saved for gate {g}"], {"save": {key: rds}}
+
+
+def check_answer(skin: str, line: str, states: List[str], failing: Optional[int], ace: Optional[Dict[str, Any]] = None,
+                 saved: Optional[Dict[str, Any]] = None, failing_gate: Optional[int] = None
+                 ) -> Tuple[float, List[str], Dict[str, Any]]:
+    """(seconds it takes, console lines, what it measured: {"tube": mm}, {"hub": (slot, mm)}, {"save": variables}
+    or {"failed_gate": g}) for one line. failing: the slot whose motor test fails (once); failing_gate: the gate
+    whose encoder run comes out too far from slot 1's (once)."""
     words = line.split()
     if not words:
         return 0, [], {}
     cmd, p = words[0].upper(), _params(words)
+    if cmd in ("MMU_TEST_MOVE", "MMU_CALIBRATE_GEAR", "MMU_CALIBRATE_ENCODER", "MMU_CALIBRATE_GATE", "MMU_CALIBRATE_GATES"):
+        return _gear_answer(cmd, p, states, ace or {}, saved or {}, failing_gate)
     if cmd == "MMU_HOME":
         return 2, ["// Homing MMU...", "// MMU selector homed"], {}
     if cmd == "MMU_CHECK_GATE":

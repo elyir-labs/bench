@@ -277,6 +277,8 @@ export interface IntentUnit {
   actions: IntentAction[]
   /** Check and measure (design/unit-setup/, B): Happy Hare and AFC units only, else null (see ./unitCheck.ts). */
   check?: UnitCheckOffer | null
+  /** Measure the gear (again), from Care: Happy Hare only (design/unit-setup/, "Gear calibration"). */
+  gear?: UnitCheckOffer | null
 }
 
 /** A labelled part of the print (design/skip-objects/, A): Klipper's [exclude_object], numbered the way a person

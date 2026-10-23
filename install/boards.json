@@ -22,7 +22,7 @@
   "system": "Debian 12",
   "verdict": "differences",
   "screen": "Yes",
-  "slicing": "Another printer running Elyir Bench slices for it",
+  "slicing": "Another printer running Elyir Bench, or a Bench Box, on your Wi-Fi slices for it",
   "get": "Everything else",
   "note": ""
  },
@@ -31,7 +31,7 @@
   "system": "Debian 11",
   "verdict": "differences",
   "screen": "Yes, the way KlipperScreen runs",
-  "slicing": "Another printer running Elyir Bench slices for it",
+  "slicing": "Another printer running Elyir Bench, or a Bench Box, on your Wi-Fi slices for it",
   "get": "Everything else",
   "note": "Debian 11 itself gets no more updates."
  },
@@ -40,7 +40,7 @@
   "system": "BTT's own system, 1 GB",
   "verdict": "differences",
   "screen": "Yes, simpler animations",
-  "slicing": "Another printer running Elyir Bench slices for it",
+  "slicing": "Another printer running Elyir Bench, or a Bench Box, on your Wi-Fi slices for it",
   "get": "Everything else",
   "note": ""
  },

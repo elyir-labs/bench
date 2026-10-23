@@ -150,8 +150,8 @@ before it is unpacked. More, with the table of boards: [bench.elyir.com/install]
 - **It leaves alone** printer.cfg (apart from that line) and your macros, Mainsail or Fluidd (still on port 80), your files and print
   history. KlipperScreen stays installed.
 - **Will it work on my printer?** A Raspberry Pi 4 or 5 on Debian 13 gets everything. On Debian 11 or 12, or a
-  BTT Pi or CB1, everything works except slicing on the printer itself (another printer running Elyir Bench on
-  your Wi-Fi slices for it), and a BTT board's screen has simpler animations. A Raspberry Pi 3, other boards
+  BTT Pi or CB1, everything works except slicing on the printer itself (another printer running Elyir Bench, or a
+  [Bench Box](https://bench.elyir.com/box), on your Wi-Fi slices for it), and a BTT board's screen has simpler animations. A Raspberry Pi 3, other boards
   and 32-bit systems: not yet; the command checks and changes nothing. The same list is in
   `expectations()` in `installer/elyir_bench.py`, which the command and the page both use.
 - **Updating:** run the same command again.

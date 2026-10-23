@@ -1039,6 +1039,10 @@ class IntentTracker:
         self.light_objects: List[str] = []
         self.light_choice: Optional[str] = None
         self.light_choice_dirty = False
+        # units whose gear someone chose to leave at Happy Hare's design value; the component keeps it at
+        # elyir-bench/gear_skipped whenever gear_skipped_dirty is set
+        self.gear_skipped: List[str] = []
+        self.gear_skipped_dirty = False
         self._light: Optional[Dict[str, Any]] = None
         self._light_queue: List[tuple] = []
         self._quiet_since: Optional[float] = None
@@ -1722,33 +1726,59 @@ class IntentTracker:
             why = "Take the filament out of the head first: the check runs each slot up the tube."
         return {"action": _action("unit_check_start", "Check and measure", unit=index), "why": why}
 
-    def begin_unit_check(self, index: int, now: Optional[float] = None) -> bool:
+    def unit_gear_offer(self, index: int) -> Optional[Dict[str, Any]]:
+        """Measure the gear again, from Care: Check and measure with the gear step even when it's measured (design/
+        unit-setup/, "Gear calibration"). Happy Hare only; None for AFC, an ACE, or a unit Bench only watches."""
+        offer = self.unit_check_offer(index)
+        cmds = self.unit_commands()
+        u = next((x for x in self._units_raw() if x["index"] == index), None)
+        if offer is None or u is None or not filament_units.can(cmds, "calibrate_gear"):
+            return None
+        state = cmds.gear_state(self.status, u)
+        label = "Measure the gear again" if state["measured"] else "Measure the gear"
+        return {"action": _action("unit_check_start", label, unit=index, gear=1), "why": offer["why"]}
+
+    def begin_unit_check(self, index: int, now: Optional[float] = None, gear: bool = False) -> bool:
         now = time.time() if now is None else now
         offer = self.unit_check_offer(index)
         u = next((x for x in self._units_raw() if x["index"] == index), None)
         if offer is None or offer["why"] or u is None or not u["n"]:
             return False
         name = next((x["name"] for x in self.unit_list([], now) if x["index"] == index), "The unit")
+        if gear and self.unit_gear_offer(index) is None:
+            return False
         self._check = unit_check.UnitCheck(u, name, self.unit_state()["driver"], lambda: self.status,
-                                           self.unit_commands, now)
+                                           self.unit_commands, now, gear=gear, gear_skipped=name in self.gear_skipped)
         self._keep_warm_until = None
         return True
 
     def unit_check_input(self, payload: Dict[str, Any], now: Optional[float] = None) -> bool:
         op = payload.get("op")
         if op == "start":
-            return self.begin_unit_check(int(payload.get("unit", -1)), now)
+            return self.begin_unit_check(int(payload.get("unit", -1)), now, gear=bool(payload.get("gear")))
         if self._check is None:
             return False
         if op == "done":
             if self._check.phase != "ready":
                 return False
+            self._note_gear(self._check)
             self._check = None
             return True
-        if op == "stop" and self._check.busy is None:
+        if op == "stop" and self._check.busy is None and not self._check._tidy_due():
             self._check = None
             return True
-        return self._check.answer(str(op))
+        took = self._check.answer(str(op), payload)
+        self._note_gear(self._check)
+        return took
+
+    def _note_gear(self, check: Any) -> None:
+        gear = check.gear
+        outcome = gear.outcome if gear is not None else None
+        skipped = check.name in self.gear_skipped
+        if outcome == "skipped" and not gear.back_to and not skipped:
+            self.gear_skipped, self.gear_skipped_dirty = self.gear_skipped + [check.name], True
+        elif outcome == "measured" and skipped:
+            self.gear_skipped, self.gear_skipped_dirty = [n for n in self.gear_skipped if n != check.name], True
 
     # ---- setting a Happy Hare or AFC unit up from the screen (design/unit-setup/, B, stage 2) ---------------
 
@@ -2029,6 +2059,7 @@ class IntentTracker:
                 "dry": plan,
                 "actions": actions,
                 "check": self.unit_check_offer(u["index"]),
+                "gear": self.unit_gear_offer(u["index"]),
             })
         return out
 
@@ -5197,7 +5228,13 @@ def plan_change(action_id: str, args: Dict[str, Any], tracker: IntentTracker) ->
 
 
 UNIT_CHECK_OPS = {"unit_check_in": "in", "unit_check_skip": "skip", "unit_check_retry": "retry",
-                  "unit_check_stop": "stop", "unit_check_done": "done"}
+                  "unit_check_stop": "stop", "unit_check_done": "done",
+                  # measuring Happy Hare's gear (unit_check.py, the section "Gear calibration")
+                  "unit_check_gear_start": "gear_start", "unit_check_gear_skip": "gear_skip",
+                  "unit_check_gear_off": "gear_off", "unit_check_gear_more": "gear_more",
+                  "unit_check_gear_marked": "gear_marked", "unit_check_gear_type": "gear_type",
+                  "unit_check_gear_again": "gear_again", "unit_check_gear_measured": "gear_measured",
+                  "unit_check_gear_use": "gear_use", "unit_check_gear_on": "gear_on", "unit_check_gear_now": "gear_now"}
 
 
 UNIT_SETUP_ARGS = {"unit_setup_unit": "unit", "unit_setup_board": "board", "unit_setup_slots": "slots",
@@ -5229,13 +5266,22 @@ def plan_unit_check(action_id: str, args: Dict[str, Any], tracker: IntentTracker
     """Check and measure a Happy Hare or AFC unit, or answer the check going on."""
     if action_id == "unit_check_start":
         unit = _int(args.get("unit"))
-        offer = tracker.unit_check_offer(unit) if unit is not None else None
+        gear = bool(_int(args.get("gear")))
+        offer = None if unit is None else tracker.unit_gear_offer(unit) if gear else tracker.unit_check_offer(unit)
         if offer is None or offer["why"]:
             return []
-        return [(ActionPlan.UNIT_CHECK, {"op": "start", "unit": unit})]
+        return [(ActionPlan.UNIT_CHECK, {"op": "start", "unit": unit, **({"gear": True} if gear else {})})]
     op = UNIT_CHECK_OPS.get(action_id)
     if op is None or tracker._check is None:
         return []
+    if op in ("gear_measured", "gear_use"):
+        try:
+            mm = float(args.get("mm"))
+        except (TypeError, ValueError):
+            return []
+        if not 1 <= mm <= 1000:
+            return []
+        return [(ActionPlan.UNIT_CHECK, {"op": op, "mm": mm})]
     return [(ActionPlan.UNIT_CHECK, {"op": op})]
 
 

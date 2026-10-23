@@ -4,8 +4,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  backAction, barButtons, cardLines, careRows, dots, flowShown, progress, stepLabel,
-  type UnitCheckView,
+  backAction, barButtons, cardLines, careRows, dots, flowShown, gearButtons, gearChecklist, padNumber, padPress,
+  progress, rangeAt, stepLabel,
+  type GearView, type UnitCheckView,
 } from '../src/intent/unitCheck.ts'
 
 const act = (id: string, label: string, primary = false) => ({ id, label, primary, style: 'default' as const })
@@ -79,4 +80,81 @@ test("Care's Filament unit row: only units Bench can check, with why not", () =>
   assert.equal(rows[0].line, 'Check each slot, and measure the tube to the head. A few minutes at the printer.')
   assert.equal(rows[1].line, "Not while it's printing.")
   assert.deepEqual(careRows(undefined), [])
+})
+
+// ---- measuring Happy Hare's gear (design/unit-setup/, "Gear calibration", C with B's mark) ----------------------
+
+const gear = (over: Partial<GearView> = {}): GearView => ({
+  step: 'pad', kind: 'per_slot', slots_n: 8, plan: [], side: null, art: 'outlet', pushed: 120, push: 100, tries: 1,
+  mm: null, range: [90, 110], near: [80, 120], sheet: null, rows: null, cards: null, progress: null, busy: false, ...over,
+})
+
+test('Care: Measure the gear again sits under Check and measure, Happy Hare only', () => {
+  const start = act('unit_check_start', 'Check and measure')
+  const g = { ...act('unit_check_start', 'Measure the gear again'), args: { unit: 0, gear: 1 } }
+  const rows = careRows([{ name: 'ERCF 1', check: { action: start, why: null }, gear: { action: g, why: null } },
+    { name: 'Turtle 1', check: { action: start, why: null }, gear: null }])
+  assert.deepEqual(rows.map((r) => [r.key, r.gear, r.action.label]), [
+    ['ERCF 1', false, 'Check and measure'], ['ERCF 1 gear', true, 'Measure the gear again'],
+    ['Turtle 1', false, 'Check and measure']])
+  assert.equal(rows[1].line, 'Slot 1 with a ruler, then the unit measures the rest. A few minutes at the printer.')
+})
+
+test('the number pad: digits, one point, one decimal, delete', () => {
+  let v = ''
+  for (const k of ['9', '8', '.', '5', '7']) v = padPress(v, k)
+  assert.equal(v, '98.5')
+  assert.equal(padPress('98.5', '.'), '98.5')
+  assert.equal(padPress('', '.'), '0.')
+  assert.equal(padPress('0', '7'), '7')
+  assert.equal(padPress('114', '2'), '114')
+  assert.equal(padPress('98.5', '⌫'), '98.')
+  assert.equal(padNumber('98.5'), 98.5)
+  assert.equal(padNumber('98.'), null)
+  assert.equal(padNumber(''), null)
+  assert.equal(padNumber('0'), null)
+})
+
+test("the pad's buttons: That's it carries the number and waits for one; Stop is the back button", () => {
+  const uc = view({ step: 'gear', n: 2, of: 4, detail: null, tone: null, gear: gear(),
+    actions: [act('unit_check_gear_again', 'Measure again'), act('unit_check_gear_measured', "That's it", true), STOP] })
+  const empty = gearButtons(uc, '')
+  assert.deepEqual(empty.map((b) => [b.action.label, b.disabled]), [['Measure again', false], ["That's it", true]])
+  const typed = gearButtons(uc, '98.5')
+  assert.deepEqual(typed[1].action.args, { mm: 98.5 })
+  assert.equal(typed[1].disabled, false)
+  assert.equal(gearButtons({ ...uc, gear: gear({ busy: true }) }, '98.5')[1].disabled, true)
+  assert.equal(backAction(uc)?.id, 'unit_check_stop')
+  assert.equal(stepLabel(uc), '2 of 4')
+  assert.deepEqual(dots(uc), ['d', 'n', '', ''])
+})
+
+test('while the encoder measures, Stop is drawn at the bottom (board gc-encoder)', () => {
+  const uc = view({ step: 'gear', n: 2, of: 4, gear: gear({ step: 'gates', busy: true }), actions: [STOP] })
+  assert.deepEqual(gearButtons(uc, '').map((b) => [b.action.label, b.disabled]), [['Stop', false]])
+  const failed = { ...uc, tone: 'failed' as const, actions: [act('unit_check_retry', 'Try again', true), act('unit_check_skip', 'Skip it'), STOP] }
+  assert.deepEqual(gearButtons(failed, '').map((b) => b.action.label), ['Skip it', 'Try again'])
+})
+
+test('the plan: No ruler? Skip it, then Start', () => {
+  const uc = view({ step: 'gear', n: 2, of: 4, gear: gear({ step: 'plan' }),
+    actions: [act('unit_check_gear_skip', 'No ruler? Skip it'), act('unit_check_gear_start', 'Start', true), STOP] })
+  assert.deepEqual(gearButtons(uc, '').map((b) => b.action.label), ['No ruler? Skip it', 'Start'])
+})
+
+test('tube off, then the mark (board gb-mark)', () => {
+  assert.deepEqual(gearChecklist(gear({ step: 'free', pushed: 0 })).map((c) => c.state), ['n', ''])
+  assert.deepEqual(gearChecklist(gear({ step: 'free', pushed: 0, busy: true })).map((c) => c.state), ['d', ''])
+  const mark = gearChecklist(gear({ step: 'mark', pushed: 20 }))
+  assert.deepEqual(mark.map((c) => c.state), ['d', 'n'])
+  assert.equal(mark[1].sub, 'Bench pushed a little out. Any marker that shows on it.')
+})
+
+test('the range bar and the encoder runs in minutes', () => {
+  assert.equal(rangeAt(gear(), 100), 0.5)
+  assert.equal(rangeAt(gear(), 140), 1)
+  assert.equal(rangeAt(gear(), null), null)
+  assert.equal(progress({ seconds: 245, elapsed: 100 }).words, 'About 2 minutes left')
+  assert.equal(progress({ seconds: 245, elapsed: null }).words, 'About 4 minutes')
+  assert.equal(progress({ seconds: 245, elapsed: 200 }).words, 'About 45 seconds')
 })

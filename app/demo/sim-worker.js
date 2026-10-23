@@ -39,6 +39,7 @@ async function handle(port, m) {
       else if (m.op === 'state') result = bridge.state()
       else if (m.op === 'run') result = await bridge.run(String(m.arg))
       else if (m.op === 'insert') result = bridge.insert(Number(m.arg))
+      else if (m.op === 'act') result = await bridge.act(String(m.arg))
       else throw new Error(`unknown op ${m.op}`)
       port.postMessage({ t: 'ctl', id: m.id, result: JSON.parse(result) })
     } catch (e) {
@@ -82,6 +83,7 @@ async function boot() {
   setStatus('loading', 'Loading the printer')
   pyodide.FS.mkdirTree('/sim/simulator')
   pyodide.FS.mkdirTree('/sim/printer')
+  pyodide.FS.mkdirTree('/sim/installer')
   // which Python files make the printer: written by the build (vite.demo.config.ts), so none is ever left out
   const PY = await fetch(new URL('py/files.json', base)).then((r) => {
     if (!r.ok) throw new Error(`py/files.json: ${r.status}`)
@@ -92,6 +94,8 @@ async function boot() {
     return r.text()
   })))
   PY.forEach(([, dest], i) => pyodide.FS.writeFile(dest, files[i]))
+  // the installer (for the unit setup's catalog) imports pwd, which Pyodide leaves out; the demo never calls what uses it
+  pyodide.runPython('import sys, types; sys.modules.setdefault("pwd", types.ModuleType("pwd"))')
   pyodide.runPython('import sys; sys.path.insert(0, "/sim/simulator")')
   const b = pyodide.pyimport('bridge')
   await b.start(base, (text) => sendAll(text), params.get('scenario') || 'day', Number(params.get('speed') || 4),

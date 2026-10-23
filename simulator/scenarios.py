@@ -14,6 +14,7 @@ from copy import deepcopy
 from typing import Any, Dict, List
 
 import library
+import unit_skins
 
 # Moonraker-style file metadata for the pretend files on the drive.
 FILES: Dict[str, Dict[str, Any]] = {
@@ -200,11 +201,40 @@ async def idle(sim, **_) -> None:
 async def unit_check(sim, **_) -> None:
     """With --units afc or happy_hare: idle, nothing in the head, so Materials and Care offer Check and measure
     (design/unit-setup/, B). Slot 3 is empty until a spool is pushed in (the control page), and slot 4's motor test
-    fails once, so Try again can be seen."""
+    fails once, so Try again can be seen. Happy Hare's gear is already measured here (unit_check_gear: it isn't)."""
     await idle(sim)
-    sim.patch({"ace": {"selected_gate": -1}, "filament_switch_sensor extruder_sensor": {"filament_detected": False}})
+    sim.patch({"ace": {"selected_gate": -1, "sim_hh_unit": None},
+               "filament_switch_sensor extruder_sensor": {"filament_detected": False}})
     sim.set_slot(2, status="empty")
     sim.fail_check_slot = 3
+    _hh_gear(sim, measured=True)
+
+
+def _hh_gear(sim, measured: bool) -> None:
+    if sim.skin == "happy_hare" and "save_variables" in sim.status:
+        n = len(unit_skins._slot_states(sim.status["ace"]))
+        sim.save_vars(unit_skins.gear_vars(sim.status["ace"], n, measured))
+
+
+async def unit_check_gear(sim, **_) -> None:
+    """With --units happy_hare: a fresh ERCF whose gear and encoder aren't measured (design/unit-setup/, "Gear
+    calibration", C): Check and measure checks the slots, then slot 1 by ruler, then the encoder measures the others.
+    Every slot has filament; slot 3's encoder run is thrown out once, so Try again can be seen."""
+    await idle(sim)
+    sim.patch({"ace": {"selected_gate": -1, "sim_hh_unit": None},
+               "filament_switch_sensor extruder_sensor": {"filament_detected": False}})
+    for g in range(len(sim.status["ace"].get("gate_color") or [])):
+        sim.set_slot(g, status="ready")
+    sim.fail_gear_gate = 2
+    _hh_gear(sim, measured=False)
+
+
+async def unit_check_tradrack(sim, **_) -> None:
+    """unit_check_gear on a Tradrack without its encoder mod: one gear for every slot, so one ruler step covers them."""
+    await unit_check_gear(sim)
+    sim.patch({"ace": {"sim_hh_unit": "tradrack"}})
+    sim.fail_gear_gate = None
+    _hh_gear(sim, measured=False)
 
 
 async def unit_setup(sim, **_) -> None:
@@ -749,6 +779,8 @@ SCENARIOS = {
     "unit_setup": unit_setup,
     "unit_setup_fails": unit_setup_fails,
     "unit_check": unit_check,
+    "unit_check_gear": unit_check_gear,
+    "unit_check_tradrack": unit_check_tradrack,
     "power_out": power_out,
     "power_back": power_back,
     "power_lost": power_lost,

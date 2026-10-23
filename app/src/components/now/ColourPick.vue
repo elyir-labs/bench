@@ -6,13 +6,13 @@
   <div class="cpick" :class="{ compact }">
     <template v-if="!compact">
       <div class="heads">
-        <span v-for="(u, k) in units" :key="k" class="uhead">
+        <span v-for="(u, k) in units" :key="k" class="uhead" :style="{ '--n': u.tiles.length }">
           <span class="uname">{{ u.name }}</span>
           <span v-if="warm && k === units.length - 1" class="warm">{{ warm }}</span>
         </span>
       </div>
       <div class="tiles" role="radiogroup" aria-label="Which spool next">
-        <div v-for="(u, k) in units" :key="k" class="unit">
+        <div v-for="(u, k) in units" :key="k" class="unit" :style="{ '--n': u.tiles.length }">
           <button
             v-for="t in u.tiles" :key="t.slot" type="button" role="radio" class="tile"
             :class="['st-' + t.status, { on: t.slot === picked, off: !offered(t, away) }]"
@@ -60,11 +60,13 @@ const units = computed(() => unitsOf(props.colour))
 <style scoped>
 .cpick { margin-top: calc(8 * var(--u) + 2px); }
 .heads { display: flex; gap: calc(18 * var(--u)); margin: 0 2px calc(5 * var(--u)); }
-.uhead { flex: 1; display: flex; align-items: baseline; min-width: 0; }
+/* one row of tiles: each unit as wide as its slots (two ACEs 4 + 4, an ERCF 8), so a unit with more slots never
+   wraps onto a second row the panel has no room for */
+.uhead { flex: var(--n) 1 0%; display: flex; align-items: baseline; min-width: 0; }
 .uname { font-size: calc(12 * var(--u) + 1px); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--a-ink-3); }
 .warm { margin-left: auto; font-size: calc(12 * var(--u) + 2px); color: var(--a-ink-3); white-space: nowrap; }
 .tiles { display: flex; gap: calc(18 * var(--u)); }
-.unit { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(9 * var(--u)); }
+.unit { flex: var(--n) 1 0%; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: calc(9 * var(--u)); }
 .tile {
   appearance: none; font: inherit; color: var(--a-ink); cursor: pointer; position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;

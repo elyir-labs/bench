@@ -216,9 +216,45 @@
     new ResizeObserver(() => window.parent.postMessage({ t: 'try-height', h: document.documentElement.scrollHeight }, '*')).observe(document.body)
   }
   const units = new URLSearchParams(location.search).get('units')
-  const worker = new Worker('sim-worker.js' + (['happy_hare', 'afc'].includes(units) ? `?units=${units}` : ''), { type: 'module' })
+  // bench.elyir.com/units: "Set one up, live" opens a printer with no unit yet, already setting one up
+  const SETUP = !['happy_hare', 'afc'].includes(units) && new URLSearchParams(location.search).get('moment') === 'unit_setup'
+  const worker = new Worker('sim-worker.js' + (['happy_hare', 'afc'].includes(units) ? `?units=${units}&scenario=unit_check`
+    : SETUP ? '?scenario=unit_setup' : ''), { type: 'module' })
   const frames = [...document.querySelectorAll('iframe')]
   const $ = (id) => document.getElementById(id)
+
+  // Arriving from Try an ERCF or Try a Box Turtle (bench.elyir.com/units): say which unit this printer has, open both
+  // screens on Materials where it shows, start idle with nothing in the head so Check and measure can run, and put
+  // that first among the moments, with a way to push a spool into the slot it finds empty
+  const UNIT = { happy_hare: ['an ERCF', 'Happy Hare'], afc: ['a Box Turtle', 'AFC'] }[units]
+  if (UNIT) {
+    const line = document.createElement('p')
+    line.className = 'lede'
+    line.innerHTML = `This one has <b>${UNIT[0]} on ${UNIT[1]}</b>. It's on Materials, checking every slot on both screens.`
+    document.querySelector('header').append(line)
+    frames.forEach((f) => { f.dataset.src += '#/materials' })
+    const group = document.createElement('div')
+    group.className = 'group'
+    group.innerHTML = '<small>Your unit</small><button class="moment" data-s="unit_check" disabled title="Every slot checked, then the tube measured"'
+      + ` data-look="Checking every slot, on both screens. Slot 3 is empty, so it asks for a spool: push one in here, or Skip. Slot 4's motor test fails once, so you can see Try again.">Check and measure</button>`
+      + (units === 'happy_hare' ? '<button class="moment" data-s="unit_check_gear" disabled title="A fresh ERCF: its gear measured with a ruler, then the encoder"'
+        + ' data-look="A fresh ERCF: Check and measure stops for its gear. Mark the filament, Bench pushes 100 mm, type what you measured (any number near 100 works here), then the encoder measures the other slots.">Measure the gear</button>' : '')
+    $('groups').prepend(group)
+    const push = Object.assign(document.createElement('button'), { className: 'again', id: 'push', hidden: true, textContent: 'Push a spool into slot 3' })
+    $('again').before(push)
+  } else {
+    const filament = [...document.querySelectorAll('#groups .group')].find((g) => g.querySelector('small')?.textContent === 'Filament')
+    filament?.insertAdjacentHTML('beforeend', '<button class="moment" data-s="unit_setup" disabled title="No unit yet: pick one and its board, Bench installs it"'
+      + ' data-look="No filament unit in Klipper yet, and a board on USB it doesn\'t use. Pick ERCF v2 or Box Turtle and its board: Bench installs'
+      + ' its software, restarts Klipper once, then checks every slot. Put it back (Care) undoes it.">Set up a unit</button>')
+  }
+  if (SETUP) {
+    const line = document.createElement('p')
+    line.className = 'lede'
+    line.innerHTML = 'This one has <b>no filament unit yet</b>, and a board on USB. It\'s setting one up on both screens.'
+    document.querySelector('header').append(line)
+    frames.forEach((f) => { f.dataset.src += '#/materials' })
+  }
 
   // Dark or light, the page and both screens together. A first visit follows the visitor's own setting;
   // a pick is remembered in this browser. Switching reloads only the screens: the printer lives in this
@@ -274,6 +310,13 @@
     restart: 'Klipper has stopped. Restart it from either screen.',
   }
   const PHASE = { playing: 'Playing', waiting: 'Your turn', done: 'Done' }
+  // the unit moments only set the printer up; what they show starts as if someone tapped it on Materials
+  const START = { unit_check: 'unit_check_start', unit_check_gear: 'unit_check_start', unit_setup: 'unit_setup_start' }
+  const startFor = async (name) => {
+    for (let i = 0; i < 20; i++) {
+      try { return await ctl('act', START[name]) } catch { await new Promise((r) => setTimeout(r, 500)) }
+    }
+  }
   let shown = ''
   let current = null
   let answered = false
@@ -295,6 +338,7 @@
       : answered ? 'You answered it, and the printer carries on from here.'
         : m ? m.dataset.look : docs[st.running].split('\n')[0])
     $('again').hidden = false
+    if ($('push')) $('push').hidden = st.running !== 'unit_check'
   }
   // the printer doesn't announce a change of phase, so the page asks twice a second while it's in view
   const watch = () => setInterval(async () => {
@@ -332,6 +376,19 @@
         // screens start once the printer is up; the boot picture covers the wait on the panel
         frames.forEach((f) => { f.src = f.dataset.src })
         frames.forEach((f, i) => f.addEventListener('load', () => setTimeout(() => loaders[i].classList.add('done'), 600), { once: true }))
+        if (UNIT || SETUP) {
+          current = UNIT ? 'unit_check' : 'unit_setup'
+          // the panel's boot picture sends it to Now (html[data-boot] until it's done); then both go to Materials
+          frames.forEach((f) => f.addEventListener('load', () => {
+            const go = () => {
+              const d = f.contentDocument
+              if (!d || d.documentElement.dataset.boot) return setTimeout(go, 300)
+              f.contentWindow.location.hash = '#/materials'
+            }
+            go()
+          }, { once: true }))
+          frames[0].addEventListener('load', () => setTimeout(() => startFor(current), 1500), { once: true })
+        }
       }
     }
   }
@@ -346,7 +403,11 @@
     answered = false
     shown = ''
     openPop(false)
-    try { await ctl('run', name); say(await ctl('state')) } catch (e) { console.error(e) }
+    try {
+      await ctl('run', name)
+      if (START[name]) await startFor(name)
+      say(await ctl('state'))
+    } catch (e) { console.error(e) }
   }
   $('groups').addEventListener('click', (ev) => {
     const b = ev.target.closest('.moment')
@@ -365,6 +426,7 @@
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !pop.hidden) { openPop(false); more.focus() } })
   document.addEventListener('click', (ev) => { if (!pop.hidden && !ev.target.closest('.remote')) openPop(false) })
   $('again').addEventListener('click', () => { if (current) play(current) })
+  $('push')?.addEventListener('click', () => ctl('insert', 2))
 
   // each screen is drawn at its real size and scaled to fit its frame
   const fit = () => document.querySelectorAll('.viewport').forEach((v) => {
