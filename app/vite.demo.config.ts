@@ -13,7 +13,7 @@ import base from './vite.config'
 //   dist-demo/write.html      the form a printer's code opens at /write (design/report/, B)
 //   dist-demo/testers.html    asking to test, and the steps once invited, at /testers (design/testers/, B)
 //   dist-demo/units.html      for filament unit owners, at /units; slicing.html at /slicing; box.html (the Bench Box) at /box
-//                             (design/site-features/, B)
+//                             (design/site-features/, B); setups.html at /setups, from the unit to the nozzle (design/setups/, A)
 //   dist-demo/app/            the app, built with VITE_DEMO=1 (src/demo/socket.ts)
 //   dist-demo/sim-worker.js   the printer; pyodide/ and py/ beside it
 //   dist-demo/install         install/install.sh, for `curl -fsSL https://bench.elyir.com/install | sh`
@@ -42,7 +42,7 @@ function demoFiles(): Plugin {
       writeFileSync(path.join(OUT, 'index.html'), skeleton('front.html'))
       writeFileSync(path.join(OUT, 'try.html'), skeleton('showcase.html'))
       writeFileSync(path.join(OUT, 'write.html'), skeleton('write.html'))
-      for (const f of ['testers.html', 'units.html', 'slicing.html', 'box.html']) writeFileSync(path.join(OUT, f), skeleton(f))
+      for (const f of ['testers.html', 'units.html', 'slicing.html', 'box.html', 'setups.html']) writeFileSync(path.join(OUT, f), skeleton(f))
       for (const f of ['advanced.html', 'camera.webp', 'camera.jpg', '_headers', 'shots']) copy(`app/demo/${f}`, f)
       const worker = readFileSync(path.resolve(ROOT, 'app/demo/sim-worker.js'), 'utf8')
       writeFileSync(path.join(OUT, 'sim-worker.js'), STDLIB_MODULE ? worker.replace('const STDLIB_MODULE = false', 'const STDLIB_MODULE = true') : worker)
@@ -64,7 +64,7 @@ function demoFiles(): Plugin {
         copy(`simulator/${f}`, `py/simulator/${f}`)
         py.push([`simulator/${f}`, `/sim/simulator/${f}`])
       }
-      for (const f of ['elyir_bench_intent.py', 'filament_units.py', 'unit_check.py', 'unit_setup.py', 'elyir_bench_care.py']) {
+      for (const f of ['elyir_bench_intent.py', 'filament_units.py', 'unit_check.py', 'unit_setup.py', 'elyir_bench_care.py', 'gcode_layers.py']) {
         copy(`printer/${f}`, `py/printer/${f}`)
         py.push([`printer/${f}`, `/sim/printer/${f}`])
       }

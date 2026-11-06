@@ -7,24 +7,38 @@ import { readFileSync } from 'node:fs'
 
 const read = (f: string) => readFileSync(new URL(`../demo/${f}`, import.meta.url), 'utf8')
 const front = read('front.html')
-const pages = { units: read('units.html'), slicing: read('slicing.html'), box: read('box.html') }
+const pages = { units: read('units.html'), slicing: read('slicing.html'), box: read('box.html'), setups: read('setups.html') }
 const build = readFileSync(new URL('../vite.demo.config.ts', import.meta.url), 'utf8')
 const LABELS = ['Works today', 'New · help us test it', 'New', 'Coming', 'ACE Pro: works today']
 
 test('the hero sentence names all three, and three teasers under it open their pages', () => {
   assert.match(front, /It slices on the printer, swaps spools on your ACE Pro, ERCF or Box Turtle, and asks when it needs you\./)
   const hero = front.slice(front.indexOf('<div class="hero">'), front.indexOf('<section'))
-  const doors = [...hero.matchAll(/<a class="teaser" href="(\w+)">/g)].map((m) => m[1])
+  const doors = [...hero.matchAll(/<a class="(?:teaser|cover)" href="(\w+)"/g)].map((m) => m[1])
   assert.deepEqual(doors, ['units', 'slicing', 'box'])
   assert.ok(front.indexOf('<section id="try">') < front.indexOf('<section class="screens">'), 'the demo stays one scroll down')
 })
 
-test('every page has Units, Slicing and Bench Box in its nav, and the build writes the pages', () => {
-  for (const html of [front, ...Object.values(pages), read('install.html'), read('testers.html')]) {
+test('every page has Multi-color, Slicing and Bench Box in its nav, and no Plans', () => {
+  for (const html of [front, ...Object.values(pages), read('install.html'), read('testers.html'), read('showcase.html')]) {
     const nav = html.slice(html.indexOf('<nav>'), html.indexOf('</nav>'))
-    for (const [href, name] of [['units', 'Units'], ['slicing', 'Slicing'], ['box', 'Bench Box']]) assert.match(nav, new RegExp(`href="${href}"( aria-current="page")?>${name}</a>`), name)
+    for (const [href, name] of [['units', 'Multi-color'], ['slicing', 'Slicing'], ['box', 'Bench Box']]) assert.match(nav, new RegExp(`href="${href}"( aria-current="page")?>${name}</a>`), name)
+    assert.doesNotMatch(nav, />Plans<\/a>|>Units<\/a>/)
   }
   for (const f of Object.keys(pages)) assert.ok(build.includes(`'${f}.html'`), `${f}.html is not built`)
+})
+
+test('/setups is a click from the front page, the /units hero and every footer that lists the pages', () => {
+  const teaser = front.slice(front.indexOf('<div class="teaser card-link">'), front.indexOf('<a class="teaser" href="slicing">'))
+  assert.match(teaser, /<a class="cover" href="units"/)
+  assert.match(teaser, /<a class="also" href="setups">Two setups on a Voron/)
+  const hero = pages.units.slice(pages.units.indexOf('<div class="doors">'), pages.units.indexOf('</figure>'))
+  assert.match(hero, /<a class="btn" href="setups">See two setups on a Voron/)
+  for (const html of [front, ...Object.values(pages)]) {
+    const foot = html.slice(html.indexOf('<footer>'), html.indexOf('</footer>'))
+    assert.match(foot, /<a href="box">Bench Box<\/a><a href="setups">Setups<\/a>/)
+    assert.doesNotMatch(foot, />Plans<\/a>/)
+  }
 })
 
 test('every label is one of the three, and Now, Soon and Later are gone', () => {

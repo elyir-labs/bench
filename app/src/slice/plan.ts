@@ -133,6 +133,7 @@ export function showValue(key: string, v: unknown): string {
   if (key === 'layer_height') return `${s} mm`
   if (key === 'top_shell_layers' || key === 'bottom_shell_layers') return `${s} layers`
   if (key === 'filament_colour') return s.toUpperCase()
+  if (key === 'wall_generator') return s === 'arachne' ? 'Printed' : 'Left out'
   return s
 }
 
@@ -185,11 +186,31 @@ export function asKind(s: string | null | undefined, usual: SupportKind): Suppor
 
 /** The Supports row: the kind, and whether it's the usual one or for this print only. A slice that needed
  *  none says so. */
-export function supportsWords(kind: SupportKind, added: boolean | null | undefined, usual: SupportKind): { value: string; note: string } {
+export function supportsWords(kind: SupportKind, added: boolean | null | undefined, usual: SupportKind,
+  where?: string | null): { value: string; note: string } {
   const w = KIND_WORDS[kind]
   if (kind === 'off') return { value: w.label, note: w.row }
-  if (added === false) return { value: 'None needed', note: 'Nothing overhangs too far' }
+  if (added === false) return where ? { value: 'None', note: where } : { value: 'None needed', note: 'Nothing overhangs too far' }
+  if (where) return { value: w.label, note: where }
   return { value: w.label, note: kind === usual ? `${w.row} · your usual` : `${w.row}, for this print` }
+}
+
+const places = (n: number) => `${n} ${n === 1 ? 'place' : 'places'}`
+
+/** Where supports go, said on Ready's Supports row (design/supports-where/, A): null when Orca chose it all.
+ *  "1 place added, 1 taken off"; "Only where you said · 2 places"; a mark a turn left facing sideways is said too. */
+export function whereWords(where: 'needed' | 'only', s: { added: number; off: number; stray: boolean }, on = 0): string | null {
+  const bits: string[] = []
+  if (where === 'only') bits.push(on ? `Only where you said · ${places(on)}` : 'Only where you said · none marked')
+  else {
+    if (s.added && s.off) bits.push(`${places(s.added)} added, ${s.off} taken off`)
+    else if (s.added) bits.push(`${places(s.added)} added`)
+    else if (s.off) bits.push(`${places(s.off)} taken off`)
+  }
+  if (s.stray) bits.push('some of what you marked no longer faces down')
+  if (!bits.length) return null
+  const out = bits.join(' · ')
+  return out[0].toUpperCase() + out.slice(1)
 }
 
 /** "phone-stand.stl" → "Phone stand"; "[a]_buildplate_bushing_x1_r1s.stl" → "Buildplate bushing".
@@ -253,4 +274,12 @@ export function overflow(parts: PartLike[], firstCounts: number[] | null | undef
 export function matchPrinter<T extends { id: string; name: string }>(printers: T[], name: string | null | undefined): T | null {
   const n = (name ?? '').toLowerCase()
   return printers.find(p => p.name.toLowerCase() === n || p.id.toLowerCase() === n) ?? (printers.length === 1 ? printers[0] : null)
+}
+
+/** "The top 9.1 mm of Tube top won't print" (design/thin-walls/). */
+export function shortTitle(s: { name: string; bottom: number; top: number; all: boolean }): string {
+  if (s.all) return `${s.name} won't print at all`
+  const mm = (v: number) => `${Math.round(v * 10) / 10} mm`
+  const ends = [s.bottom ? `the bottom ${mm(s.bottom)}` : '', s.top ? `the top ${mm(s.top)}` : ''].filter(Boolean).join(' and ')
+  return `${ends[0].toUpperCase()}${ends.slice(1)} of ${s.name} won't print`
 }

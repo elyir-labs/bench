@@ -1,5 +1,5 @@
 <template>
-  <div class="shell" :class="['state-' + state, 'lay-' + layout, { offline: !connected, bench: benchChrome, framed: embedded && !benchChrome, trying: trial }]" :style="unitStyle">
+  <div class="shell" :class="['state-' + state, 'lay-' + layout, { railed, offline: !connected, bench: benchChrome, framed: embedded && !benchChrome, trying: trial }]" :style="unitStyle">
     <!-- The printer's screen on trial after the phone's Try it (design/getting-started/, C): Keep it here? -->
     <TrialBar v-if="trial" :seconds-left="intent!.printer.screen_trial!.seconds_left" />
     <!-- Tablets and laptops: Now never leaves the screen (design/responsive/, B). -->
@@ -23,6 +23,7 @@
       <button
         class="name"
         v-bind="hold.handlers"
+        @click="onName"
         :style="{ '--hold': hold.progress.value }"
         aria-label="Hold to open Advanced"
       >
@@ -77,6 +78,7 @@
 
     <CameraViewer v-if="cameraOpen && camera && !cameraInPane" :camera="camera" @close="cameraOpen = false" />
     <LightSheet />
+    <PanelGlance v-if="railed" :open="glanceOpen" @close="glanceOpen = false" />
     <AdvancedDoor v-if="advancedOpen" :url="advancedUrl" @close="advancedOpen = false" />
     <AskCard />
 
@@ -88,6 +90,7 @@
 
 <script setup lang="ts">
 import { preparingWord } from '@/intent/colour'
+import { printerOff } from '@/intent/power'
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useIntentStore } from '@/intent/store'
@@ -98,7 +101,9 @@ import { followAsks } from '@/asks'
 import BootScreen from '@/boot/BootScreen.vue'
 import Vitals from '@/components/now/Vitals.vue'
 import { followPanelTheme } from '@/theme'
-import { layout, finePointer } from './useLayout'
+import { layout, finePointer, ownScreen, railed } from './useLayout'
+import { isPanel } from '@/theme'
+import PanelGlance from '@/components/now/PanelGlance.vue'
 import { unitFor } from './layout'
 import NowScreen from '@/pages/NowScreen.vue'
 import PrintScreen from '@/pages/PrintScreen.vue'
@@ -163,8 +168,8 @@ const state = computed(() => intent.value?.state ?? 'ready')
 const printerName = computed(() => intent.value?.printer?.name ?? 'Printer')
 const advancedUrl = computed(() => store.advancedUrl)
 // Only the panel asks: the trial is about the screen it's on (docs/setup-card.md)
-const trial = computed(() => layout.value === 'panel' && !benchChrome && !!intent.value?.printer.screen_trial)
-const needsAttention = computed(() => state.value === 'needs_you' || state.value === 'problem')
+const trial = computed(() => ownScreen.value && !benchChrome && !!intent.value?.printer.screen_trial)
+const needsAttention = computed(() => state.value === 'needs_you' || (state.value === 'problem' && !printerOff(intent.value)))
 const busy = computed(() => store.busy)
 const checking = computed(() => flowShown(intent.value?.unit_check, door.away) && !(leftToPanel.value && !!intent.value?.unit_check?.title))
 const settingUp = computed(() => setupShown(intent.value?.unit_setup, door.away, leftToPanel.value))
@@ -177,7 +182,7 @@ const statusWord = computed(() => {
     case 'printing': return 'Printing'
     case 'needs_you': return intent.value?.phase === 'power_hold' ? 'On battery' : 'Needs you'
     case 'finished': return 'Finished'
-    case 'problem': return 'Stopped'
+    case 'problem': return printerOff(intent.value) ? 'Off' : 'Stopped'
     case 'setup': return 'New printer'
     default: return 'Ready'
   }
@@ -201,12 +206,17 @@ const advancedOpen = ref(false)
 // Not from away: Mainsail lives on the home network and the door doesn't carry it.
 const hold = useLongPress(2000, () => { if (!door.away && !embedded) advancedOpen.value = true })
 
+// On the rail the top line opens what no longer fits beside it: temperatures, spools and the light.
+const glanceOpen = ref(false)
+function onName() { if (railed.value && !advancedOpen.value) glanceOpen.value = true }
+
 // When the printer needs a person, the Now screen wins and Advanced closes.
 const attention = (s?: string) => s === 'needs_you' || s === 'problem'
 watch(() => intent.value, (now, before) => {
   if (before && now && attention(now.state) && !attention(before.state)) {
     advancedOpen.value = false
     // With a Now pane, Now is already on screen.
+    glanceOpen.value = false
     if (!pane.value && router.currentRoute.value.path !== '/') router.push('/')
   }
 })
@@ -216,7 +226,7 @@ const IDLE_RETURN_MS = 2 * 60 * 1000
 let idleTimer = 0
 function armIdle() {
   window.clearTimeout(idleTimer)
-  if (layout.value !== 'panel') return
+  if (!ownScreen.value) return
   idleTimer = window.setTimeout(() => {
     if (!advancedOpen.value && router.currentRoute.value.path !== '/') router.push('/')
   }, IDLE_RETURN_MS)
@@ -265,7 +275,7 @@ onBeforeUnmount(() => {
   transition: background 600ms ease;
   --a-tint: transparent;
   --a-state: var(--a-ink-3);
-  --tabbar-h: calc(56 * var(--u) + 8px);
+  --tabbar-h: max(calc(56 * var(--u) + 8px), var(--tap));
 }
 /* the screen trial's bar takes the top row's place for its two minutes, so the page below keeps its whole
    height (a row added above clipped Print again on the 7" panel) */
@@ -383,7 +393,25 @@ onBeforeUnmount(() => {
 /* The legacy design system's global .label (uppercase, 12 px) was shrinking the printer's name. */
 .shell:not(.lay-panel) .name .label { font-size: inherit; text-transform: none; letter-spacing: normal; color: var(--a-ink); font-weight: 700; }
 .lay-compact .top { padding: calc(10px + env(safe-area-inset-top, 0px)) 20px 0; font-size: 15px; }
-.lay-compact .tabs { height: calc(58px + var(--safe-b)); }
+.lay-compact .tabs { height: max(calc(58px + var(--safe-b)), var(--tap)); }
+
+/* A panel under 55 mm tall (design/small-screens/, B): height is what's short, so the tabs go down the side */
+.shell.railed { --rail-w: calc(var(--tap) * 1.2); grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.railed > .top, .railed > .content { grid-column: 2; }
+.railed > .top { padding: 4px calc(20 * var(--u)) 0; min-height: calc(var(--tap) * .62); }
+.railed > .top .right { display: none; }
+.railed > .top { font-size: calc(17 * var(--u)); }
+.railed .name { min-height: calc(var(--tap) * .62); }
+.railed .name .label { font-size: inherit; text-transform: none; letter-spacing: normal; color: var(--a-ink); font-weight: 700; }
+.railed > .tabs {
+  grid-column: 1; grid-row: 1 / -1; height: auto; padding: 0;
+  grid-template-columns: minmax(0, 1fr); grid-auto-rows: minmax(0, 1fr);
+  border-top: 0; border-right: 1px solid var(--a-line);
+}
+.railed .tab .icon { width: calc(var(--tap) * .46); height: calc(var(--tap) * .46); }
+.railed .tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.railed .tab.router-link-active { background: var(--a-surface); box-shadow: inset 5px 0 0 var(--a-ink); }
+.railed .tab.attention::after { top: 18%; right: 22%; width: 12px; height: 12px; }
 .lay-compact .tab { font-size: 12px; }
 .lay-compact .tab .icon { width: 24px; height: 24px; }
 .nowbar-slot { position: relative; z-index: 2; }

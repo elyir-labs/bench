@@ -17,6 +17,7 @@ import base64
 import collections
 import contextlib
 import glob
+import importlib.util
 import json
 import math
 import os
@@ -104,6 +105,11 @@ SUPPORTS: Dict[str, List[Tuple[str, str, str]]] = {
         ("enable_support", "0", "Asked for no supports"),
     ],
 }
+
+# Where they go (design/supports-where/, A): Orca decides, corrected by the parts' marks, or only where marked
+# (Orca's manual kinds, which support the faces marked "here" and nothing else).
+SUPPORTS_WHERE = ("needed", "only")
+MARKS = (0, 1, 2)                        # Orca's paint_supports states: none, enforcer, blocker
 
 
 # ── what a person may change ─────────────────────────────────────────────────
@@ -279,7 +285,7 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
 
         cache: Dict[str, Dict[str, Any]] = {}
 
-        def tris_of(model_path: str, oid: str, m: List[List[float]], depth: int = 0, fil: int = 1) -> List[Tuple[List[List[float]], int]]:
+        def tris_of(model_path: str, oid: str, m: List[List[float]], depth: int = 0, fil: int = 1) -> List[Tuple[List[List[float]], int, int]]:
             if depth > 8:
                 return []
             if model_path not in cache:
@@ -288,7 +294,7 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
             if obj is None:
                 return []
             fil = filament.get(oid, fil)
-            out: List[Tuple[List[List[float]], int]] = []
+            out: List[Tuple[List[List[float]], int, int]] = []
             mesh = obj.find(f"{pre}mesh")
             if mesh is not None:
                 vs = []
@@ -298,7 +304,8 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
                 for t in mesh.iter(f"{pre}triangle"):
                     try:
                         out.append(([vs[int(t.get("v1"))], vs[int(t.get("v2"))], vs[int(t.get("v3"))]],
-                                    paint_state(t.get("paint_color")) or fil))
+                                    paint_state(t.get("paint_color")) or fil,
+                                    mark if (mark := paint_state(t.get("paint_supports") or t.get("slic3rpe:custom_supports"))) in MARKS else 0))
                     except (IndexError, TypeError, ValueError):
                         continue
             for c in obj.iter(f"{pre}component"):
@@ -324,12 +331,13 @@ def three_mf_parts(path: str) -> List[Dict[str, Any]]:
             pairs = tris_of(root_path, oid, m)
             if not pairs:
                 continue
-            tris = [t for t, _ in pairs]
+            tris = [t for t, _, _ in pairs]
             if k != 1.0:
                 tris = [[[c * k for c in v] for v in t] for t in tris]
             obj = cache[root_path].get(oid)
             name = names.get(oid) or (obj.get("name") if obj is not None else None) or f"{Path(path).stem} {len(groups) + 1}"
-            groups[key] = {"name": name, "tris": tris, "copies": 1, "filaments": [f for _, f in pairs]}
+            groups[key] = {"name": name, "tris": tris, "copies": 1, "filaments": [f for _, f, _ in pairs],
+                           "marks": [s for _, _, s in pairs]}
         parts = list(groups.values())
         if "Metadata/model_settings.config" not in names_in:
             parts = _assemblies(parts, Path(path).stem)
@@ -366,7 +374,8 @@ def _assemblies(parts: List[Dict[str, Any]], stem: str) -> List[Dict[str, Any]]:
         else:
             out.append({"name": stem if len(together) == 1 else f"{stem} {len(out) + 1}",
                         "tris": [t for i in members for t in single[i]["tris"]], "copies": 1,
-                        "filaments": [f for i in members for f in single[i].get("filaments", [])]})
+                        "filaments": [f for i in members for f in single[i].get("filaments", [])],
+                        "marks": [k for i in members for k in single[i].get("marks", [0] * len(single[i]["tris"]))]})
     return out
 
 
@@ -419,7 +428,7 @@ LABELS: Dict[str, str] = {
     "seam_position": "Seam", "enable_support": "Supports", "support_type": "Support style",
     "filament_colour": "Color", "curr_bed_type": "Plate",
     "orientation": "Lying", "scale": "Size", "skirt_loops": "Loop around the part",
-    "gcode_label_objects": "Parts named in the file", "exclude_object": "Parts can be skipped",
+    "gcode_label_objects": "Parts named in the file", "exclude_object": "Parts can be skipped", "wall_generator": "Thin walls",
     "nozzle_temperature": "Nozzle", "filament_retraction_length": "Pull back", "filament_retraction_speed": "Pull-back speed",
     "filament_z_hop_types": "Lift", "reduce_crossing_wall": "Travel",
     "brim_type": "Brim", "ironing_type": "Smooth top", "support_on_build_plate_only": "Supports",
@@ -664,6 +673,7 @@ class Request:
     purge: Optional[str] = None          # PURGES; None = the printer's usual (default_purge)
     one_after_other: bool = False        # each part finished before the next starts: one change per part
     heights: List[Height] = field(default_factory=list)      # changes at a height, lowest first
+    supports_where: str = "needed"       # SUPPORTS_WHERE: Orca decides (with the parts' marks) | only where marked
 
     def __post_init__(self) -> None:
         if self.spools:                  # the first color is the plate's material, color and slot as before
@@ -698,6 +708,8 @@ class Request:
             out.append(f"purpose must be one of {', '.join(PURPOSES)}")
         if self.supports not in SUPPORTS:
             out.append(f"supports must be one of {', '.join(SUPPORTS)}")
+        if self.supports_where not in SUPPORTS_WHERE:
+            out.append(f"supports_where must be one of {', '.join(SUPPORTS_WHERE)}")
         if self.material.upper() not in printer.materials and not self.filament:
             out.append(f"{printer.name} has no settings for {self.material}; it knows {', '.join(printer.materials)}")
         if self.color is not None and not re.fullmatch(r"#[0-9A-Fa-f]{6}", self.color):
@@ -742,6 +754,8 @@ class Part:
     spool: int = 0                       # which of the plate's colors it prints in (Request.spools)
     paint: Optional[List[int]] = None    # painted (design/paint-and-height/, A): [color, count, ...] runs over its
                                          # triangles in the file's order; color 0 = its own, k = the plate's color k-1
+    support_marks: Optional[List[int]] = None   # where supports go (design/supports-where/, A): [mark, count, ...] runs
+                                         # over its triangles as paint; MARKS: 0 Orca decides, 1 here, 2 not here
 
     @property
     def project(self) -> bool:
@@ -784,6 +798,22 @@ class Part:
                 out.append("only STL models can be painted")
             elif self.project:
                 out.append("a 3MF with its own colors is painted already")
+        if self.support_marks is not None:
+            runs = self.support_marks
+            if (not isinstance(runs, list) or len(runs) % 2 or not all(isinstance(x, int) and not isinstance(x, bool) for x in runs)
+                    or any(c not in MARKS for c in runs[0::2]) or any(n < 1 for n in runs[1::2])):
+                out.append("support_marks must be [mark, count, ...]: marks 0, 1 (here) or 2 (not here), counts 1 or more")
+            elif Path(self.model).suffix.lower() != ".stl":
+                out.append("only STL models can have supports marked")
+        return out
+
+    def marked(self) -> Dict[str, int]:
+        """How many triangles its support marks say "here" and "not here"."""
+        out = {"here": 0, "not_here": 0}
+        runs = self.support_marks or []
+        for c, n in zip(runs[0::2], runs[1::2]):
+            if c:
+                out["here" if c == 1 else "not_here"] += n
         return out
 
     def painted(self) -> set:
@@ -868,6 +898,8 @@ def plan(printer: Printer, req: Request, presets: Presets) -> Plan:
         _set(process, key, value, why, "purpose", changes)
     for key, value, why in SUPPORTS[req.supports]:
         _set(process, key, value, why, "supports", changes)
+    if req.supports_where == "only" and req.supports != "off":
+        _set(process, "support_type", f"{support_kind(process)}(manual)", "Supports only where you said", "supports", changes)
     for where, key, value, why in ([] if printer.learned else MATERIALS.get(req.material.upper(), [])):
         if where == "filament":
             _set(filament, key, value, why, "spool", changes, per_filament=True)
@@ -902,6 +934,9 @@ def plan(printer: Printer, req: Request, presets: Presets) -> Plan:
     # (design/skip-objects/). Orca's presets ask for labels but leave exclude_object off: no EXCLUDE_OBJECT_DEFINE.
     _set(process, "gcode_label_objects", "1", "Each part is named in the file, so the printer knows which is which", "printer", changes)
     _set(process, "exclude_object", "1", "A part that fails can be skipped while the rest carry on", "printer", changes)
+    # Some vendor profiles (all of Anycubic's) use classic walls, which leave out a wall thinner than one line without
+    # a word: a tube's 0.4 mm foot vanished from a Kobra print (31 October 2026). Arachne prints it as one thinner line.
+    _set(process, "wall_generator", "arachne", "Walls thinner than one line still print instead of being left out", "printer", changes)
     if printer.skirt_loops:
         _set(process, "skirt_loops", str(printer.skirt_loops),
              f"{printer.name} wipes its nozzle on a brush just before printing; a loop around the part gets it flowing again",
@@ -1052,12 +1087,35 @@ def down_side(part: "Part") -> Optional[Tuple[float, List[float]]]:
         contact, size = side["contact"], side["size"]
     elif part.lay == "file" and lying_.get("down_area") is not None:
         contact, size = lying_["down_area"], model_size(part.model)
+    elif part.lay == "side" and n:
+        measured = side_measure(part.model, n)                      # turned by hand, onto no listed side
+        if not measured:
+            return None
+        contact, size = measured
     else:
         return None
     if not size:
         return None
     k = part.scale
     return contact * k * k, [x * k for x in size]
+
+
+def side_measure(path: str, normal: List[float]) -> Optional[Tuple[float, List[float]]]:
+    """The contact (mm²) and size (w, d, h) with the side facing `normal` down, measured from the mesh."""
+    tris = _triangles(path)
+    if not tris:
+        return None
+    r = down_rotation(normal)
+    turned = [[[_dot(r[k], v) for k in range(3)] for v in t] for t in tris]
+    zmin = min(v[2] for t in turned for v in t)
+    contact = 0.0
+    for t in turned:
+        m, a = _normal_area(t)
+        if m is not None and m[2] < -0.98 and all(abs(v[2] - zmin) < 0.05 for v in t):
+            contact += a
+    lo = [min(v[k] for t in turned for v in t) for k in range(3)]
+    hi = [max(v[k] for t in turned for v in t) for k in range(3)]
+    return round(contact, 1), [round(hi[k] - lo[k], 1) for k in range(3)]
 
 
 def brim_rule(contact: float, size: List[float], material: str) -> Tuple[str, str]:
@@ -1133,6 +1191,19 @@ def heights_xml(heights: List[Height], spools: List[Spool], plates: int, first: 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def runs_of(states: List[int]) -> Optional[List[int]]:
+    """States as [state, count, ...], the way paint and support marks travel; None when all are 0."""
+    if not any(states):
+        return None
+    out: List[int] = []
+    for v in states:
+        if out and out[-2] == v:
+            out[-1] += 1
+        else:
+            out += [v, 1]
+    return out
+
+
 def unrun(runs: List[int]) -> List[int]:
     out: List[int] = []
     for c, n in zip(runs[0::2], runs[1::2]):
@@ -1149,10 +1220,12 @@ _VERTEX = re.compile(rb'<vertex x="([^"]+)" y="([^"]+)" z="([^"]+)"')
 _TRIANGLE = re.compile(rb'<triangle v1="(\d+)" v2="(\d+)" v3="(\d+)"([^>]*?)/>')
 
 
-def paint_object(xml: bytes, tris: List[Tuple[Tuple[float, ...], ...]], states: List[int]) -> Tuple[bytes, int]:
-    """An object's mesh in the arranged 3MF with each painted triangle's paint_color. Orca moves the mesh (its
-    middle to 0) and may drop broken triangles, so the file's triangles are found by shape: in the same order when
-    they all match, else by where their middles are. Returns the mesh and how many triangles were painted."""
+def paint_object(xml: bytes, tris: List[Tuple[Tuple[float, ...], ...]], states: List[int],
+                 attr: str = "paint_color") -> Tuple[bytes, int]:
+    """An object's mesh in the arranged 3MF with each painted triangle's paint_color (or `attr`: paint_supports for
+    support marks, same code). Orca moves the mesh (its middle to 0) and may drop broken triangles, so the file's
+    triangles are found by shape: in the same order when they all match, else by where their middles are. Returns
+    the mesh and how many triangles were painted."""
     verts = [tuple(float(v) for v in m.groups()) for m in _VERTEX.finditer(xml)]
     faces = [tuple(int(v) for v in m.groups()[:3]) for m in _TRIANGLE.finditer(xml)]
     if not verts or not tris:
@@ -1174,21 +1247,25 @@ def paint_object(xml: bytes, tris: List[Tuple[Tuple[float, ...], ...]], states: 
     def one(m: "re.Match") -> bytes:
         nonlocal painted
         c = next(it, 0)
-        rest = re.sub(rb'\s*paint_color="[^"]*"', b"", m.group(4))
+        rest = re.sub(rb'\s*' + attr.encode() + rb'="[^"]*"', b"", m.group(4))
         if not c:
             return m.group(0)
         painted += 1
-        return b'<triangle v1="%s" v2="%s" v3="%s"%s paint_color="%s"/>' % (m.group(1), m.group(2), m.group(3), rest,
-                                                                            paint_code(c).encode())
+        return b'<triangle v1="%s" v2="%s" v3="%s"%s %s="%s"/>' % (m.group(1), m.group(2), m.group(3), rest,
+                                                                   attr.encode(), paint_code(c).encode())
     return _TRIANGLE.sub(one, xml), painted
 
 
 def edit_plates(src: str, dst: str, brims: Optional[List[str]] = None, heights: Optional[bytes] = None,
-                paint: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None) -> Dict[int, int]:
+                paint: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None,
+                marks: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None
+                ) -> Tuple[Dict[int, int], Dict[int, int]]:
     """The arranged 3MF again, to slice as it is: each object with its part's brim_type (brims: Orca's value, by
-    part index, read from the object's name, p{i}c{k}__...), the changes at a height (heights_xml), and each part's
-    paint (paint: part index -> its triangles as prepared, and each one's color). Returns triangles painted by part."""
+    part index, read from the object's name, p{i}c{k}__...), the changes at a height (heights_xml), each part's
+    paint (paint: part index -> its triangles as prepared, and each one's color) and its support marks (marks: the
+    same, each one's MARKS state). Returns triangles painted, and triangles marked, by part."""
     painted: Dict[int, int] = {}
+    marked: Dict[int, int] = {}
     with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
         for item in zi.infolist():
             if item.filename.endswith((".gcode", ".md5")) or heights and item.filename == "Metadata/custom_gcode_per_layer.xml":
@@ -1204,15 +1281,19 @@ def edit_plates(src: str, dst: str, brims: Optional[List[str]] = None, heights: 
                             obj.remove(old)
                         ET.SubElement(obj, "metadata", key="brim_type", value=brims[int(found.group(1))])
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-            found = _PART_FILE.search(item.filename) if paint and item.filename.startswith("3D/Objects/") else None
-            if found and int(found.group(1)) in paint:
+            found = _PART_FILE.search(item.filename) if (paint or marks) and item.filename.startswith("3D/Objects/") else None
+            if found and int(found.group(1)) in (paint or {}):
                 i = int(found.group(1))
                 data, n = paint_object(data, *paint[i])
                 painted[i] = painted.get(i, 0) + n
+            if found and int(found.group(1)) in (marks or {}):
+                i = int(found.group(1))
+                data, n = paint_object(data, *marks[i], attr="paint_supports")
+                marked[i] = marked.get(i, 0) + n
             zo.writestr(item, data)
         if heights:
             zo.writestr("Metadata/custom_gcode_per_layer.xml", heights)
-    return painted
+    return painted, marked
 
 
 def plates_in(three_mf: str) -> int:
@@ -1294,6 +1375,70 @@ def read_result(gcode: str) -> Dict[str, Any]:
 _AXIS = re.compile(r"([XYZE])(-?\d*\.?\d+)")
 
 
+def printed_heights(gcode: str) -> Dict[int, Tuple[float, float]]:
+    """For each part (p0__, p1c2__...), the lowest and highest layer it lays plastic on, from the G-code's ;Z: and
+    the object blocks Orca writes with gcode_label_objects. Copies of a part count as one."""
+    out: Dict[int, Tuple[float, float]] = {}
+    z = 0.0
+    part: Optional[int] = None
+    e_abs = False
+    last_e = 0.0
+    with open(gcode, errors="replace") as f:
+        for line in f:
+            c = line[0]
+            if c == ";":
+                if line.startswith(";Z:"):
+                    with contextlib.suppress(ValueError):
+                        z = float(line[3:])
+                elif line.startswith("; printing object "):
+                    found = _PART_FILE.search(line[18:])
+                    part = int(found.group(1)) if found else None
+                elif line.startswith("; stop printing object "):
+                    part = None
+                continue
+            if line.startswith("M82"):
+                e_abs = True
+            elif line.startswith("M83"):
+                e_abs = False
+            elif line.startswith("G92"):
+                m = re.search(r"E(-?\d*\.?\d+)", line)
+                if m:
+                    last_e = float(m.group(1))
+            elif part is not None and line.startswith(("G1 ", "G2 ", "G3 ")):
+                m = re.search(r"E(-?\d*\.?\d+)", line.split(";", 1)[0])
+                if not m:
+                    continue
+                e = float(m.group(1))
+                if e_abs:
+                    e, last_e = e - last_e, e
+                if e > 0:
+                    lo, hi = out.get(part, (z, z))
+                    out[part] = (min(lo, z), max(hi, z))
+    return out
+
+
+SHORT_BY = 1.0   # mm: less than this is layer rounding, not a lost piece
+
+
+def short_parts(printed: Dict[int, Tuple[float, float]], heights: Dict[int, float],
+                first_layer: float) -> List[Dict[str, Any]]:
+    """The parts the slicer left a piece of out: in mm, how much of the bottom and of the top (as the part lies on
+    the plate) has no plastic, or all of it when nothing of the part was printed. A slice that leaves out a wall
+    thinner than the nozzle still succeeds, so this is the only way to know before it prints."""
+    out = []
+    for i, tall in sorted(heights.items()):
+        if i not in printed:
+            out.append({"part": i, "bottom": 0.0, "top": round(tall, 1), "all": True})
+            continue
+        lo, hi = printed[i]
+        bottom = max(0.0, lo - first_layer)
+        top = max(0.0, tall - hi)
+        if bottom >= SHORT_BY or top >= SHORT_BY:
+            out.append({"part": i, "bottom": round(bottom if bottom >= SHORT_BY else 0.0, 1),
+                        "top": round(top if top >= SHORT_BY else 0.0, 1), "all": False})
+    return out
+
+
 def support_lines(gcode: str, limit: int = 12000) -> Dict[str, Any]:
     """Where the supports go (design/supports/, A: the picture on each kind's card): every extruding move
     inside a ;TYPE:Support... section, in mm on the bed. A tree is tens of thousands of short moves, so whole
@@ -1354,126 +1499,22 @@ def support_lines(gcode: str, limit: int = 12000) -> Dict[str, Any]:
     return {"count": len(keep), "width": round(max(0.45, height * step), 2), "segs": base64.b64encode(packed).decode()}
 
 
-# Layers (design/look/, A with C's layers): a slice's G-code read once into where each layer starts and every
-# layer's outer wall, to draw the print up to a cut; then any one layer's paths on request, each move tagged
-# with what it prints.
-WALL, INNER, INFILL, SUPPORT, OTHER = range(5)
-_KIND_OF = (("Outer wall", WALL), ("Overhang wall", WALL), ("External perimeter", WALL), ("Inner wall", INNER),
-            ("Perimeter", INNER), ("Support", SUPPORT), ("Skirt", OTHER), ("Brim", OTHER), ("Prime tower", OTHER),
-            ("Wipe tower", OTHER), ("Custom", OTHER))
+# Layers (design/look/, A with C's layers): printer/gcode_layers.py, shared with the printer's own Now ring.
+def _gcode_layers():
+    here = os.path.dirname(os.path.realpath(__file__))
+    for d in (os.path.join(here, "..", "printer"), here):
+        path = os.path.join(d, "gcode_layers.py")
+        if os.path.exists(path):
+            spec = importlib.util.spec_from_file_location("gcode_layers", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise ImportError("gcode_layers.py not found beside the slicer or in ../printer")
 
 
-def _kind(name: str) -> int:
-    return next((k for prefix, k in _KIND_OF if name.startswith(prefix)), INFILL)
-
-
-class _Walk:
-    """The nozzle through G-code one line at a time: where it is, and the line an extruding move draws."""
-
-    def __init__(self, state: Optional[Tuple[float, float, float, bool, float, int]] = None):
-        self.x, self.y, self.z, self.e_abs, self.last_e, self.kind = state or (0.0, 0.0, 0.0, False, 0.0, OTHER)
-
-    def state(self) -> Tuple[float, float, float, bool, float, int]:
-        return (self.x, self.y, self.z, self.e_abs, self.last_e, self.kind)
-
-    def step(self, line: str) -> Optional[Tuple[float, float, float, float]]:
-        c = line[:1]
-        if c == ";":
-            if line.startswith(";TYPE:"):
-                self.kind = _kind(line[6:].strip())
-            return None
-        if c != "G" and c != "M":
-            return None
-        if line.startswith("M82"):
-            self.e_abs = True
-            return None
-        if line.startswith("M83"):
-            self.e_abs = False
-            return None
-        if not (line.startswith("G1 ") or line.startswith("G0 ")):
-            if line.startswith("G92"):
-                m = re.search(r"E(-?\d*\.?\d+)", line)
-                if m:
-                    self.last_e = float(m.group(1))
-            return None
-        nx, ny, e = self.x, self.y, None
-        for k, v in _AXIS.findall(line.split(";", 1)[0]):
-            if k == "X":
-                nx = float(v)
-            elif k == "Y":
-                ny = float(v)
-            elif k == "Z":
-                self.z = float(v)
-            else:
-                e = float(v)
-        if e is not None and self.e_abs:
-            e, self.last_e = e - self.last_e, e
-        seg = (self.x, self.y, nx, ny) if e is not None and e > 0 and (nx != self.x or ny != self.y) else None
-        self.x, self.y = nx, ny
-        return seg
-
-
-def _pack16(values: List[float]) -> str:
-    return base64.b64encode(struct.pack(f"<{len(values)}h", *(max(-32768, min(32767, round(v * 10))) for v in values))).decode()
-
-
-def layer_index(gcode: str, limit: int = 60000) -> Tuple[Dict[str, Any], List[Tuple[int, Tuple[float, float, float, bool, float, int]]]]:
-    """Each layer's height above the plate and every layer's outer wall (segs as support_lines packs them, and
-    `layer`: each segment's layer as uint16s), for people; and where each layer starts in the file with the
-    nozzle's state there, so layer_paths can read one alone. A tall print has more wall than a phone wants, so
-    whole layers of it are left out until `limit` segments remain, drawn wider to close the gaps."""
-    walk = _Walk()
-    starts: List[Tuple[int, Tuple[float, float, float, bool, float, int]]] = []
-    zs: List[Optional[float]] = []
-    walls: List[List[Tuple[float, float, float, float]]] = []
-    height = 0.2
-    pos = 0
-    with open(gcode, "rb") as f:
-        for raw in f:
-            line = raw.decode("ascii", "replace")
-            if line.startswith(";LAYER_CHANGE"):
-                starts.append((pos + len(raw), walk.state()))
-                zs.append(None)
-                walls.append([])
-            elif line.startswith(";Z:") and zs and zs[-1] is None:
-                with contextlib.suppress(ValueError):
-                    zs[-1] = float(line[3:])
-            elif line.startswith(";HEIGHT:"):
-                with contextlib.suppress(ValueError):
-                    height = float(line[8:]) or height
-            seg = walk.step(line)
-            if seg and walls:
-                if zs[-1] is None:
-                    zs[-1] = walk.z
-                if walk.kind == WALL:
-                    walls[-1].append(seg)
-            pos += len(raw)
-    z = [round(v if v is not None else 0.0, 3) for v in zs]
-    total = sum(len(w) for w in walls)
-    step = max(1, math.ceil(total / limit)) if total else 1
-    keep = [(i, s) for i, w in enumerate(walls) if i % step == 0 for s in w]
-    flat = [v for i, s in keep for v in (*s, z[i])]
-    public = {"count": len(z), "z": z, "width": round(max(0.45, height * step), 2),
-              "walls": {"count": len(keep), "segs": _pack16(flat),
-                        "layer": base64.b64encode(struct.pack(f"<{len(keep)}H", *(min(i, 65535) for i, _ in keep))).decode()}}
-    return public, starts
-
-
-def layer_paths(gcode: str, start: int, end: Optional[int], state: Tuple[float, float, float, bool, float, int], z: float) -> Dict[str, Any]:
-    """One layer's extruding moves, from where layer_index found it: segs packed as support_lines packs them,
-    and `kinds` (base64 bytes): WALL, INNER, INFILL, SUPPORT or OTHER for each."""
-    walk = _Walk(state)
-    flat: List[float] = []
-    kinds = bytearray()
-    with open(gcode, "rb") as f:
-        f.seek(start)
-        chunk = f.read(-1 if end is None else max(0, end - start))
-    for line in chunk.decode("ascii", "replace").splitlines():
-        seg = walk.step(line)
-        if seg:
-            flat.extend((*seg, z))
-            kinds.append(walk.kind)
-    return {"count": len(kinds), "segs": _pack16(flat), "kinds": base64.b64encode(bytes(kinds)).decode()}
+_layers = _gcode_layers()
+WALL, INNER, INFILL, SUPPORT, OTHER = _layers.WALL, _layers.INNER, _layers.INFILL, _layers.SUPPORT, _layers.OTHER
+layer_index, layer_paths = _layers.layer_index, _layers.layer_paths
 
 
 _TOOL = re.compile(r"(\bTOOL=)0\b")
@@ -1752,16 +1793,29 @@ def support_kind(process: Dict[str, Any]) -> str:
     return "tree" if str(process.get("support_type", "")).startswith("tree") else "normal"
 
 
+def support_angle(process: Dict[str, Any]) -> float:
+    """How far from flat a face may lean and still get supports from Orca (support_threshold_angle; 0 is Orca's own
+    choice, 30). Bench's own 30 is the Vorons'; Anycubic's Kobra profiles say 40 (design/supports-where/)."""
+    v = process.get("support_threshold_angle")
+    try:
+        a = float(v[0] if isinstance(v, list) else v)
+    except (TypeError, ValueError, IndexError):
+        return 30.0
+    return a if 0 < a < 90 else 30.0
+
+
 def options(printers: Dict[str, Printer], beds: Optional[Dict[str, Optional[List[float]]]] = None,
-            kinds: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """What a person can choose, for the app to draw. kinds: each printer's usual support (support_kind)."""
-    beds, kinds = beds or {}, kinds or {}
+            kinds: Optional[Dict[str, str]] = None, angles: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    """What a person can choose, for the app to draw. kinds: each printer's usual support (support_kind); angles:
+    how far a face may lean and still get them (support_angle)."""
+    beds, kinds, angles = beds or {}, kinds or {}, angles or {}
     return {
         "purposes": [{"id": k, "label": v["label"], "summary": v["summary"]} for k, v in PURPOSES.items()],
         "supports": list(SUPPORTS),
         "editable": [{"key": k, "label": LABELS.get(k, k), **spec} for k, spec in EDITABLE.items()],
         "printers": [{"id": p.id, "name": p.name, "materials": sorted(p.materials), "slots": p.tools,
                       "bed": beds.get(p.id), "base": p.process, "supports": kinds.get(p.id, "normal"),
+                      "support_angle": angles.get(p.id, 30.0),
                       "unit": p.unit, "purges": purges(p), "change_seconds": p.change_seconds}
                      for p in printers.values()],
         "models": sorted(MODEL_TYPES),
@@ -1876,45 +1930,261 @@ def _dot(a, b) -> float:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-def sides(path: str, tris=None, limit: int = 8) -> List[Dict[str, Any]]:
-    """Every side the model can rest on, most contact first: the side facing `normal` goes down. contact is
-    the area that would really touch the plate (faces on the model's outermost plane that way, not every
-    face pointing that way); size is [w, d, h] lying so; support the area facing down more than 45°
-    above the plate, a rough measure of how much needs holding up. design/orientation/ (Which side down)."""
-    tris = _triangles(path) if tris is None else tris
-    if not tris:
-        return []
-    groups: Dict[Tuple[float, ...], List[float]] = collections.defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
-    faces = []
+def _faces(tris) -> List[Tuple[float, ...]]:
+    """Each triangle as (normal x, y, z, centroid x, y, z, area, triangle), the dot products sides() runs on."""
+    out = []
     for t in tris:
         n, a = _normal_area(t)
-        if n is None:
+        if n is not None:
+            out.append((n[0], n[1], n[2], (t[0][0] + t[1][0] + t[2][0]) / 3, (t[0][1] + t[1][1] + t[2][1]) / 3,
+                        (t[0][2] + t[1][2] + t[2][2]) / 3, a, t))
+    return out
+
+
+def _measure(faces, d, ext: float) -> Tuple[float, float]:
+    """With the side facing d down (its plane at d·v = ext): the area really touching the plate, and the area
+    facing down more than 45° above it, a rough measure of how much needs holding up."""
+    dx, dy, dz = d
+    contact = support = 0.0
+    for mx, my, mz, cx, cy, cz, a, t in faces:
+        dm = dx * mx + dy * my + dz * mz
+        if dm <= 0.7071:
             continue
-        faces.append((t, n, a))
-        g = groups[tuple(round(x, 1) for x in n)]
-        for i in range(3):
-            g[i] += n[i] * a
-        g[3] += a
-    verts = [v for t, _, _ in faces for v in t]
+        if ext - (dx * cx + dy * cy + dz * cz) > 0.2:
+            support += a
+        elif dm > 0.985 and all(abs(dx * v[0] + dy * v[1] + dz * v[2] - ext) < 0.05 for v in t):
+            contact += a
+    return contact, support
+
+
+def _centroid(faces) -> List[float]:
+    """Where the solid's weight sits: the volume centroid by signed tetrahedra, or the surface's when the mesh
+    doesn't close (its volume comes out near nothing)."""
+    vol, c = 0.0, [0.0, 0.0, 0.0]
+    for *_, t in faces:
+        a, b, e = t
+        v = (a[0] * (b[1] * e[2] - b[2] * e[1]) - a[1] * (b[0] * e[2] - b[2] * e[0]) + a[2] * (b[0] * e[1] - b[1] * e[0])) / 6
+        vol += v
+        for k in range(3):
+            c[k] += v * (a[k] + b[k] + e[k]) / 4
+    lo = [min(v[k] for *_, t in faces for v in t) for k in range(3)]
+    hi = [max(v[k] for *_, t in faces for v in t) for k in range(3)]
+    if abs(vol) > 1e-6 * max(1e-9, (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])):
+        c = [x / vol for x in c]
+        if all(lo[k] - 1e-6 <= c[k] <= hi[k] + 1e-6 for k in range(3)):
+            return c
+    area = sum(f[6] for f in faces) or 1.0
+    return [sum(f[3 + k] * f[6] for f in faces) / area for k in range(3)]
+
+
+def _hull(pts: List[Tuple[int, int, int]]) -> List[Tuple[int, int, int]]:
+    """The convex hull of integer points (quickhull) as triangles, counterclockwise seen from outside; [] when
+    the points are flat. Integers keep every in-front test exact: with floats, CAD parts' many coplanar points
+    leave points outside the hull."""
+    n = len(pts)
+    if n < 4:
+        return []
+    sub = lambda p, q: (p[0] - q[0], p[1] - q[1], p[2] - q[2])
+    cross = lambda u, w: (u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0])
+    ext = [min(range(n), key=lambda i: pts[i][k]) for k in range(3)] + [max(range(n), key=lambda i: pts[i][k]) for k in range(3)]
+    a, b = max(((i, j) for i in ext for j in ext), key=lambda ij: _dot(*(sub(pts[ij[0]], pts[ij[1]]),) * 2))
+    ab = sub(pts[b], pts[a])
+    c = max(range(n), key=lambda i: _dot(*(cross(ab, sub(pts[i], pts[a])),) * 2))
+    nrm = cross(ab, sub(pts[c], pts[a]))
+    if nrm == (0, 0, 0):
+        return []
+    d = max(range(n), key=lambda i: abs(_dot(nrm, sub(pts[i], pts[a]))))
+    if _dot(nrm, sub(pts[d], pts[a])) == 0:
+        return []
+    faces: Dict[int, List[Any]] = {}
+    edges: Dict[Tuple[int, int], int] = {}
+    count = [0]
+
+    def make(i, j, k):
+        u = cross(sub(pts[j], pts[i]), sub(pts[k], pts[i]))
+        f = count[0]
+        count[0] += 1
+        faces[f] = [i, j, k, u, _dot(u, pts[i]), []]
+        edges[(i, j)], edges[(j, k)], edges[(k, i)] = f, f, f
+        return f
+
+    inner4 = [sum(pts[i][k] for i in (a, b, c, d)) for k in range(3)]       # 4 x the simplex's middle
+    for i, j, k in ((a, b, c), (a, b, d), (a, c, d), (b, c, d)):
+        u = cross(sub(pts[j], pts[i]), sub(pts[k], pts[i]))
+        make(*((i, j, k) if _dot(u, inner4) < 4 * _dot(u, pts[i]) else (i, k, j)))
+
+    def assign(points, among):
+        planes = [(f, faces[f][3], faces[f][4]) for f in among]
+        for p in points:
+            x, y, z = pts[p]
+            best, far = None, 0
+            for f, (ux, uy, uz), off in planes:
+                h = ux * x + uy * y + uz * z - off
+                if h > far:
+                    best, far = f, h
+            if best is not None:
+                faces[best][5].append(p)
+
+    assign((i for i in range(n) if i not in (a, b, c, d)), list(faces))
+    stack = [f for f in faces if faces[f][5]]
+    while stack:
+        f = stack.pop()
+        if f not in faces or not faces[f][5]:
+            continue
+        u = faces[f][3]
+        eye = max(faces[f][5], key=lambda p: _dot(u, pts[p]))
+        e = pts[eye]
+        seen, todo, horizon = {f}, [f], []
+        while todo:
+            g = todo.pop()
+            i, j, k = faces[g][:3]
+            for p, q in ((i, j), (j, k), (k, i)):
+                h = edges.get((q, p))
+                if h is None or h in seen:
+                    continue
+                if _dot(faces[h][3], e) > faces[h][4]:
+                    seen.add(h)
+                    todo.append(h)
+                else:
+                    horizon.append((p, q))
+        loose = []
+        for g in seen:
+            i, j, k = faces[g][:3]
+            loose += faces[g][5]
+            for p, q in ((i, j), (j, k), (k, i)):
+                if edges.get((p, q)) == g:
+                    del edges[(p, q)]
+            del faces[g]
+        new = [make(p, q, eye) for p, q in horizon]
+        assign((p for p in loose if p != eye), new)
+        stack += [g for g in new if faces[g][5]]
+    return [tuple(v[:3]) for v in faces.values()]
+
+
+def sides(path: str, tris=None, limit: int = 8, faces=None) -> List[Dict[str, Any]]:
+    """Every side the model can rest on, most contact first: the side facing `normal` goes down. A rigid part
+    only rests on a face of its convex hull, and only when its weight sits over that face, so the sides are the
+    hull's flat faces it's steady on, whatever the file's facets look like; a round wall's thin strips are one
+    side. contact is the area that would really touch the plate (the part's own faces on that plane, not the
+    hull's); size is [w, d, h] lying so; support the area facing down more than 45° above the plate, a rough
+    measure of how much needs holding up. design/orientation/ (Which side down)."""
+    tris = _triangles(path) if tris is None else tris
+    faces = _faces(tris) if faces is None else faces
+    if not faces:
+        return []
+    floats = {v for *_, t in faces for v in t}
+    unit = max(max(v[k] for v in floats) - min(v[k] for v in floats) for k in range(3)) / 1e6 or 1.0
+    grid = list({(round(v[0] / unit), round(v[1] / unit), round(v[2] / unit)) for v in floats})
+    hull = _hull(grid)
+    if not hull:
+        return []
+    pts = [(x * unit, y * unit, z * unit) for x, y, z in grid]
+    corners = sorted({i for t in hull for i in t})
+    hull_pts = [pts[i] for i in corners]
+
+    # Hull triangles on one plane are one flat face (plate); a round wall's strips are plates side by side.
+    tri_n = [_normal_area([pts[i] for i in t]) for t in hull]
+    by_edge = {}
+    for f, (i, j, k) in enumerate(hull):
+        by_edge[(i, j)], by_edge[(j, k)], by_edge[(k, i)] = f, f, f
+    up = list(range(len(hull)))
+
+    def root(x, parent):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for (i, j), f in by_edge.items():
+        g = by_edge.get((j, i))
+        if g is not None and tri_n[f][0] and tri_n[g][0] and _dot(tri_n[f][0], tri_n[g][0]) > 0.99996:
+            up[root(f, up)] = root(g, up)
+    plates: Dict[int, Dict[str, Any]] = {}
+    for f, t in enumerate(hull):
+        if tri_n[f][0] is None:
+            continue
+        p = plates.setdefault(root(f, up), {"n": [0.0, 0.0, 0.0], "area": 0.0, "corners": set()})
+        n, a = tri_n[f]
+        for k in range(3):
+            p["n"][k] += n[k] * a
+        p["area"] += a
+        p["corners"].update(t)
+    # One plane can come out in pieces (a sliver between them): on a convex hull, one normal is one plane.
+    canon: Dict[int, int] = {}
+    by_normal: Dict[Tuple[float, ...], int] = {}
+    for k, p in list(plates.items()):
+        length = math.sqrt(_dot(p["n"], p["n"])) or 1.0
+        key = tuple(round(x / length, 3) for x in p["n"])
+        if key in by_normal:
+            q = plates[by_normal[key]]
+            q["n"] = [q["n"][i] + p["n"][i] for i in range(3)]
+            q["area"] += p["area"]
+            q["corners"] |= p["corners"]
+            del plates[k]
+        else:
+            by_normal[key] = k
+        canon[k] = by_normal[key]
+    for p in plates.values():
+        length = math.sqrt(_dot(p["n"], p["n"])) or 1.0
+        p["n"] = [x / length for x in p["n"]]
+    keys = list(plates)
+    wall = {k: k for k in keys}
+    for (i, j), f in by_edge.items():
+        g = by_edge.get((j, i))
+        if g is None:
+            continue
+        p, q = canon.get(root(f, up)), canon.get(root(g, up))
+        if p is not None and q is not None and p != q and _dot(plates[p]["n"], plates[q]["n"]) > 0.978 and \
+                min(plates[p]["area"], plates[q]["area"]) > 0.5 * max(plates[p]["area"], plates[q]["area"]):
+            wall[root(p, wall)] = root(q, wall)
+    walls = collections.defaultdict(list)
+    for k in keys:
+        walls[root(k, wall)].append(k)
+
+    com = _centroid(faces)
+
+    def steady(p, margin):
+        n = p["n"]
+        u = [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0]
+        u = [u[1] * n[2] - u[2] * n[1], u[2] * n[0] - u[0] * n[2], u[0] * n[1] - u[1] * n[0]]
+        length = math.sqrt(_dot(u, u))
+        u = [x / length for x in u]
+        w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]]
+        ring = _hull2d([(_dot(u, pts[i]), _dot(w, pts[i])) for i in p["corners"]])
+        x, y = _dot(u, com), _dot(w, com)
+        if len(ring) < 3:
+            return False
+        for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1]):
+            if (x1 - x0) * (y - y0) - (y1 - y0) * (x - x0) < margin * math.hypot(x1 - x0, y1 - y0):
+                return False
+        return True
+
+    picks = []
+    for members in walls.values():
+        if len(members) >= 3:
+            best = max(members, key=lambda k: plates[k]["area"])
+            if steady(plates[best], 0.0):
+                picks.append(plates[best])
+        else:
+            picks += [plates[k] for k in members if steady(plates[k], 0.3)]
+    picks.sort(key=lambda p: -p["area"])
+
+    # contact can't be more than the hull face's area, so measuring biggest first can stop early.
     out: List[Dict[str, Any]] = []
-    for g in sorted(groups.values(), key=lambda g: -g[3])[:24]:
-        length = math.sqrt(g[0] ** 2 + g[1] ** 2 + g[2] ** 2) or 1.0
-        n = [g[0] / length, g[1] / length, g[2] / length]
-        if any(_dot(n, o["normal"]) > 0.996 for o in out):
-            continue
-        ext = max(_dot(n, v) for v in verts)
-        contact = sum(a for t, m, a in faces if _dot(m, n) > 0.985 and all(abs(_dot(n, v) - ext) < 0.05 for v in t))
+    for p in picks:
+        contacts = sorted((o["contact"] for o in out), reverse=True)
+        floor = max(20.0, (contacts[0] if contacts else 0) * 0.02)
+        if p["area"] < floor or (len(contacts) >= limit and p["area"] < contacts[limit - 1]):
+            break
+        n = p["n"]
+        ext = max(_dot(n, v) for v in hull_pts)
+        contact, support = _measure(faces, n, ext)
         if contact < 1:
             continue
         r = down_rotation(n)
-        rot = [[_dot(r[k], v) for k in range(3)] for v in verts]
-        lo = [min(p[k] for p in rot) for k in range(3)]
-        hi = [max(p[k] for p in rot) for k in range(3)]
-        support = 0.0
-        for t, m, a in faces:
-            mz = _dot(r[2], m)
-            if mz < -0.7071 and sum(_dot(r[2], v) for v in t) / 3 - lo[2] > 0.2:
-                support += a
+        rot = [[_dot(r[k], v) for k in range(3)] for v in hull_pts]
+        lo = [min(q[k] for q in rot) for k in range(3)]
+        hi = [max(q[k] for q in rot) for k in range(3)]
         out.append({"normal": [round(x, 5) for x in n], "contact": round(contact, 1),
                     "size": [round(hi[k] - lo[k], 1) for k in range(3)], "support": round(support, 1)})
     out.sort(key=lambda o: -o["contact"])
@@ -1922,27 +2192,40 @@ def sides(path: str, tris=None, limit: int = 8) -> List[Dict[str, Any]]:
     return [o for o in out if o["contact"] >= max(20.0, best * 0.02)][:limit]
 
 
+def _hull2d(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """The convex hull of 2D points, counterclockwise (monotone chain)."""
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        return pts
+    def half(seq):
+        h: List[Tuple[float, float]] = []
+        for p in seq:
+            while len(h) >= 2 and (h[-1][0] - h[-2][0]) * (p[1] - h[-2][1]) - (h[-1][1] - h[-2][1]) * (p[0] - h[-2][0]) <= 1e-12:
+                h.pop()
+            h.append(p)
+        return h[:-1]
+    return half(pts) + half(reversed(pts))
+
+
 def lying(path: str) -> Optional[Dict[str, Any]]:
     """How the model sits, and whether lying it on another side is clearly better: the area touching the
     plate as the file has it, and the side with the most real contact (sides()). design/orientation/ (A):
-    laid flat for the person when the side that's down touches much less than that one. None for a file
-    that can't be read here (STEP)."""
+    laid flat for the person when the side that's down touches much less than that one and doesn't need
+    much more holding up. None for a file that can't be read here (STEP)."""
     tris = _triangles(path)
     if not tris:
         return None
-    zmin = min(v[2] for t in tris for v in t)
-    down = 0.0
-    for t in tris:
-        n, a = _normal_area(t)
-        if n is not None and n[2] < -0.98 and all(abs(v[2] - zmin) < 0.05 for v in t):
-            down += a
-    every = sides(path, tris)
+    faces = _faces(tris)
+    every = sides(path, tris, faces=faces)
     if not every:
         return None
+    zmin = min(v[2] for *_, t in faces for v in t)
+    down, held = _measure(faces, (0.0, 0.0, -1.0), -zmin)
     n = every[0]["normal"]
     already = n[2] < -0.98                       # the side with the most contact is the one that's down
     return {"down_area": round(down, 1), "flat_area": every[0]["contact"], "flat_normal": n,
-            "flat_better": (not already) and every[0]["contact"] > 2 * max(down, 1.0),
+            "flat_better": (not already) and every[0]["contact"] > 2 * max(down, 1.0)
+                           and every[0]["support"] <= held + max(100.0, held / 2),
             "tilt": round(math.degrees(math.acos(max(-1.0, min(1.0, -n[2])))), 1), "sides": every}
 
 

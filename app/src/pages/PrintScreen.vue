@@ -13,6 +13,7 @@
     <BusyBanner then="pick the next print" />
     <WarmStrip />
     <p class="sub away" v-if="door.away">These are your recent prints. Start one at the printer, where you can check the bed is clear.</p>
+    <LookHome class="under-away" />
 
     <!-- Newer prints use other settings (design/getting-started/, c-slice-newer): one line, never a switch -->
     <NewerCard v-if="canSlice && offer" :offer="offer" :busy="newerBusy" :error="newerError" @use="useNewer" @keep="keepCurrent" />
@@ -105,6 +106,7 @@ import { askingWords, type SlicerState } from '@/slice/elsewhere'
 import FoundSheet from '@/components/profile/FoundSheet.vue'
 import ProfilesSheet from '@/components/profile/ProfilesSheet.vue'
 import NewerCard from '@/components/profile/NewerCard.vue'
+import LookHome from '@/components/door/LookHome.vue'
 import {
   LIKE_YOURS, NONE_WORDS, firstSheet, foundView, inUse, learned, listView, newerOffer, slicingWaits, type ProfileInfo,
 } from '@/intent/profile'
@@ -237,6 +239,8 @@ function pickModel(e: Event) {
 .every svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .sub { color: var(--a-ink-2); font-size: calc(17 * var(--u) + 5px); margin: 0; max-width: 40ch; line-height: 1.3; }
 .sub.away { margin: calc(6 * var(--u) + 4px) 0 calc(12 * var(--u) + 4px); }
+.sub.away:has(+ .under-away) { margin-bottom: 8px; }
+.under-away { margin-bottom: calc(12 * var(--u) + 4px); }
 .sec { font-size: calc(4 * var(--u) + 9px); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-ink-3); margin: calc(5 * var(--u) + 13px) 0 calc(3 * var(--u) + 6px); display: flex; align-items: baseline; gap: 10px; }
 .trow + .sec { margin-top: 12px; }
 .sec em { font-style: normal; font-weight: 600; letter-spacing: 0; text-transform: none; font-size: calc(5 * var(--u) + 10px); }

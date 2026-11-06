@@ -2,13 +2,15 @@
 //
 // Home first (docs/door.md): try the printer's home name with the token for about 1.5 s; if it
 // answers paired, use it, otherwise the public name. Ask again when the phone comes back online,
-// when the app comes back to the foreground, and whenever a printer's connection drops. Each
-// printer keeps one live connection for the list's status; its own screens open in a frame.
+// when the app comes back to the foreground, whenever a printer's connection drops, and every
+// 30 s while it's on the public name. Each printer keeps one live connection for the list's
+// status; its own screens open in a frame.
 
 import { reactive, ref } from 'vue'
 import { IntentClient } from '@/intent/client'
 import type { Intent } from '@/intent/types'
 import { del, getAll, put } from './db'
+import { lookHomeNow, nextStep } from './reach'
 
 export interface Addresses {
   home: string | null   // https://192-0-2-73.workshop.home.elyir.app
@@ -44,6 +46,7 @@ export interface LivePrinter extends PrinterRecord {
 
 const HOME_PROBE_MS = 1500
 const AWAY_PROBE_MS = 8000
+const MANUAL_HOME_PROBE_MS = 3000
 
 export const printers = reactive<LivePrinter[]>([])
 /** The saved list has been read: until then an empty list means nothing yet, not no printers. */
@@ -153,6 +156,9 @@ function connect(p: LivePrinter) {
   let dropTimer = 0
   const started = Date.now()
   let gaveUp = false
+  let everUp = false
+  let looked = started
+  let homeLooked = started
   const sync = () => {
     if (clients.get(p.id) !== c) return
     const q = byId(p.id)
@@ -160,17 +166,51 @@ function connect(p: LivePrinter) {
     q.intent = c.intent.value
     if (q.connected !== c.connected.value) {
       q.connected = c.connected.value
+      everUp ||= q.connected
       window.clearTimeout(dropTimer)
       if (!q.connected) dropTimer = window.setTimeout(() => reach(p.id), 4000)
     }
-    // reachable by plain requests but the live connection never comes up: the other name
-    if (!q.connected && Date.now() - started > 8000 && !gaveUp) {
+    const now = Date.now()
+    const step = nextStep({ connected: q.connected, everUp, sinceStart: now - started, gaveUp, sinceLook: now - looked })
+    if (step === 'other') {
       gaveUp = true
+      looked = now
       tryOtherAddress(p.id)
+    } else if (step === 'again') {
+      looked = now
+      reach(p.id)
+    }
+    if (document.visibilityState === 'visible' && lookHomeNow({
+      away: q.reach === 'away', connected: q.connected, homeKnown: !!q.addresses.home,
+      homeAvoided: avoided(p.id, 'home'), sinceHomeLook: now - homeLooked,
+    })) {
+      homeLooked = now
+      lookHome(q)
     }
     window.setTimeout(sync, 500)
   }
   sync()
+}
+
+/** "I'm home: look on this Wi-Fi" (design/printers-away/): a fresh look at home even if it failed lately, a little more
+ *  patient than the automatic one. True when the printer is now reached at home. */
+export async function lookOnWifi(id: string): Promise<boolean> {
+  const p = byId(id)
+  if (!p) return false
+  if (p.reach === 'home') return true
+  if (!p.addresses.home) return false
+  avoid.get(id)?.delete('home')
+  const me = await doorMe(p.addresses.home, p.token, MANUAL_HOME_PROBE_MS)
+  if (!me?.paired) return false
+  await reach(id)
+  if (byId(id)?.reach !== 'home') await reach(id)   // a look already running chose its order before ours
+  return byId(id)?.reach === 'home'
+}
+
+/** Away and working: if the home name answers now, reach() moves the printer there (home is tried first). */
+async function lookHome(p: LivePrinter) {
+  const me = await doorMe(p.addresses.home!, p.token, HOME_PROBE_MS)
+  if (me?.paired && p.reach === 'away') reach(p.id)
 }
 
 export async function loadPrinters(): Promise<void> {

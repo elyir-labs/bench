@@ -1,6 +1,6 @@
 // Which side down (design/orientation/, then any side): every side a part can rest on, flattest first, as the slicer
 // measured them (`lying.sides`, not sliced). The printer's Print and the Bench Box's model page and plan list them
-// alike (components/slice/SidePicks.vue draws each lying that way). Pure, so tests can pin the words.
+// alike (components/slice/SideTurner.vue draws each lying that way). Pure, so tests can pin the words.
 
 import type { Lying } from './api.ts'
 
@@ -12,7 +12,9 @@ export function area(mm2: number) { return mm2 >= 100 ? `${Math.round(mm2 / 100)
 export function supportWords(mm2: number) { return mm2 < 50 ? 'hardly any supports' : `supports under about ${area(mm2)}` }
 
 /** One side to pick: normal null is the file's own bottom. */
-export interface SideOption { key: string; normal: number[] | null; title: string; tags: string[]; note: string; on: boolean }
+export interface SideOption { key: string; normal: number[] | null; title: string; tags: string[]; note: string; on: boolean
+  /** what touches (mm²) and how tall it stands, when the slicer measured it */
+  contact?: number; tall?: number }
 
 /** Every side it can rest on, `cur` the one down now (null: the file's own bottom). The file's own bottom is one of
  *  them when it touches the plate at all; otherwise it's added, so "as it was drawn" is always there. `own`: the side
@@ -28,7 +30,7 @@ export function sideOptions(lying: Lying | null | undefined, cur: number[] | nul
       title: `${Math.round(sd.size[2])} mm tall`,
       tags: [...(i === 0 ? ['flattest'] : []), ...(asFile ? ['as in the file'] : []), ...(isOwn(normal) ? [own!.tag] : [])],
       note: `Touches ${area(sd.contact)} · ${supportWords(sd.support)}`,
-      on: asFile ? cur == null : sameSide(cur, sd.normal),
+      on: asFile ? cur == null : sameSide(cur, sd.normal), contact: sd.contact, tall: sd.size[2],
     }
   })
   if (!out.some((o) => o.normal == null)) {

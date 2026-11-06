@@ -56,6 +56,7 @@
     <OneSpool v-if="one" :spool="one" :feeding="feeding" />
     <template v-else>
     <p class="sub away" v-if="door.away">Load, switch and edit spools at the printer.</p>
+    <LookHome class="under-away" />
     <p class="sub" v-if="!spools.length && !setupOffer">No filament unit found. Spools will appear here when one is connected.</p>
 
     <!-- An untagged spool was pushed into an empty slot: ask once (design/slots/, B) -->
@@ -158,6 +159,7 @@ import SpoolSheet from '@/components/materials/SpoolSheet.vue'
 import OneSpool from '@/components/materials/OneSpool.vue'
 import DrySheet from '@/components/materials/DrySheet.vue'
 import Toggle from '@/components/materials/Toggle.vue'
+import LookHome from '@/components/door/LookHome.vue'
 import type { IntentUnit } from '@/intent/types'
 
 const store = useIntentStore()
@@ -227,7 +229,7 @@ function nameOf(s: IntentSpool): string {
 .materials { flex: 1; padding: calc(8 * var(--u) + 4px) calc(28 * var(--u) + 8px) calc(16 * var(--u) + 6px); overflow: auto; }
 .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: calc(4 * var(--u) + 2px); }
 .head-right { display: flex; align-items: center; gap: calc(12 * var(--u) + 4px); }
-.look { flex: none; font-size: calc(15 * var(--u) + 4px); padding: calc(8 * var(--u) + 3px) calc(14 * var(--u) + 5px); min-height: 40px; }
+.look { flex: none; font-size: calc(15 * var(--u) + 4px); padding: calc(8 * var(--u) + 3px) calc(14 * var(--u) + 5px); min-height: max(40px, var(--tap)); }
 .notice {
   display: flex; align-items: center; gap: calc(14 * var(--u) + 6px);
   background: var(--a-tint-amber); border-radius: calc(16 * var(--u) + 6px);
@@ -249,9 +251,11 @@ function nameOf(s: IntentSpool): string {
 .title { font-size: calc(30 * var(--u) + 8px); margin: 0; }
 .sub { color: var(--a-ink-2); font-size: calc(16 * var(--u) + 5px); margin: 0; }
 .sub.away { margin: 0 0 calc(12 * var(--u) + 4px); }
+.sub.away:has(+ .under-away) { margin-bottom: 8px; }
+.under-away { margin-bottom: calc(12 * var(--u) + 4px); }
 .note { margin-top: calc(14 * var(--u) + 6px); color: var(--a-ink-3); max-width: 50ch; }
 .unit + .unit { margin-top: calc(6 * var(--u) + 2px); }
-.uh { display: flex; align-items: center; gap: calc(8 * var(--u) + 2px); min-height: 34px; margin-bottom: calc(2 * var(--u) + 2px);
+.uh { display: flex; align-items: center; gap: calc(8 * var(--u) + 2px); min-height: max(34px, var(--tap)); margin-bottom: calc(2 * var(--u) + 2px);
       font-size: calc(13 * var(--u) + 2px); color: var(--a-ink-3); white-space: nowrap; }
 .uname { font-size: calc(13 * var(--u) + 2px); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--a-ink-2); }
 .drying { color: var(--a-ink-2); overflow: hidden; text-overflow: ellipsis; }
@@ -267,7 +271,7 @@ function nameOf(s: IntentSpool): string {
   border-radius: calc(14 * var(--u) + 4px);
   padding: calc(10 * var(--u) + 2px) calc(10 * var(--u) + 2px);
   display: flex; align-items: center; gap: calc(8 * var(--u) + 2px);
-  min-height: calc(52 * var(--u) + 12px); min-width: 0;
+  min-height: max(calc(52 * var(--u) + 12px), var(--tap)); min-width: 0;
 }
 .slot:active { transform: scale(0.98); }
 .slot[disabled] { cursor: default; }
@@ -298,13 +302,13 @@ function nameOf(s: IntentSpool): string {
 /* Phones: each unit a list, one slot per row */
 @media (max-width: 599px) {
   .grid { grid-template-columns: 1fr; gap: 0; background: var(--a-surface); border-radius: 18px; overflow: hidden; box-shadow: var(--a-card-shadow); }
-  .slot { border-radius: 0; min-height: 56px; padding: 8px 14px; background: none; border-top: 1px solid var(--a-line); gap: 12px; }
+  .slot { border-radius: 0; min-height: max(56px, var(--tap)); padding: 8px 14px; background: none; border-top: 1px solid var(--a-line); gap: 12px; }
   .slot:first-child { border-top: 0; }
   .slot.inuse, .slot.asked { outline: 0; }
   .swatch { width: 32px; height: 32px; }
   .name { font-size: 16px; }
   .meta { font-size: 13px; }
-  .uh { font-size: 13px; min-height: 32px; }
+  .uh { font-size: 13px; min-height: max(32px, var(--tap)); }
   .uname { font-size: 12px; }
   .drybar { display: none; }
   .head { margin-bottom: 12px; flex-wrap: wrap; row-gap: 6px; }
@@ -312,4 +316,12 @@ function nameOf(s: IntentSpool): string {
   .setline b { font-size: 15px; }
   .setline .w span { font-size: 13px; }
 }
+
+/* The rail (design/small-screens/, B): two slots across, each big enough to read and hit */
+:root[data-fit='rail'] .materials { padding: 2px calc(20 * var(--u)) 12px; }
+:root[data-fit='rail'] .head { align-items: center; }
+:root[data-fit='rail'] .sub { white-space: nowrap; }
+:root[data-fit='rail'] .unitbtn { min-height: var(--tap); padding-inline: calc(16 * var(--u)); font-size: calc(16 * var(--u)); }
+:root[data-fit='rail'] .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:root[data-fit='rail'] .name { font-size: calc(17 * var(--u) + 3px); }
 </style>

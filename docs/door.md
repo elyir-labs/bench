@@ -89,7 +89,7 @@ the code. A code the relay refuses never costs the name: the printer says why an
 Calls over Moonraker's websocket, by method:
 
 - **Watching:** `server.connection.identify`, `server.info`, `printer.info`, `printer.intent`,
-  `printer.intent.events`, `printer.intent.check_print`, `printer.objects.list`,
+  `printer.intent.events`, `printer.intent.check_print`, `printer.intent.layers`, `printer.objects.list`,
   `printer.objects.query`, `printer.objects.subscribe`, `server.history.list`,
   `server.files.list`, `server.files.get_directory` (the Print tab's library, browse only),
   `server.files.metadata`, `server.webcams.list`, and `server.database.get_item` in the
@@ -187,6 +187,14 @@ stay in the public logs.
 The shell at `https://printers.elyir.app` holds every printer a phone is paired with, and loads each
 printer's own screens from that printer in a frame, so the screens always match the printer's version.
 It tries each printer's home name first (about 1.5 s) and falls back to its public name.
+
+- **Away isn't sticky** (design/printers-away/). On the public name the shell looks at home again every 30 s
+  and moves there when it answers. The list's "Away from home" and the bar's AWAY open a sheet with
+  "I'm home: look on this Wi-Fi". A printer screen's own button, under its "do this at the printer" lines,
+  sends `elyir-bench:look-home`. The shell looks and answers `elyir-bench:home-look {found}`; when found, the frame
+  reloads at home instead. The button shows only when `elyir-bench:token` carried `looksHome: true`, so a
+  printer inside an older shell doesn't offer it. There's no way to say "I'm home": the door decides the role by
+  the listener.
 
 - **Tokens, not cookies.** The two names are two origins, so the shell keeps the token `POST
   /door/pair` returns and sends it as `Authorization: Bearer`, as the websocket subprotocol

@@ -21,12 +21,25 @@ mkdir -p "$PROFILE"
 # Don't show "restore pages?" after a power cut
 sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/; s/"exited_cleanly":false/"exited_cleanly":true/' "$PROFILE/Default/Preferences" 2>/dev/null
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/fit.sh"
+
+# The panel's size reaches the app as ?panel_in (9 mm taps, the rail on small panels), and a tall panel draws at a
+# device scale so the phone layout fills it. Needs the panel's turn applied first, so each backend calls this after.
+fit_panel() {
+  read -r w h mw mh
+  read -r inches scale < <(panel_fit "$w" "$h" "$mw" "$mh" "${ELYIR_BENCH_PANEL_SIZE:-}")
+  if [ "$inches" != "0.0" ]; then
+    case "$URL" in *\?*) URL="$URL&panel_in=$inches" ;; *) URL="$URL?panel_in=$inches" ;; esac
+  fi
+  [ "$scale" = "1" ] || FLAGS+=(--force-device-scale-factor="$scale")
+}
+
 CHROME="$(command -v chromium-browser || command -v chromium)"
 [ -n "$CHROME" ] || { echo "chromium not installed: run elyir-bench apply"; exit 1; }
 
 # shellcheck disable=SC2054  # the commas are inside --enable-features, not separators
 FLAGS=(
-  --kiosk "$URL"
   --user-data-dir="$PROFILE"
   --enable-features=OverlayScrollbar,TouchpadOverscrollHistoryNavigation
   --disable-features=TranslateUI
@@ -65,8 +78,9 @@ if [ "$BACKEND" = "x11" ]; then
       270) xrandr --output "$xwant" --rotate right ;;
     esac
   fi
+  [ -n "${xwant:-}" ] && fit_panel < <(xrandr | panel_geometry_x "$xwant")
   size="$(xrandr | sed -n 's/.*current \([0-9]*\) x \([0-9]*\).*/\1,\2/p' | head -1)"
-  exec "$CHROME" "${FLAGS[@]}" --ozone-platform=x11 --window-position=0,0 ${size:+--window-size=$size}
+  exec "$CHROME" "${FLAGS[@]}" --kiosk "$URL" --ozone-platform=x11 --window-position=0,0 ${size:+--window-size=$size}
 fi
 
 # cage runs this script a second time as its one client: switch off any output that
@@ -96,15 +110,15 @@ if [ -n "${ELYIR_BENCH_OUTPUT:-}" ] && command -v wlr-randr >/dev/null; then
       90|180|270) wlr-randr --output "$ELYIR_BENCH_OUTPUT" --transform "$ELYIR_BENCH_ROTATION" ;;
     esac
   fi
+  fit_panel < <(wlr-randr | panel_geometry_wlr "$ELYIR_BENCH_OUTPUT")
 fi
 
 # cage shows black until its first window has a picture, which takes a cold Chromium seconds. The
 # boot eye's handoff frame goes up first (kiosk/boot/cover.py): the picture Plymouth just
 # left on the panel and the app's first frame, so the three meet without a gap.
 # After wlr-randr: until then cage spans any phantom output too, and the eye would sit off-center.
-HERE="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$HERE/boot/plymouth/cover.json" ] && command -v python3 >/dev/null; then
   python3 "$HERE/boot/cover.py" "$HERE/boot/plymouth" &
 fi
 
-exec "$CHROME" "${FLAGS[@]}" --ozone-platform=wayland
+exec "$CHROME" "${FLAGS[@]}" --kiosk "$URL" --ozone-platform=wayland

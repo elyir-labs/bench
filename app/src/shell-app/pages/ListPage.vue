@@ -13,7 +13,7 @@
       <h1 class="a-display">Printers</h1>
       <span class="tools"><YouLink /></span>
     </div>
-    <p v-if="awayAll" class="away-chip"><i aria-hidden="true"></i>Away from home</p>
+    <button v-if="awayAll" class="away-chip" @click="askAboutAway(awayIds)"><i aria-hidden="true"></i>Away from home<span class="chev" aria-hidden="true">›</span></button>
 
     <p v-if="!printers.length && !benches.length" class="empty">
       Add your first printer: on the printer's screen, go to <b>Care</b>, then <b>Phones</b>, then
@@ -155,6 +155,7 @@ import { ALERTS_FREE, AWAY_SUB, AWAY_TITLE, GETS, NOT_NOW, PITCH_STRIP_LINE, SEE
 import CloudGets from '../CloudGets.vue'
 import YouLink from '../YouLink.vue'
 import { recent, type Looked } from '../look'
+import { askAboutAway } from '../home-look'
 
 const props = defineProps<{ wide?: boolean }>()
 
@@ -164,6 +165,7 @@ const needing = computed(() => groups.value.find((g) => g.group === 'attention')
 const others = computed(() => groups.value.filter((g) => g.group !== 'attention').flatMap((g) => g.printers))
 const noCamera = reactive<Record<string, boolean>>({})
 const awayAll = computed(() => allAway(printers))
+const awayIds = computed(() => printers.filter((p) => p.reach === 'away').map((p) => p.id))
 const broken = reactive<Record<string, boolean>>({})
 
 const dismissed = ref(pitchDismissed())
@@ -209,6 +211,8 @@ h1 { font-size: 34px; margin: 6px 0 10px; }
 .away-chip { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 650;
   color: var(--a-amber-text); background: color-mix(in srgb, var(--a-amber) 18%, transparent); }
 .away-chip i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+button.away-chip { appearance: none; border: 0; font-family: inherit; cursor: pointer; }
+.away-chip .chev { font-size: 17px; line-height: 1; margin-left: -2px; }
 .empty { color: var(--a-ink-2); font-size: 17px; line-height: 1.5; margin: 8px 0 20px; }
 .empty b { color: var(--a-ink); }
 

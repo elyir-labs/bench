@@ -6,6 +6,7 @@
 // header, the websocket subprotocol, or ?access_token= on the camera and thumbnails.
 // Outside the shell there is no token and everything works by cookie, as before.
 
+import { reactive } from 'vue'
 import { BASE } from '@/base'
 
 export const SHELL_ORIGINS = ['https://printers.elyir.app', 'http://localhost:5173', 'http://localhost:5174']   // 5174: the Bench Box's screen in dev
@@ -25,6 +26,8 @@ export const benchChrome = embedded && (() => {
 })()
 
 export const auth = { token: null as string | null }
+/** looksHome: the Printers app around this frame can look for the printer on this Wi-Fi (design/printers-away/, B). */
+export const shell = reactive({ looksHome: false })
 
 /** Pages this frame may take its token from and report to: the Printers app's, and every Bench Box this
  *  printer said yes to (its door lists them at /door/frames, docs/bench.md). */
@@ -53,6 +56,7 @@ export function receiveToken(timeoutMs = 8000): Promise<string | null> {
       if (ev.source !== window.parent || !parents.has(ev.origin)) return
       if (ev.data?.type === 'elyir-bench:token' && typeof ev.data.token === 'string') {
         auth.token = ev.data.token
+        shell.looksHome = ev.data.looksHome === true
         done(ev.data.token)
       }
     }
@@ -62,6 +66,25 @@ export function receiveToken(timeoutMs = 8000): Promise<string | null> {
     ask()
     const asking = window.setInterval(ask, 500)
     const timer = window.setTimeout(() => done(null), timeoutMs)
+  })
+}
+
+/** "I'm home: look on this Wi-Fi": the Printers app looks. Found, it reloads this frame at home, so no answer comes;
+ *  not found, it says so here and shows what to check. */
+export function askShellToLookHome(timeoutMs = 20000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const done = (found: boolean) => {
+      window.removeEventListener('message', onMessage)
+      window.clearTimeout(timer)
+      resolve(found)
+    }
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== window.parent || !parents.has(ev.origin)) return
+      if (ev.data?.type === 'elyir-bench:home-look') done(ev.data.found === true)
+    }
+    window.addEventListener('message', onMessage)
+    window.parent.postMessage({ type: 'elyir-bench:look-home' }, '*')   // carries nothing secret
+    const timer = window.setTimeout(() => done(false), timeoutMs)
   })
 }
 

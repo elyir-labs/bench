@@ -127,3 +127,65 @@ export function severalFrom(parts: FromFile[]): string | null {
   for (const p of parts) n.set(p.from, (n.get(p.from) ?? 0) + 1)
   return [...n.entries()].find(([, k]) => k > 1)?.[0] ?? null
 }
+
+// ── what the slicer left out (design/thin-walls/) ──────────────────────────────────────────────────────────────
+
+/** A piece of a part the slicer has no plastic for: mm of its bottom and top as it lies on the plate, or all of it. */
+export interface LeftOut { bottom: number; top: number; all: boolean }
+
+export const LEFT_OUT_STRIPES = ['#F2DDAE', '#DDB462']
+const STRIPE = 1.5   // mm a stripe
+
+type V = [number, number, number]
+
+/** The part of a polygon on one side of z = c (below: z <= c), its winding kept. */
+function clip(poly: V[], c: number, below: boolean): V[] {
+  const inside = (v: V) => (below ? v[2] <= c : v[2] >= c)
+  const out: V[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length]
+    if (inside(p)) out.push(p)
+    if (inside(p) !== inside(q)) {
+      const t = (c - p[2]) / (q[2] - p[2])
+      out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1]), c])
+    }
+  }
+  return out
+}
+
+/** The triangles cut wherever one crosses a height in `cuts`, each piece wound as the triangle was. */
+function cutAt(tris: Float32Array, cuts: number[]): V[][] {
+  const out: V[][] = []
+  for (let i = 0; i < tris.length; i += 9) {
+    let pieces: V[][] = [[[tris[i], tris[i + 1], tris[i + 2]], [tris[i + 3], tris[i + 4], tris[i + 5]], [tris[i + 6], tris[i + 7], tris[i + 8]]]]
+    const lo = Math.min(tris[i + 2], tris[i + 5], tris[i + 8]), hi = Math.max(tris[i + 2], tris[i + 5], tris[i + 8])
+    for (const c of cuts) {
+      if (c <= lo || c >= hi) continue
+      pieces = pieces.flatMap(p => [clip(p, c, true), clip(p, c, false)].filter(q => q.length >= 3))
+    }
+    for (const p of pieces) for (let k = 1; k + 1 < p.length; k++) out.push([p[0], p[k], p[k + 1]])
+  }
+  return out
+}
+
+/** The part with what the slicer left out drawn apart: its triangles cut at those heights, the ones that print
+ *  first in `color`, then the missing piece in pale stripes. For compose() and plateRuns(). */
+export function leftOutRuns(tris: Float32Array, scale: number, gone: LeftOut, color: string): { tris: Float32Array; runs: { count: number; color: string }[] } {
+  let z0 = Infinity, z1 = -Infinity
+  for (let i = 2; i < tris.length; i += 3) { z0 = Math.min(z0, tris[i]); z1 = Math.max(z1, tris[i]) }
+  const lo = gone.all ? z1 : z0 + gone.bottom / scale, hi = gone.all ? z0 : z1 - gone.top / scale
+  const band = STRIPE / scale
+  const cuts = [lo, hi]
+  for (let z = z0 + band; z < z1; z += band) if (z < lo || z > hi) cuts.push(z)
+  const keep: V[][] = [], stripes: V[][][] = [[], []]
+  for (const t of cutAt(tris, cuts)) {
+    const cz = (t[0][2] + t[1][2] + t[2][2]) / 3
+    if (!gone.all && cz >= lo && cz <= hi) keep.push(t)
+    else stripes[Math.floor((cz - z0) / band) % 2].push(t)
+  }
+  const all = [...keep, ...stripes[0], ...stripes[1]]
+  const out = new Float32Array(all.length * 9)
+  all.forEach((t, k) => out.set([...t[0], ...t[1], ...t[2]], k * 9))
+  const runs = [{ count: keep.length, color }, { count: stripes[0].length, color: LEFT_OUT_STRIPES[0] }, { count: stripes[1].length, color: LEFT_OUT_STRIPES[1] }]
+  return { tris: out, runs: runs.filter(r => r.count) }
+}

@@ -88,7 +88,7 @@
 
     <footer class="fbar">
       <span class="t">{{ us.step === 'unit' ? 'The name is usually on the front of the unit.' : '' }}</span>
-      <template v-if="phone && us.step === 'installing' && !carry">
+      <template v-if="phone && !ownScreen && us.step === 'installing' && !carry">
         <button class="a-btn accent wide" @click="carry = true">Carry on here</button>
         <button class="linkish" @click="leftToPanel = true">Use {{ printer }}'s screen</button>
       </template>
@@ -120,6 +120,7 @@ import {
 } from '@/intent/unitSetup'
 import UnitArt from './UnitArt.vue'
 import { leftToPanel } from './handover'
+import { ownScreen } from '@/shell/useLayout'
 
 const props = defineProps<{ us: UnitSetupView; phone: boolean; printer: string }>()
 const store = useIntentStore()

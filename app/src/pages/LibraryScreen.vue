@@ -27,7 +27,10 @@
         </template>
       </div>
       <BusyBanner then="pick the next print" />
-      <p v-if="door.away" class="awayline">These are the files on {{ printer }}. Start one at the printer, where you can check the bed is clear.</p>
+      <template v-if="door.away">
+        <p class="awayline">These are the files on {{ printer }}. Start one at the printer, where you can check the bed is clear.</p>
+        <LookHome />
+      </template>
       <label v-else-if="compact" class="search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M15.5 15.5l5 5" /></svg>
         <input v-model="query" type="search" :placeholder="`Search ${total} files`" enterkeyhint="search" />
@@ -68,6 +71,7 @@ import BusyBanner from '@/components/now/BusyBanner.vue'
 import PrintCheckSheet from '@/components/print/PrintCheckSheet.vue'
 import FileTile from '@/components/print/FileTile.vue'
 import FileSheet from '@/components/print/FileSheet.vue'
+import LookHome from '@/components/door/LookHome.vue'
 import { useLibrary } from '@/print/useLibrary'
 import { chips, countLabel, emptyLine, filtered, listLine, type Filter, type Item } from '@/print/library'
 import { door } from '@/door'

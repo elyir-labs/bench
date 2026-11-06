@@ -43,7 +43,7 @@ TRIES, TRIES_WINDOW = 5, 600             # wrong codes per address before it has
 
 WATCH = {
     "server.connection.identify", "server.info", "printer.info",
-    "printer.intent", "printer.intent.events", "printer.intent.check_print",
+    "printer.intent", "printer.intent.events", "printer.intent.check_print", "printer.intent.layers",
     "printer.objects.list", "printer.objects.query", "printer.objects.subscribe",
     "server.history.list", "server.files.metadata", "server.webcams.list",
     # The Print tab's library, browsed from away (design/print-library, B): listing only. Removing a

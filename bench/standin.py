@@ -43,7 +43,8 @@ for _p in (HERE.parent / "printer", HERE / "printer"):   # the repo, or a releas
         sys.path.insert(0, str(_p))
         break
 import elyir_bench_intent as engine  # noqa: E402
-from kobra_lan import LanUpstream, RpcError  # noqa: E402
+from kobra_lan import LanUpstream, RpcError, mac_tail  # noqa: E402
+import gcode_layers  # noqa: E402
 try:
     import elyir_bench_care as care  # noqa: E402
 except ImportError:   # pragma: no cover
@@ -58,6 +59,11 @@ CARE_EVERY = 60          # ticks between looks at the printer's history and main
 RECONNECT = 5.0          # seconds before trying the printer again
 CALL_TIMEOUT = 15.0
 CAMERA_EVERY = 60.0      # seconds a look at whether its camera gives a picture is kept
+# A Kobra that stops answering keeps its last state this long (a Wi-Fi blip), then reads as off. The pages stay
+# connected: the box still answers, so the apps say "off" instead of falling back to the relay and saying "away".
+DOWN_GRACE = 15.0
+LAYERS_KEPT = 3
+OFF_PHASE = "printer_off"     # the apps show it gray, as Off (app/src/intent/power.ts printerOff)
 
 # What GoKlipper can't do, or can't be asked safely (Rinkhals refuses FIRMWARE_RESTART and RESTART: they deadlock it
 # until a power cycle). An action never offered can't be pressed; one asked for anyway is refused.
@@ -257,13 +263,20 @@ class Standin:
         self.pages: Set[Page] = set()
         self.page_ids = itertools.count(1)
         self.last_published: Optional[str] = None
+        self.down_since: Optional[float] = time.monotonic()   # not heard from yet
+        self.last_up_intent: Optional[Dict[str, Any]] = None
         self.last_filename: Optional[str] = None
+        self.layer_reads: Dict[Any, asyncio.Task] = {}
         self.care_entries: Dict[str, Any] = {}
         self.ticks = 0
         self.session: Optional[ClientSession] = None
+        # A Kobra's id ends in its MAC (anycubic.id_of). DHCP can give its old address to another Kobra; that one is
+        # refused, so the box looks for this one again instead of speaking for the wrong printer.
+        m = re.fullmatch(r"anycubic-([0-9a-f]{6})", pid)
+        self.mac = m.group(1) if m else None
         if self.lan:
             self.up = LanUpstream(host, state or Path(tempfile.mkdtemp()), self._notify, self._printer_up, self._printer_down,
-                                  mqtt=lan_mqtt, info_port=lan_port)
+                                  mqtt=lan_mqtt, info_port=lan_port, mac=self.mac)
         else:
             self.up = Upstream(self.moonraker.replace("http://", "ws://") + "/websocket",
                                self._notify, self._printer_up, self._printer_down)
@@ -287,6 +300,13 @@ class Standin:
             await self.session.close()
 
     async def _printer_up(self) -> None:
+        if not self.lan and self.mac and not await self._is_ours():
+            await self.up.ws.close()
+            return
+        if self.down_since is not None:
+            self.down_since = None
+            for page in list(self.pages):    # pages kept through the outage start again with a fresh subscription
+                await page.ws.close()
         try:
             info = await self.up.call("server.info")
         except RpcError:
@@ -300,11 +320,22 @@ class Standin:
             self.tracker.set_klippy_state(state)
             self._publish(force=True)
 
+    async def _is_ours(self) -> bool:
+        try:
+            info = await self.up.call("machine.system_info")
+        except (RpcError, asyncio.TimeoutError):
+            return False
+        macs = [mac_tail(i.get("mac_address")) for i in (((info or {}).get("system_info") or {}).get("network") or {}).values()]
+        if self.mac in macs:
+            return True
+        log.info("%s: another printer has %s now", self.id, self.host)
+        return False
+
     async def _printer_down(self) -> None:
+        self.down_since = self.down_since or time.monotonic()
         self.tracker.set_klippy_state("disconnected")
         self.upstream_subs = {}
-        for page in list(self.pages):        # as when a printer turns off: its pages lose it
-            await page.ws.close()
+        self._publish(force=True)
 
     async def _klippy_ready(self) -> None:
         try:
@@ -489,6 +520,16 @@ class Standin:
         i["printer"]["screen_trial"] = None
         i["printer"]["standin"] = "bench"     # spoken for by the Bench Box
         i["setup"] = {"open": self.setup_open()}
+        if self.down_since is None:
+            self.last_up_intent = i
+            return i
+        if time.monotonic() - self.down_since < DOWN_GRACE:
+            return self.last_up_intent or i
+        i.update(state="problem", phase=OFF_PHASE, headline=f"{self.name} is off",
+                 detail="The Bench Box can't see it on your Wi-Fi. Switch it on and it comes back here by itself.",
+                 actions=[])
+        if "raw" in i:
+            i["raw"] = ""
         return i
 
     def _publish(self, force: bool = False) -> None:
@@ -606,6 +647,20 @@ class Standin:
         else:
             raise RpcError(400, f"{self.name} can't do that from here.")
 
+    async def layers(self, filename: str) -> Dict[str, Any]:
+        """The file's layers for the Now ring, read from the box's copy (LAN mode keeps every file it sends)."""
+        path = self.up.held_file(filename) if self.lan else None
+        if path is None:
+            raise RpcError(404, "No such file.")
+        st = path.stat()
+        key = (str(path), st.st_mtime, st.st_size)
+        task = self.layer_reads.get(key)
+        if task is None or (task.done() and task.exception() is not None):
+            task = self.layer_reads[key] = asyncio.create_task(asyncio.to_thread(lambda: gcode_layers.layer_index(str(path))[0]))
+            for old in list(self.layer_reads)[:-LAYERS_KEPT]:
+                del self.layer_reads[old]
+        return await asyncio.shield(task)
+
     async def check_print(self, filename: str) -> Dict[str, Any]:
         return engine.check_print(filename, await self._metadata(filename), self.tracker.spools())
 
@@ -632,6 +687,8 @@ class Standin:
             return await self.action(str(params.get("action", "")), params.get("args", {}))
         if method == "printer.intent.check_print":
             return await self.check_print(str(params.get("filename", "")))
+        if method == "printer.intent.layers" and self.lan:
+            return await self.layers(str(params.get("filename", "")))
         if method == "printer.intent.events":
             boot = self.notifier.boot
             if params.get("boot", boot) != boot:
@@ -649,7 +706,8 @@ class Standin:
             return {"connection_id": page.n}
         if method == "printer.objects.subscribe":
             page.subs = dict(params.get("objects") or {})
-            await self._subscribe()
+            if self.up.up:
+                await self._subscribe()
             return {"eventtime": time.monotonic(), "status": pick(self.status, self._known(page.subs))}
         if method == "server.webcams.list":
             return await self.webcams(await self.up.call(method, params))
@@ -660,9 +718,6 @@ class Standin:
     async def ws(self, request: web.Request) -> web.WebSocketResponse:
         sock = web.WebSocketResponse(heartbeat=30, protocols=("elyir-bench",))
         await sock.prepare(request)
-        if not self.up.up:
-            await sock.close()
-            return sock
         page = Page(sock, next(self.page_ids))
         self.pages.add(page)
         try:

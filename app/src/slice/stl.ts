@@ -56,19 +56,11 @@ function obj(text: string): Float32Array {
 /** The model turned so the side facing `normal` lies on the plate, as the slicer turns it
  *  (down_rotation in slicer/elyir_bench_slice.py), then set down on z = 0. */
 export function layOn(tris: Float32Array, normal: number[]): Float32Array {
-  const [nx, ny, nz] = normal
-  // axis = n x (0, 0, -1), angle between n and straight down
-  let ax = -ny, ay = nx, az = 0
-  const s = Math.hypot(ax, ay, az), c = -nz
-  let r: number[][]
-  if (s < 1e-9) r = c > 0 ? [[1, 0, 0], [0, 1, 0], [0, 0, 1]] : [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
-  else {
-    ax /= s; ay /= s; az /= s
-    const k = 1 - c
-    r = [[c + ax * ax * k, ax * ay * k - az * s, ax * az * k + ay * s],
-      [ay * ax * k + az * s, c + ay * ay * k, ay * az * k - ax * s],
-      [az * ax * k - ay * s, az * ay * k + ax * s, c + az * az * k]]
-  }
+  return turnTo(tris, downRotation(normal))
+}
+
+/** The model turned by the rotation r, then set down on z = 0. */
+export function turnTo(tris: Float32Array, r: number[][]): Float32Array {
   const out = new Float32Array(tris.length)
   let zmin = Infinity
   for (let i = 0; i < tris.length; i += 3) {
@@ -78,6 +70,20 @@ export function layOn(tris: Float32Array, normal: number[]): Float32Array {
   }
   for (let i = 2; i < out.length; i += 3) out[i] -= zmin
   return out
+}
+
+/** The rotation that turns `normal` to point straight down. */
+export function downRotation(normal: number[]): number[][] {
+  const [nx, ny, nz] = normal
+  // axis = n x (0, 0, -1), angle between n and straight down
+  let ax = -ny, ay = nx, az = 0
+  const s = Math.hypot(ax, ay, az), c = -nz
+  if (s < 1e-9) return c > 0 ? [[1, 0, 0], [0, 1, 0], [0, 0, 1]] : [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
+  ax /= s; ay /= s; az /= s
+  const k = 1 - c
+  return [[c + ax * ax * k, ax * ay * k - az * s, ax * az * k + ay * s],
+    [ay * ax * k + az * s, c + ay * ay * k, ay * az * k - ax * s],
+    [az * ax * k - ay * s, az * ay * k + ax * s, c + az * az * k]]
 }
 
 /** Width, depth and height in mm. */

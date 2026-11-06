@@ -28,9 +28,10 @@
 import { computed, markRaw, reactive } from 'vue'
 import * as api from './api'
 import { asKind, fitScale, matchPrinter, pickSpool, PURPOSES, spoolChoice, SUPPORT_KINDS, type Choice, type Purpose, type SpoolLike, type SupportKind } from './plan'
-import { compose, pickFrom, plateRuns, provisional, severalFrom, type Placed } from './plate'
+import { compose, leftOutRuns, pickFrom, plateRuns, provisional, severalFrom, type Placed } from './plate'
 import { matchFileColors, sameSpool, unsorted, type FileColor, type PlateSpool, type Purge } from './colors'
 import { drawRuns, flatTop, heightColors, paintUses, toRuns, type Height } from './paint'
+import { changed, fromRuns, isOn, marksToSend, places, strayArea, turned, type Place, type Where } from './places'
 import type { SupportLines } from './supports'
 import { layOn, parseModel, sizeOf } from './stl'
 import { thumbnail } from './render'
@@ -61,6 +62,10 @@ export interface Part {
   spool: number                              // which of the plate's colors (design/multi-color/)
   paint: Uint8Array | null                   // a color per triangle: 0 its own, k the plate's color k - 1; markRaw
   paintV: number                             // counts paint changes, so the plate is sliced again
+  marks: Uint8Array | null                   // where supports go (design/supports-where/, A): per triangle 0 Orca, 1 here,
+                                             // 2 not here; markRaw
+  marksV: number                             // counts mark changes, so the plate is sliced again
+  marksFile: boolean                         // the marks came in the 3MF
   project: { colors: FileColor[]; runs: { count: number; filament: number }[] } | null   // a 3MF with its own colors
 }
 
@@ -79,6 +84,7 @@ export const session = reactive({
   printer: null as api.PrinterOption | null,
   purpose: 'everyday' as Purpose,
   supports: 'normal' as SupportKind,
+  where: 'needed' as Where,                  // Orca decides, corrected by the marks | only where marked (design/supports-where/)
   usual: 'normal' as SupportKind,            // the person's usual kind on this printer
   settings: {} as Record<string, string>,    // changed for this print
   kept: {} as Partial<Record<Purpose, Record<string, string>>>,   // changed for good, per purpose
@@ -200,7 +206,8 @@ export const tooBig = (p: Part | null | undefined) => !!p && p.scale < 1
 
 /** What's on the plate, as the slicer sees it: a change to any of it makes the slices stale. */
 export function plateKey(parts: Part[] = session.parts, skipCopiesOf = -1): string {
-  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool, p.paintV]))
+  return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool, p.paintV,
+    p.marksV]).concat(session.where === 'only' ? ['only'] : []))
 }
 
 /** The plate's colors, the first being session.spool. */
@@ -256,6 +263,19 @@ export const runs = computed(() => {
   const at = session.placed?.for === key ? session.placed.at : provisional(parts, session.printer?.bed)
   return markRaw(plateRuns(parts, at))
 })
+/** The plate with what the slicer left out in pale stripes (design/thin-walls/), or null when it left nothing out. */
+export function leftOutPlate(short: api.SliceJob['short']): { tris: Float32Array; runs: { end: number; color: string }[] } | null {
+  if (!short?.length) return null
+  const parts = session.parts.map((p, i) => {
+    const gone = short.find(s => s.part === i)
+    if (!gone || !p.tris) return { tris: p.tris, copies: p.copies, scale: p.scale, runs: partRuns(p) }
+    const l = leftOutRuns(p.tris, p.scale, gone, colorOf(p.spool))
+    return { tris: l.tris, copies: p.copies, scale: p.scale, runs: l.runs }
+  })
+  const key = plateKey()
+  const at = session.placed?.for === key ? session.placed.at : provisional(parts, session.printer?.bed)
+  return { tris: markRaw(compose(parts, at)), runs: markRaw(plateRuns(parts, at)) }
+}
 
 
 /** The side that goes down: the outward normal, or null for the file's own bottom. */
@@ -287,8 +307,10 @@ function newPart(name: string, up: api.UploadedModel, tris: Float32Array | null,
     key: nextKey++, name, model: up.model, trisFile: tris ? markRaw(tris) : null, tris: null,
     sizeFile: up.size ?? (tris ? sizeOf(tris) : null), size: null, lying: up.lying ?? null,
     lay: 'file', layAuto: true, down: null, brim: 'auto', scale: 1, fit: 1, copies: Math.max(1, up.copies ?? 1), fill: null,
-    spool: 0, project: null, paint: null, paintV: 0,
+    spool: 0, project: null, paint: null, paintV: 0, marks: null, marksV: 0, marksFile: false,
   }) as Part
+  const marks = tris ? fromRuns(up.support_marks, tris.length / 9) : null
+  if (marks) { p.marks = markRaw(marks); p.marksFile = true }
   applyLay(p, p.lying?.flat_better ? 'flat' : 'file')
   return p
 }
@@ -352,7 +374,7 @@ export async function begin(files: File[], spools: SpoolLike[], printerName: str
   dropUnfinished()
   Object.assign(session, {
     stage: 'reading', error: '', errorInfo: null, parts: [], files: files.map(f => f.name), adding: 0, purpose: 'everyday', spool: null, spoolAuto: true,
-    more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
+    more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false, where: 'needed',
     jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null, sent: null, sentLater: [], settings: {}, pending: false,
     left: [], picking: null, undo: null,
   })
@@ -426,7 +448,14 @@ export async function addFiles(files: File[]): Promise<void> {
 function partRequest(p: Part): api.PartRequest {
   return { model: p.model!, copies: p.copies, scale: p.scale, lay: p.lay, ...(p.lay === 'side' && p.down ? { down: p.down } : {}),
     ...(p.brim !== 'auto' ? { brim: p.brim } : {}), ...(multi.value && !p.project ? { spool: p.spool } : {}),
-    ...(multi.value && p.paint && paintable(p) ? paintRequest(p.paint) : {}) }
+    ...(multi.value && p.paint && paintable(p) ? paintRequest(p.paint) : {}), ...marksRequest(p) }
+}
+
+function marksRequest(p: Part): { support_marks?: number[] } {
+  if (!markable(p) || session.supports === 'off') return {}
+  const out = marksToSend(p.marks, placesOf(p), session.where, p.tris!.length / 9)
+  const runs = out ? toRuns(out) : null
+  return runs ? { support_marks: runs } : {}
 }
 
 function paintRequest(states: Uint8Array): { paint?: number[] } {
@@ -454,7 +483,7 @@ function request(purpose: Purpose, png: string | null, parts: Part[], supports: 
     printer: session.printer!.id, purpose, supports,
     kept: session.kept[purpose] ?? {}, settings: session.settings,
     material: sp.material, color: sp.color, slot: sp.slot == null ? null : sp.slot + 1,
-    thumbnail: png, ...spoolsRequest(),
+    thumbnail: png, ...spoolsRequest(), ...(session.where === 'only' && supports !== 'off' ? { supports_where: 'only' as const } : {}),
   }
 }
 
@@ -595,6 +624,51 @@ export function setPaint(i: number, states: Uint8Array, palette: PlateSpool[]) {
 }
 
 export function dismissOffer() { session.offerOff = true }
+
+// ── where supports go (design/supports-where/, A "tap the places") ──
+/** Only STL parts: the triangles marked here are the ones the slicer gets, as with paint. */
+export const markable = paintable
+const placesCache = new WeakMap<Float32Array, { scale: number; angle: number; at: Place[] }>()
+/** How far from flat a face may lean and still get supports on this printer: Anycubic's profiles say 40, not 30. */
+export const supportAngle = () => session.printer?.support_angle ?? 30
+/** The places on a part that point down as it prints now (turned, at its size). */
+export function placesOf(p: Part): Place[] {
+  if (!p.tris) return []
+  const c = placesCache.get(p.tris), angle = supportAngle()
+  if (c && c.scale === p.scale && c.angle === angle) return c.at
+  const at = places(p.tris, p.scale, angle)
+  placesCache.set(p.tris, { scale: p.scale, angle, at })
+  return at
+}
+/** How the plate's places differ from Orca's choice, and marks left where nothing points down (a part turned since). */
+export function marksSummary(parts: Part[] = session.parts): { added: number; off: number; on: number; stray: boolean; found: number } {
+  let added = 0, off = 0, on = 0, stray = false, found = 0
+  for (const p of parts) {
+    if (!markable(p)) continue
+    const at = placesOf(p)
+    const c = changed(at, p.marks)
+    added += c.added; off += c.off; found += at.length
+    on += at.filter(q => isOn(q, p.marks)).length
+    if (strayArea(p.tris!, p.marks, at, p.scale) >= 4) stray = true
+  }
+  return { added, off, on, stray, found }
+}
+/** Part i's marks from the Where screen, and the plate's "where". */
+export function setMarks(i: number, marks: Uint8Array, where: Where) {
+  const p = session.parts[i]
+  if (!p || !markable(p)) return
+  p.marks = marks.some(v => v) ? markRaw(marks) : null
+  p.marksV++
+  p.marksFile = false
+  session.where = where
+  void sliceAll()
+}
+/** One place switched on or off, from outside the Where screen. */
+export function turnPlace(i: number, place: Place, on: boolean) {
+  const p = session.parts[i]
+  if (!p?.tris) return
+  setMarks(i, turned(place, p.marks, p.tris.length / 9, on), session.where)
+}
 
 /** Undo a change at a height: the heights and colors as they were. */
 export function restoreHeights(heights: Height[], more: PlateSpool[]) {
@@ -839,6 +913,6 @@ export function reset() {
   Object.assign(session, {
     stage: 'idle', error: '', parts: [], files: [], adding: 0, jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null,
     left: [], picking: null, undo: null, pending: false,
-    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
+    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false, where: 'needed',
   })
 }

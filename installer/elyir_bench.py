@@ -876,7 +876,7 @@ def default_settings(facts: dict) -> dict:
         panel = "klipperscreen"   # leave the screen as it is until the person switches it
     else:
         panel = "elyir-bench" if facts["panel_output"] else "none"
-    return {"printer_name": name, "panel": panel, "panel_output": "auto", "panel_rotation": "auto",
+    return {"printer_name": name, "panel": panel, "panel_output": "auto", "panel_rotation": "auto", "panel_size": "auto",
             "panel_backend": "auto", "panel_render": "auto", "boot_screen": "elyir-bench", "port": "8088",
             "remote": "relay", "slicer": "auto", "slice_for_others": "off", "role": "auto", "start_macro": "off",
             "network_wait": "off", "filament_units": "auto",
@@ -909,6 +909,8 @@ def save_settings(facts: dict, s: dict) -> Path:
         f"panel_output: {s['panel_output']}\n"
         "# auto, or 0 | 90 | 180 | 270 for a panel mounted sideways or upside down\n"
         f"panel_rotation: {s.get('panel_rotation', 'auto')}\n"
+        "# auto, or the screen's diagonal in inches, such as 3.5, for one that doesn't report its size\n"
+        f"panel_size: {s.get('panel_size', 'auto')}\n"
         "# auto, cage (Wayland) or x11 (for systems without cage, such as Debian 11)\n"
         f"panel_backend: {s.get('panel_backend', 'auto')}\n"
         "# auto, gpu or cpu (cpu: no motion or blur, for boards whose GPU the OS can't drive)\n"
@@ -1224,8 +1226,15 @@ def panel_rotation(facts: dict, s: dict) -> int:
     return facts.get("panel_rotation", 0) if r == "auto" else int(r)
 
 
+def panel_size(s: dict) -> str:
+    """The diagonal in inches, or nothing for the kiosk to ask the display. Anything else isn't a size."""
+    r = str(s.get("panel_size", "auto")).strip()
+    return r if re.fullmatch(r"\d+(\.\d+)?", r) and float(r) > 0 else ""
+
+
 def render_kiosk_unit(facts: dict, s: dict, output: str) -> str:
     rotation = panel_rotation(facts, s)
+    size = panel_size(s)
     render = kiosk_render(facts, s)
     if kiosk_backend(facts, s) == "x11":
         # X's wrapper (allowed_users=anybody) picks a free VT and takes the display, like KlipperScreen
@@ -1247,6 +1256,7 @@ Environment=ELYIR_BENCH_BACKEND=x11
 # The connector the touchscreen is on; every other output is switched off
 Environment=ELYIR_BENCH_OUTPUT={output}
 Environment=ELYIR_BENCH_ROTATION={rotation}
+Environment=ELYIR_BENCH_PANEL_SIZE={size}
 # gpu, or cpu where this OS can't drive the board's GPU (panel_render in the settings)
 Environment=ELYIR_BENCH_RENDER={render}
 ExecStart={CURRENT}/kiosk/start.sh
@@ -1288,6 +1298,7 @@ Environment=ELYIR_BENCH_URL=http://localhost:{s['port']}/
 # The connector the touchscreen is on; every other output is switched off
 Environment=ELYIR_BENCH_OUTPUT={output}
 Environment=ELYIR_BENCH_ROTATION={rotation}
+Environment=ELYIR_BENCH_PANEL_SIZE={size}
 # gpu, or cpu where this OS can't drive the board's GPU (panel_render in the settings)
 Environment=ELYIR_BENCH_RENDER={render}
 {plymouth}# cage waits forever unless its VT is the one in front ('+' runs this as root)
@@ -1592,7 +1603,8 @@ class Legacy(Step):
 
 class Component(Step):
     name = "moonraker component"
-    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py"]
+    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py",
+             "gcode_layers.py"]
     def check(self, c):
         comp = Path(c.facts["moonraker"]["components"])
         wrong = [f for f in self.FILES

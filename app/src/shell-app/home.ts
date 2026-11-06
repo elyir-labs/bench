@@ -1,12 +1,13 @@
 // The Printers list, grouped by what a person has to do (design/printers-home/, A, picked 15 October 2026).
 import type { LivePrinter } from './printers.ts'
 import { statusOf } from './status.ts'
+import { printerOff } from '../intent/power.ts'
 
 export type Group = 'attention' | 'busy' | 'done' | 'ready' | 'off'
 export const ORDER: Group[] = ['attention', 'busy', 'done', 'ready', 'off']
 
 export function groupOf(p: LivePrinter): Group {
-  if ((p.reach !== 'home' && p.reach !== 'away') || !p.connected || !p.intent) return 'off'
+  if ((p.reach !== 'home' && p.reach !== 'away') || !p.connected || !p.intent || printerOff(p.intent)) return 'off'
   switch (p.intent.state) {
     case 'problem': case 'needs_you': return 'attention'
     case 'printing': case 'preparing': return 'busy'
@@ -33,6 +34,7 @@ export function groupLabel(group: Group, printers: LivePrinter[], homeOnly = fal
     case 'done': return printers.length > 1 ? 'Done · lift them off' : 'Done · lift it off'
     case 'ready': return 'Ready'
     case 'off':
+      if (printers.every((p) => printerOff(p.intent))) return 'Off'
       if (printers.every((p) => p.reach === 'checking' || (p.reach !== 'offline' && p.reach !== 'unpaired'))) return 'Looking…'
       return homeOnly ? 'At home only' : 'Out of reach'
   }

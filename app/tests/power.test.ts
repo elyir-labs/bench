@@ -2,7 +2,7 @@
 // says once the printer is gone. The boards there are the spec.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { coolMinutes, goneView, nextMemo, sheetWords, RESTART_GRACE_S, UNREACHABLE_AFTER_S } from '../src/intent/power.ts'
+import { coolMinutes, goneView, nextMemo, printerOff, sheetWords, RESTART_GRACE_S, UNREACHABLE_AFTER_S } from '../src/intent/power.ts'
 
 const NOW = new Date('2026-10-05T18:24:00').getTime() / 1000
 
@@ -52,4 +52,11 @@ test('the memo: kept from the moment it goes, cleared once the printer is back',
   assert.equal(nextMemo(m, going, 'Workshop', NOW + 2), m)
   assert.equal(nextMemo(m, { allowed: true, why: null, cool_to: 50, kind: null }, 'Workshop', NOW + 60), null)
   assert.equal(nextMemo(null, { ...going, going: false }, 'Workshop', NOW), null)
+})
+
+test('a printer the Bench Box says is off reads as off while the box still answers', () => {
+  const said = { headline: 'Kobra 3 is off', detail: "The Bench Box can't see it on your Wi-Fi. Switch it on and it comes back here by itself." }
+  assert.deepEqual(goneView({ connected: true, name: 'Kobra 3', memo: null, lostFor: 0, now: NOW, off: said }), { kind: 'off', ...said })
+  assert.ok(printerOff({ state: 'problem', phase: 'printer_off' }))
+  assert.ok(!printerOff({ state: 'problem', phase: 'offline' }))
 })

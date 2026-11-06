@@ -85,9 +85,17 @@
         </div>
         <p v-if="howError" class="bad">{{ howError }}</p>
 
+        <!-- a piece the slicer left out, too thin for the nozzle (design/thin-walls/): Print on waits until it's said -->
+        <div v-if="short.length" class="shortcard">
+          <b v-for="x in short" :key="x.part"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4zM12 10v4.5M12 17.5v.01" /></svg>{{ shortTitle(x) }}</b>
+          <span>{{ short.every(x => x.all) ? "It's" : 'That piece is' }} thinner than the nozzle can lay, so the slicer left it out.</span>
+          <button v-if="shortWait" class="a-btn ghost" @click="ready!.ok = true">Print anyway</button>
+          <span v-else>It prints without it.</span>
+        </div>
+
         <!-- the buttons stay above the tab bar while the page scrolls under them -->
         <div class="acts">
-          <button class="a-btn accent go" :disabled="!picked" @click="go">{{ !picked ? 'No printer can take it' : picked.now ? `Print on ${picked.name}` : `Send to ${picked.name}` }}</button>
+          <button class="a-btn accent go" :disabled="!picked || shortWait" @click="go">{{ !picked ? 'No printer can take it' : picked.now ? `Print on ${picked.name}` : `Send to ${picked.name}` }}</button>
           <button class="a-btn ghost go" :disabled="!fil || queuing" @click="queueIt">Add to the queue</button>
           <span v-if="picked" class="muted line" :class="{ bad: ready?.state === 'failed' }">{{ underLine }}</span>
         </div>
@@ -144,8 +152,8 @@
 import { computed, markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { PrintCheck } from '@/intent/types'
-import type { SliceOptions } from '@/slice/api'
-import type { Purpose, SupportKind } from '@/slice/plan'
+import type { Short, SliceOptions } from '@/slice/api'
+import { shortTitle, type Purpose, type SupportKind } from '@/slice/plan'
 import { bench, clientOf, loadQueue } from '../live'
 import { choices, filamentFor, firstPick, lastLine, printOn, shelfCard, timeable, type MyFilament, type Printable } from '../shelf'
 import { addToQueue, cancelSetup, getLayer, getLayers, getMine, getPrintable, getSetup, getShelf, getSides, getSliceOptions, getUsual, partTris, removeModel, sendSetup, setHow, setSide, startSetup, type ShelfItem } from '../shelf-api'
@@ -262,6 +270,8 @@ interface Setup {
   seconds: number | null; grams: number | null; values: Record<string, string> | null; error: string
   asked?: boolean     // Print on (or Send to) was tapped: a busy printer gets the file once it's set up
   sent?: string
+  short?: Short[]     // what the slicer left out
+  ok?: boolean        // Print anyway, for that
 }
 const setup = ref<Setup | null>(null)
 const sheet = ref(false)
@@ -273,6 +283,8 @@ let soon = 0
 const key = computed(() => (picked.value && item.value && sidesRead.value ? setupKey(picked.value.id, copies.value, fil.value?.key ?? '', how.value, sidesKey(sides.value)) : ''))
 // the setup for what's on screen now, or null while the next one waits for the taps to stop
 const ready = computed(() => (setup.value && setup.value.key === key.value ? setup.value : null))
+const short = computed(() => (ready.value?.state === 'done' ? ready.value.short ?? [] : []))
+const shortWait = computed(() => short.value.length > 0 && !ready.value?.ok)
 watch(key, () => {
   window.clearTimeout(soon)
   soon = window.setTimeout(() => void prepare(), 700)
@@ -350,8 +362,8 @@ function follow() {
       const j = await getSetup(s.job)
       if (!setup.value || setup.value.job !== s.job) return
       setup.value = { ...setup.value, state: j.state === 'cancelled' ? 'failed' : j.state, seconds: j.estimate?.seconds ?? null,
-                      grams: j.estimate?.grams ?? null, values: j.values ?? null, error: j.error ?? '' }
-      if (setup.value.state === 'done' && !setup.value.now && setup.value.asked) void sendOnly()
+                      grams: j.estimate?.grams ?? null, values: j.values ?? null, error: j.error ?? '', short: j.short ?? [] }
+      if (setup.value.state === 'done' && !setup.value.now && setup.value.asked && !setup.value.short?.length) void sendOnly()
     } catch { /* the box's slicer restarting: look again */ }
     follow()
   }, 700)
@@ -683,6 +695,11 @@ onBeforeUnmount(() => {
 .tile:focus-visible, .row:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
 .right > .bad { margin: 0; font-size: 16px; }
 /* the buttons and their line stay in view above the tab bar (they were cut off under it on the box's own screen) */
+.shortcard { background: color-mix(in srgb, var(--a-amber) 30%, var(--a-surface)); border-radius: 16px; padding: 13px 15px; display: grid; gap: 4px; margin-top: 10px; }
+.shortcard b { display: flex; gap: 8px; align-items: flex-start; font-size: 17px; }
+.shortcard b svg { width: 19px; height: 19px; flex: none; margin-top: 2px; }
+.shortcard span { font-size: 14.5px; color: var(--a-ink-2); line-height: 1.35; }
+.shortcard .a-btn { justify-self: start; height: 40px; padding: 0 14px; font-size: 15px; margin-top: 6px; }
 .acts { display: flex; align-items: center; gap: 14px; margin-top: 4px; position: sticky; bottom: 0; z-index: 2;
         padding: 16px 0 14px; background: linear-gradient(transparent, var(--a-bg) 14px); }
 .go { width: auto; flex: none; white-space: nowrap; height: 58px; font-size: 21px; padding: 0 28px; }

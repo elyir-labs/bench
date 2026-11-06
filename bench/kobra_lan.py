@@ -104,7 +104,12 @@ async def handshake(session: ClientSession, host: str, port: int = INFO_PORT) ->
     return {"host": m.group(1) if m else host, "port": int(m.group(2)) if m else 9883, "username": data["username"],
             "password": data["password"], "device": data["deviceId"], "model": str(info.get("modelId")),
             "cert": data.get("devicecrt", ""), "key": data.get("devicepk", ""), "upload": info.get("fileUploadurl"),
-            "name": info.get("modelName"), "version": info.get("version")}
+            "name": info.get("modelName"), "version": info.get("version"), "usn": info.get("usn")}
+
+
+def mac_tail(mac: Optional[str]) -> str:
+    """The last six hex digits of a MAC ("uuid:fdm:A4-E8-8D-80-3E-82" → "803e82"), as a Kobra's id ends."""
+    return re.sub(r"[^0-9a-f]", "", (mac or "").lower())[-6:]
 
 
 # ── what it reports, as Klipper would say it ──
@@ -275,8 +280,10 @@ class LanUpstream:
     """standin.Upstream's part, over LAN mode. mqtt: a paho-like client factory (tests give a fake)."""
 
     def __init__(self, host: str, folder: Path, on_notify: Callable[[str, list], Any], on_up: Callable[[], Any],
-                 on_down: Callable[[], Any], mqtt=None, poll: float = POLL, info_port: int = INFO_PORT):
+                 on_down: Callable[[], Any], mqtt=None, poll: float = POLL, info_port: int = INFO_PORT,
+                 mac: Optional[str] = None):
         self.host, self.folder, self.on_notify, self.on_up, self.on_down = host, folder, on_notify, on_up, on_down
+        self.mac = mac                    # the one printer this is: another Kobra given its old address is refused
         self.info_port = info_port
         self.mqtt_factory, self.poll = mqtt, poll
         self.store = Store(folder / "lan.json")
@@ -333,6 +340,8 @@ class LanUpstream:
 
     async def _connect(self) -> None:
         self.login = await handshake(self.session, self.host, self.info_port)
+        if self.mac and mac_tail(self.login.get("usn")) != self.mac:
+            raise RpcError(409, f"another printer ({self.login.get('name')}) has this address now")
         c = self._client()
         c.username_pw_set(self.login["username"], self.login["password"])
         if not self.mqtt_factory:
@@ -564,6 +573,15 @@ class LanUpstream:
         for old in sorted(self.held.iterdir(), key=lambda f: f.stat().st_mtime)[:-KEEP]:
             old.unlink()
         return name
+
+    def held_file(self, filename: str) -> Optional[Path]:
+        """The box's copy of a file it sent, by the name it was sent as or the one the printer gave it."""
+        path = self.held / Path(filename).name
+        if path.is_file():
+            return path
+        md5 = (self.store.d["files"].get(filename) or {}).get("md5")
+        return next((self.held / n for n, m in self.store.d["files"].items()
+                     if md5 and m.get("md5") == md5 and (self.held / n).is_file()), None)
 
     async def _send(self, name: str) -> str:
         """Upload a kept file as Anycubic's slicer does. Its name on the printer."""

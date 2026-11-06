@@ -17,6 +17,7 @@ export interface PrinterOption {
   bed: number[] | null
   base: string
   supports?: 'normal' | 'tree'   // the kind its process preset prints: where "your usual" starts
+  support_angle?: number         // how far from flat a face may lean and still get supports (design/supports-where/)
   unit?: boolean                 // it has a filament unit: colors come from slots (design/multi-color/)
   purges?: Purge[]               // what Between colors offers, its usual first
   change_seconds?: number        // one color change by the unit
@@ -35,7 +36,8 @@ export interface Lying {
   size_flat: number[] | null
   sides?: Side[]
 }
-export interface UploadedModel { model: string; name: string; size: number[] | null; lying?: Lying | null; copies?: number }
+export interface UploadedModel { model: string; name: string; size: number[] | null; lying?: Lying | null; copies?: number
+  support_marks?: number[] }   // a 3MF part's own marks, [mark, count, ...] (design/supports-where/)
 /** A 3MF answers with the parts in it, each already its own model (with how many times it's placed). */
 export interface UploadedSet { models: UploadedModel[]; from: string }
 /** A 3MF that brings its own colors stays whole (design/multi-color/): its colors, and pieces to draw it with. */
@@ -51,6 +53,10 @@ export interface FitAnswer { part: number; fits: number; others_fit: boolean; at
 export type BrimAsk = 'auto' | 'none' | 'ears' | 'all'
 export interface BrimPick { kind: BrimAsk; why: string; by: 'auto' | 'you' | 'kept'; rule?: 'none' | 'ears' | 'all' }
 export interface SlicedPart { model: string; copies: number; scale: number; lay: string; brim?: BrimAsk; brim_pick?: BrimPick; spool?: number }
+/** A part the slicer left a piece of out, too thin for the nozzle (design/thin-walls/): mm of its bottom and top as it
+ *  lies on the plate, or all of it. */
+export interface Short { part: number; name: string; bottom: number; top: number; all: boolean }
+
 export interface SliceJob {
   id: string
   state: 'queued' | 'slicing' | 'done' | 'failed' | 'cancelled'
@@ -63,6 +69,7 @@ export interface SliceJob {
   placed?: { part: number; x: number; y: number; turn: number }[]
   parts?: SlicedPart[]
   warnings?: string[]
+  short?: Short[]
   values?: Record<string, string>   // every editable setting as it prints (design/edit-settings/, C)
   before?: Record<string, string>   // the same before the person's own changes: what the purpose gives
   error?: string
@@ -79,12 +86,14 @@ export interface PartRequest {
   brim?: BrimAsk                   // auto (left out): the rule picks; none | ears | all: the person did
   spool?: number                   // which of the plate's colors, when it has several
   paint?: number[]                 // painted (design/paint-and-height/, A): [color, count, ...] over its triangles
+  support_marks?: number[]         // where supports go (design/supports-where/, A): [mark, count, ...]; 1 here, 2 not here
 }
 export interface SliceRequest {
   parts: PartRequest[]
   printer: string
   purpose: string
   supports: string
+  supports_where?: 'needed' | 'only'   // only: Orca supports just the marked places (design/supports-where/)
   material: string
   color?: string | null
   slot?: number | null      // 1-based, as people count

@@ -43,7 +43,7 @@ import { useIntentStore } from '@/intent/store'
 import { BEADS, BEAD_VIEWBOX, SHEET_TITLE, beadShapes, canPress, sheetSub } from '@/intent/firstLayer'
 import CameraView from '@/components/camera/CameraView.vue'
 import { useCameras } from '@/camera/useCameras'
-import { layout } from '@/shell/useLayout'
+import { layout, ownScreen } from '@/shell/useLayout'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -56,7 +56,7 @@ const panel = computed(() => layout.value === 'panel')
 // Off the panel the camera sits on top: it's how you see the line from across the room.
 const { cameras } = useCameras()
 const camFailed = ref(false)
-const camera = computed(() => (!panel.value && !camFailed.value ? cameras.value[0] ?? null : null))
+const camera = computed(() => (!ownScreen.value && !camFailed.value ? cameras.value[0] ?? null : null))
 
 // After layer 3 there's nothing left to adjust: the sheet goes with the button.
 watch(adjust, (a) => { if (!a && props.open) emit('close') })

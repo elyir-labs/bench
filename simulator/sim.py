@@ -25,6 +25,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -42,6 +43,7 @@ import setup_card  # noqa: E402
 import bring  # noqa: E402
 import slicer_profile  # noqa: E402
 import unit_skins  # noqa: E402
+import gcode_layers  # noqa: E402
 sys.path.insert(0, os.path.join(HERE, "..", "installer"))
 try:
     import elyir_bench as installer  # noqa: E402  (the unit setup's catalog and board scan: one table, the installer's)
@@ -1348,6 +1350,11 @@ def rpc_error(req_id: Any, code: int, message: str) -> str:
 # Bring it over's are bring.ACTIONS (docs/bring-it-over.md)
 SETUP_ACTIONS = ("setup_dismiss", "setup_name", "screen_try", "screen_keep", "screen_back", "include_add", "include_remove")
 
+# Uploaded G-code, kept on disk for the ring on Now to read its layers (printer.intent.layers); the pretend files
+# in FILES have no G-code, so they keep their thumbnail
+UPLOADED: Dict[str, str] = {}
+UPLOAD_DIR = os.path.join(tempfile.gettempdir(), f"elyir-bench-sim-{os.getpid()}")
+
 # Moonraker's key/value database, in memory: the app keeps small settings here (e.g. panel theme)
 DATABASE: Dict[str, Dict[str, Any]] = {}
 
@@ -1402,6 +1409,11 @@ async def dispatch(sim: SimPrinter, method: str, params: Any) -> Any:
         return await sim.run_action(params.get("action", ""), params.get("args") or {})
     if method == "server.history.totals":
         return {"job_totals": sim.totals(), "auxiliary_totals": []}
+    if method == "printer.intent.layers":
+        path = UPLOADED.get(params.get("filename", ""))
+        if not path:
+            raise web.HTTPNotFound(text="No such file.")
+        return gcode_layers.layer_index(path)[0]   # no thread: the web demo runs this in Pyodide, which has none
     if method == "printer.intent.check_print":
         fn = params.get("filename", "")
         sim.tracker.note_check(fn, FILES.get(fn))   # what the component does when a file has colour changes
@@ -1716,6 +1728,10 @@ async def upload(request: web.Request) -> web.Response:
         sim.broadcast("notify_filelist_changed", [{"action": "create_file", "item": {"path": path, "root": "config"}}])
         return web.json_response({"item": {"path": path, "root": "config"}, "action": "create_file"}, status=201)
     text = f.file.read().decode(errors="replace")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    UPLOADED[name] = os.path.join(UPLOAD_DIR, name)
+    with open(UPLOADED[name], "w") as out:
+        out.write(text)
     FILES[name] = gcode_metadata(name, text)
     OBJECTS[name] = exclude_objects(text)
     FILES[name]["modified"] = time.time()

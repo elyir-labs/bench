@@ -50,3 +50,9 @@ test('the tiles get smaller as the bench grows; the ones that are off fold into 
   assert.equal(offLine(ordered(BENCH)), '2 off · Kobra 3 #2 · Monoprice SLA')
   assert.equal(offLine(ordered([BENCH[0]])), null)
 })
+
+test('a Kobra its stand-in says is off is in the off line, not a red Stopped tile', () => {
+  const off = P('Kobra 3 #2', intent('problem', { phase: 'printer_off', headline: 'Kobra 3 #2 is off' }))
+  assert.equal(tileOf(off).tone, 'off')
+  assert.equal(offLine(ordered([off, BENCH[0]])), '1 off · Kobra 3 #2')
+})

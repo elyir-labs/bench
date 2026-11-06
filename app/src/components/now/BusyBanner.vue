@@ -11,6 +11,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useIntentStore } from '@/intent/store'
+import { printerOff } from '@/intent/power'
 import { layout } from '@/shell/useLayout'
 
 // `then`: what becomes possible again, e.g. "pick the next print"
@@ -24,7 +25,7 @@ const text = computed(() => {
     case 'preparing': case 'printing': return `${job ? `Printing ${job}` : 'Printing'}. ${cap(props.then)} when it's done.`
     case 'needs_you': return 'The printer needs you first.'
     case 'finished': return `Take the finished print off the bed, then ${props.then}.`
-    case 'problem': return 'Sort out the problem first.'
+    case 'problem': return printerOff(store.intent) ? 'Switch the printer on first.' : 'Sort out the problem first.'
     default: return ''
   }
 })

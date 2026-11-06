@@ -27,7 +27,7 @@
 
       <span class="end">
         <router-link v-if="!wide && other" :to="`/p/${other.id}`" class="chip need" :class="'tone-' + statusOf(other).tone"><i></i>{{ other.name }}</router-link>
-        <span v-else-if="p?.reach === 'away'" class="via">away</span>
+        <button v-else-if="p?.reach === 'away'" class="via" @click="askAboutAway([p.id])">away<span aria-hidden="true">›</span></button>
         <template v-if="wide">
           <router-link to="/look" class="pill">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" /><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" /></svg>
@@ -74,6 +74,7 @@ import { chipsOf, grouped } from '../home'
 import PrinterFrame from '../PrinterFrame.vue'
 import YouLink from '../YouLink.vue'
 import RemoveSheet from '../RemoveSheet.vue'
+import { askAboutAway } from '../home-look'
 
 defineProps<{ wide?: boolean; kept: string[] }>()
 const emit = defineEmits<{ drop: [id: string] }>()
@@ -133,7 +134,9 @@ const other = computed(() => grouped(printers).find((g) => g.group === 'attentio
 .switch .pname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .switch svg { width: 18px; height: 18px; color: var(--a-ink-3); flex: none; }
 .end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
-.via { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--a-ink-3); }
+.via { appearance: none; border: 0; font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px 0 12px; border-radius: 99px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--a-amber-text); background: color-mix(in srgb, var(--a-amber) 18%, transparent); }
+.via span { font-size: 16px; line-height: 1; }
 .pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 99px; text-decoration: none;
   background: var(--a-surface); box-shadow: var(--a-card-shadow); color: var(--a-ink-2); font-weight: 650; font-size: 15px; white-space: nowrap; }
 .pill svg { width: 18px; height: 18px; color: var(--a-accent-text); }

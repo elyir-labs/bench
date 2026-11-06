@@ -263,7 +263,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useIntentStore } from '@/intent/store'
 import { authHeaders, embedded } from '@/auth'
 import { door } from '@/door'
-import { layout } from '@/shell/useLayout'
+import { layout, ownScreen } from '@/shell/useLayout'
 import AdvancedDoor from '@/shell/AdvancedDoor.vue'
 import PanelKeyboard from '@/setup/PanelKeyboard.vue'
 import { bring, bringAct, finishBring, refreshBring, seen } from '@/intent/useBring'
@@ -348,7 +348,7 @@ async function pickRow(r: SourceRow): Promise<void> {
   if (r.press === 'address') { typed.value = ''; bring.here = { at: 'address' }; return }
   if (r.press === 'cloud') { bring.here = { at: 'cloud', id: r.id }; code.value = ''; await act('bring_cloud_ask', { id: r.id }); return }
   if (r.press === 'file') {
-    if (layout.value !== 'panel') picker.value?.click()   // the panel has nothing to pick from
+    if (!ownScreen.value) picker.value?.click()   // the panel has nothing to pick from
     else bring.here = { at: 'file' }
     return
   }

@@ -228,6 +228,49 @@ def test_every_part_is_labelled_so_it_can_be_skipped(profiles, printer):
     assert sl.display_name("p0c7__buildplate_bushing_open.stl") == "Buildplate bushing open"
 
 
+def test_thin_walls_print_whatever_the_profile_says(profiles, printer):
+    """Classic walls (every Anycubic profile) left a tube's 0.4 mm foot out of a Kobra print without a word."""
+    p = sl.plan(printer, sl.Request(material="ASA"), sl.Presets(profiles))
+    assert p.process["wall_generator"] == "arachne"
+    assert {c.key: c for c in p.changes}["wall_generator"].as_dict()["label"] == "Thin walls"
+
+
+SHORT_GCODE = """M83
+;Z:0.2
+; printing object p0c0__tube_top.stl id:0 copy 0
+G1 X1 Y1 E0.5
+; stop printing object p0c0__tube_top.stl id:0 copy 0
+; printing object p1c0__pin.stl id:1 copy 0
+G1 X5 Y5 E0.5
+; stop printing object p1c0__pin.stl id:1 copy 0
+;Z:0.4
+; printing object p0c1__tube_top.stl id:2 copy 1
+G1 X1 Y2 E0.5
+G1 X1 Y3 E-0.8
+; stop printing object p0c1__tube_top.stl id:2 copy 1
+;Z:150.6
+; printing object p0c0__tube_top.stl id:0 copy 0
+G1 X2 Y2 E0.5
+; stop printing object p0c0__tube_top.stl id:0 copy 0
+;Z:151
+; printing object p0c0__tube_top.stl id:0 copy 0
+G1 X2 Y3 E-0.8
+G1 X2 Y4
+; stop printing object p0c0__tube_top.stl id:0 copy 0
+"""
+
+
+def test_a_piece_the_slicer_left_out_is_found(tmp_path):
+    g = tmp_path / "plate_1.gcode"
+    g.write_text(SHORT_GCODE)
+    printed = sl.printed_heights(str(g))
+    assert printed == {0: (0.2, 150.6), 1: (0.2, 0.2)}                 # pulling back and travel aren't plastic
+    short = sl.short_parts(printed, {0: 159.7, 1: 0.6, 2: 10}, 0.2)
+    assert short == [{"part": 0, "bottom": 0.0, "top": 9.1, "all": False},
+                     {"part": 2, "bottom": 0.0, "top": 10, "all": True}]   # a pin 0.4 short is only layer rounding
+    assert sl.short_parts({0: (9.2, 20)}, {0: 20}, 0.2) == [{"part": 0, "bottom": 9.0, "top": 0.0, "all": False}]
+
+
 def test_plate_is_a_printer_fact(profiles, printer):
     """Orca defaults to Cool Plate, where this ASA says 0 °C: the bed would never heat."""
     plan = sl.plan(printer, sl.Request(material="ASA"), sl.Presets(profiles))
@@ -601,7 +644,7 @@ async def test_options_and_cors(rig):
     d = await r.json()
     assert [p["id"] for p in d["purposes"]] == ["draft", "everyday", "display", "strong"]
     assert d["printers"][0] == {"id": "workshop", "name": "Workshop", "materials": ["ASA"], "slots": 8,
-                                "bed": [350.0, 350.0, 0.0], "base": "0.20mm Standard @Voron", "supports": "normal",
+                                "bed": [350.0, 350.0, 0.0], "base": "0.20mm Standard @Voron", "supports": "normal", "support_angle": 30.0,
                                 "unit": True, "purges": ["tower"], "change_seconds": 105}
     assert d["supports"] == ["auto", "normal", "tree", "off"]
     walls = next(e for e in d["editable"] if e["key"] == "wall_loops")
@@ -735,6 +778,29 @@ def test_a_plate_on_its_edge_is_laid_flat_and_a_flat_one_is_left(tmp_path):
 def test_a_cube_is_never_turned(tmp_path):
     (tmp_path / "c.stl").write_text(_cube_stl(20))
     assert not sl.lying(str(tmp_path / "c.stl"))["flat_better"]
+
+
+def tube_stl(path: Path, height: float, outer: float = 17, inner: float = 14, fn: int = 72) -> None:
+    """A round tube standing on one end, fine enough that each wall facet outweighs an end ring."""
+    import math
+    ring = lambda r, z: [(r * math.cos(2 * math.pi * i / fn), r * math.sin(2 * math.pi * i / fn), z) for i in range(fn)]
+    o0, o1, i0, i1 = ring(outer, 0), ring(outer, height), ring(inner, 0), ring(inner, height)
+    tris = []
+    for k in range(fn):
+        j = (k + 1) % fn
+        tris += [[o0[k], o0[j], o1[j]], [o0[k], o1[j], o1[k]]]       # outside, facing out
+        tris += [[i0[k], i1[j], i0[j]], [i0[k], i1[k], i1[j]]]       # bore, facing in
+        tris += [[o1[k], o1[j], i1[j]], [o1[k], i1[j], i1[k]]]       # top end
+        tris += [[o0[k], i0[j], o0[j]], [o0[k], i0[k], i0[j]]]       # bottom end
+    sl.write_stl(str(path), tris)
+
+
+def test_a_tube_offers_either_end_and_its_side_once(tmp_path):
+    tube_stl(tmp_path / "tube.stl", 200)
+    every = sl.lying(str(tmp_path / "tube.stl"))["sides"]
+    ends = [s for s in every if abs(s["normal"][2]) > 0.98]
+    assert sorted(s["normal"][2] for s in ends) == [-1, 1]
+    assert len(every) == 3 and all(s["size"][2] == 200 for s in ends)
 
 
 async def test_lay_flat_turns_before_slicing_and_says_so(rig, tmp_path):

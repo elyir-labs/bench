@@ -106,13 +106,24 @@
       </div>
       <template v-else>
         <!-- The plate where Orca put things; drag to look round it -->
-        <ModelPicture v-if="!stage" :tris="plate" :color="colour" :runs="runs" :alt="label" plate :bed="printer?.bed" turnable class="pic">
+        <ModelPicture v-if="!stage" :tris="shortPic?.tris ?? plate" :color="colour" :runs="shortPic?.runs ?? runs" :alt="label" plate :bed="printer?.bed" turnable class="pic">
           <span v-if="picNote" class="picnote">{{ picNote }}</span>
           <button v-if="only && paintable(only)" type="button" class="pictool" @click="openPaint(0)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 3.5l-9 9M9 13.5c-2 0-3.5 1.5-3.5 3.5 0 1.2-.8 2.3-2 2.5 1 .7 2.3 1 3.5 1 2.8 0 5-2.2 5-5z" /></svg>Paint
           </button>
         </ModelPicture>
         <h1 class="a-display head">{{ headline }}</h1>
+
+        <!-- A piece the slicer left out, too thin for the nozzle (design/thin-walls/): Print waits until it's said -->
+        <div v-if="short.length" class="warn short">
+          <b v-for="s in short" :key="s.part"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4zM12 10v4.5M12 17.5v.01" /></svg>{{ shortTitle(s) }}</b>
+          <span>{{ short.every(s => s.all) ? "It's" : 'That piece is' }} thinner than the nozzle can lay, so the slicer left it out.</span>
+          <div v-if="shortWait" class="acts">
+            <button class="a-btn ghost" @click="shortOk = job?.id ?? null">Print anyway</button>
+            <button class="a-btn ghost" @click="back">Back to Print</button>
+          </div>
+          <span v-else>It prints without it.</span>
+        </div>
 
         <!-- What doesn't fit goes on a second plate, said out loud -->
         <div v-if="spill.rest" class="warn">
@@ -257,9 +268,9 @@
                 <span>{{ waiting ? waiting.note : footNote }}</span>
               </div>
               <button v-if="!door.away" class="a-btn accent" :disabled="!canPrint" @click="open = 'bed'">Print</button>
-              <button v-else class="a-btn accent" :disabled="job?.state !== 'done' || working" @click="sendOnly">Send to {{ printerName }}</button>
+              <button v-else class="a-btn accent" :disabled="job?.state !== 'done' || working || shortWait" @click="sendOnly">Send to {{ printerName }}</button>
             </div>
-            <button v-if="!door.away" class="send" :disabled="job?.state !== 'done' || working" @click="sendOnly">Send to {{ printerName }} for later</button>
+            <button v-if="!door.away" class="send" :disabled="job?.state !== 'done' || working || shortWait" @click="sendOnly">Send to {{ printerName }} for later</button>
             <p v-if="actionError" class="bad small">{{ actionError }}</p>
           </template>
         </div>
@@ -306,14 +317,14 @@
             <span class="v a-num">{{ pct(editing.scale) }}<small>{{ sizeAt(editing, editing.scale) }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
           </button>
-          <button v-if="sideOptions.length > 1" class="row" @click="open = 'lay'">
+          <button v-if="editing.trisFile" class="row" @click="open = 'lay'">
             <span class="k">Lying</span>
             <span class="v">{{ lyingWords(editing).value }}<small>{{ lyingWords(editing).note }}</small></span>
             <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
           </button>
           <div v-else class="row still">
             <span class="k">Lying</span>
-            <span class="v">As in the file<small>{{ editing.lying ? 'It only sits one way' : 'Printed the way the file has it' }}</small></span>
+            <span class="v">As in the file<small>Printed the way the file has it</small></span>
           </div>
           <!-- design/brim/, A: picked for it from how it stands, said, changed from pictures of its own footprint -->
           <button class="row" @click="open = 'brim'">
@@ -331,6 +342,9 @@
                  :heights="session.heights" :choices="trayChoices" :layer="layer" :start="heightStart" :at="heightAt"
                  :start-spool="heightAt >= 0 ? session.heights[heightAt]?.spool : undefined"
                  @close="heightOpen = false" @add="addHeight" @remove="dropHeight" />
+    <WhereScreen :open="whereAt >= 0" :name="whereOn ? partName(whereOn) : ''" :tris="whereOn?.tris ?? null" :scale="whereOn?.scale ?? 1"
+                 :color="whereOn ? partColor(whereOn) : colour" :marks="whereOn?.marks ?? null" :where="session.where" :angle="supportAngle()"
+                 @close="whereAt = -1" @done="whereDone" />
     <PaintScreen :open="paintAt >= 0" :name="painting ? partName(painting) : ''" :tris="painting?.tris ?? null" :paint="painting?.paint ?? null"
                  :own="painting?.spool ?? 0" :choices="trayChoices" @close="paintAt = -1" @done="paintDone" />
 
@@ -348,8 +362,9 @@
 
     <!-- Which side down: every side it can rest on, as it would lie (design/orientation/, then any side).
          Each is measured, not sliced: slicing every side would take minutes on the printer's Pi. -->
-    <SliceSheet :open="open === 'lay' && !!editing" title="Which side down?" sub="Tap the side that goes on the plate. It's sliced once you pick." @close="open = null">
-      <SidePicks v-if="editing?.trisFile" :options="sideOptions" :file="editing.trisFile" :color="colour" :time="job?.state === 'done' ? time : ''" @pick="pickSide" />
+    <SliceSheet :open="open === 'lay' && !!editing" title="Which side down?" sub="Tap the side that goes on the plate, or turn it." @close="open = null">
+      <SideTurner v-if="editing?.trisFile" :options="sideOptions" :file="editing.trisFile" :color="colour" :cur="downOf(editing)"
+                  :time="job?.state === 'done' ? time : ''" @pick="pickSide" />
     </SliceSheet>
 
     <!-- Brim (design/brim/, A, picked 4 October 2026): the part's own first layer with each brim, drawn from its
@@ -449,6 +464,15 @@
           <span class="tm a-num"><b>{{ kindTime(k) }}</b><span>{{ kindGrams(k) }}</span></span>
         </button>
       </div>
+      <template v-if="session.supports !== 'off' && markParts.length">
+        <p class="where-lbl">Where they go</p>
+        <div class="opts">
+          <button v-for="{ p, i } in markParts" :key="p.key" class="opt where-row" @click="openWhere(i)">
+            <span class="t"><b>{{ markParts.length > 1 ? partName(p) : session.where === 'only' ? 'Only where I say' : 'Wherever it\'s needed' }}</b><span>{{ whereLine(p) }}</span></span>
+            <span class="go">Choose</span>
+          </button>
+        </div>
+      </template>
     </SliceSheet>
 
     <!-- One setting (design/edit-settings/, C): its control, its real price, and whether it's kept -->
@@ -507,7 +531,7 @@ import { layout } from '@/shell/useLayout'
 import { humanDuration, prettyName } from '@/intent/jobs'
 import { COLORS } from '@/components/materials/palette'
 import ModelPicture from '@/components/slice/ModelPicture.vue'
-import SidePicks from '@/components/slice/SidePicks.vue'
+import SideTurner from '@/components/slice/SideTurner.vue'
 import { area, sameSide, sideOptions as sideOptions_ } from '@/slice/sides'
 import SliceSheet from '@/components/slice/SliceSheet.vue'
 import FootprintPicture from '@/components/slice/FootprintPicture.vue'
@@ -516,20 +540,23 @@ import BedClearSheet from '@/components/slice/BedClearSheet.vue'
 import PrintCheckSheet from '@/components/print/PrintCheckSheet.vue'
 import HeightSheet from '@/components/slice/HeightSheet.vue'
 import PaintScreen from '@/components/slice/PaintScreen.vue'
+import WhereScreen from '@/components/slice/WhereScreen.vue'
 import { mm, paintUses } from '@/slice/paint'
+import { isOn as isOnPlace } from '@/slice/places'
 import { needsSheet } from '@/intent/colour'
 import {
   session, current, only, plate, tooBig, addFiles, askFill, downOf, followSpools, onlyWhatFits, removePart, reset, send,
   setCopies, setPurpose, setScale, setSide, setSpool, setSupports, askKinds, kindJob, loadLines, makeUsual, plateOf, type Part,
   setSetting, setScope, resetPurpose, wanted, isKept, undoRemove, openPicker, pick, closePicker, setBrim, retry,
   multi, plateSpools, runs, partRuns, unsortedColors, setPartSpool, setPlateSpool, setPurge, setOneAfterOther, oneColor,
-  paintable, canHeight, spotted, setHeight, removeHeight, restoreHeights, setPaint, dismissOffer,
+  paintable, canHeight, spotted, setHeight, removeHeight, restoreHeights, setPaint, dismissOffer, leftOutPlate,
+  markable, marksSummary, placesOf, setMarks, supportAngle,
 } from '@/slice/session'
 import { colorWord, costLine, footColors, PURGE_WORDS, spoolLine, tooMany, tooManyWords, type PlateSpool, type Purge } from '@/slice/colors'
 import { offTitle, readyNote, waitWords } from '@/slice/elsewhere'
 import { footprint, roomFor, type BrimKind } from '@/slice/footprint'
 import { fileCounts } from '@/slice/plate'
-import { BRIM_WORDS, editRows, editSummary, editWords, steps, groupChanges, KIND_WORDS, modelName, overflow, plateHeadline, plateLabel, SUPPORT_KINDS, supportsWords, tooBigWords, usableSpools, type Purpose, type SupportKind } from '@/slice/plan'
+import { BRIM_WORDS, editRows, editSummary, editWords, steps, groupChanges, KIND_WORDS, modelName, overflow, plateHeadline, plateLabel, shortTitle, SUPPORT_KINDS, supportsWords, tooBigWords, usableSpools, whereWords, type Purpose, type SupportKind } from '@/slice/plan'
 
 const store = useIntentStore()
 // The plate as the stage on a wide pane (design/ready-wide/): measured, so a narrow window or a tablet's
@@ -581,6 +608,7 @@ const headline = computed(() => {
   if (!session.parts.length) return 'Reading it…'
   const state = job.value?.state === 'done' ? 'done' : job.value?.state === 'failed' ? 'failed' : 'working'
   const o = only.value
+  if (shortWait.value) return short.value.length > 1 ? "Some of it won't print." : `${short.value[0].name} won't print ${short.value[0].all ? 'at all' : 'whole'}.`
   return plateHeadline(session.parts, state, plates.value.length || 1, o && o.copies === 1 && tooBig(o) ? pct(o.scale) : undefined)
 })
 const picNote = computed(() => {
@@ -592,7 +620,20 @@ const total = (j: { estimate?: { seconds: number | null; changes_seconds?: numbe
   j?.estimate?.seconds == null ? null : j.estimate.seconds + (j.estimate.changes_seconds ?? 0)
 const time = computed(() => humanDuration(total(job.value)))
 const grams = computed(() => (job.value?.estimate?.grams != null ? `${Math.round(job.value.estimate.grams)} g` : ''))
-const sup = computed(() => supportsWords(session.supports, job.value?.state === 'done' ? job.value.supports_added : null, session.usual))
+const sup = computed(() => supportsWords(session.supports, job.value?.state === 'done' ? job.value.supports_added : null, session.usual,
+  session.supports === 'off' ? null : whereWords(session.where, marksSummary(), marksSummary().on)))
+// where they go (design/supports-where/, A): a row per part on the Supports sheet, opening the part seen from below
+const markParts = computed(() => session.parts.map((p, i) => ({ p, i })).filter(({ p }) => markable(p)).slice(0, 6))
+function whereLine(p: Part) {
+  const at = placesOf(p), on = at.filter(q => isOnPlace(q, p.marks)).length
+  if (!at.length) return 'Nothing points down far enough to need supports'
+  const s = marksSummary([p]), said = whereWords(session.where, s, s.on)
+  return said ?? `${at.length} ${at.length === 1 ? 'place points' : 'places point'} down · Orca supports ${on}`
+}
+const whereAt = ref(-1)
+const whereOn = computed(() => session.parts[whereAt.value] ?? null)
+function openWhere(i: number) { open.value = null; whereAt.value = i }
+function whereDone(marks: Uint8Array, w: 'needed' | 'only') { setMarks(whereAt.value, marks, w); whereAt.value = -1 }
 // the Supports sheet: each kind's plate as its slice placed it, its supports, time and weight
 const kindPlates = computed(() => Object.fromEntries(SUPPORT_KINDS.map(k => [k, plateOf(kindJob(k))])) as Record<SupportKind, Float32Array>)
 function kindLines(k: SupportKind) { const j = kindJob(k); return j?.id ? session.lines[j.id] ?? null : null }
@@ -621,7 +662,12 @@ async function pickSheet(name: string) {
   await store.act('first_layer_sheet', { name })
 }
 // Whether the spool is really loaded is the printer's own check (check_print), after the bed question.
-const canPrint = computed(() => job.value?.state === 'done' && ready.value && !working.value && !unsortedColors.value.length)
+const canPrint = computed(() => job.value?.state === 'done' && ready.value && !working.value && !unsortedColors.value.length && !shortWait.value)
+const short = computed(() => (job.value?.state === 'done' ? job.value.short ?? [] : []))
+const shortOk = ref<string | null>(null)                       // the slice whose missing piece was accepted
+const shortWait = computed(() => short.value.length > 0 && shortOk.value !== job.value?.id)
+const shortPic = computed(() => leftOutPlate(short.value))
+
 const copies = computed(() => session.parts.reduce((a, p) => a + p.copies, 0))
 // sliced on another machine (design/slicing-elsewhere/, A): who, and what a slice waits behind there
 const slicer = computed(() => session.options?.slicer ?? null)
@@ -906,12 +952,12 @@ function lyingWords(p: Part): { value: string; note: string } {
   const l = p.lying
   if (p.lay === 'side') {
     const s = l?.sides?.find(x => sameSide(x.normal, p.down))
-    return { value: 'The side you picked', note: s ? `Touches ${area(s.contact)} · ${Math.round(s.size[2])} mm tall` : '' }
+    return { value: 'The side you picked', note: s ? `Touches ${area(s.contact)} · ${Math.round(s.size[2])} mm tall` : 'Turned your way' }
   }
   if (p.lay === 'flat') return { value: 'Its flattest side', note: p.layAuto ? `Laid flat for you: it touched ${area(l?.down_area ?? 0)} in the file` : `Touches ${area(l?.flat_area ?? 0)}` }
   return { value: 'As in the file', note: l?.flat_better ? 'A flatter side faces away' : 'It sits on its flattest side' }
 }
-// Every side it can rest on, flattest first, each drawn lying that way (slice/sides.ts, SidePicks)
+// Every side it can rest on, flattest first, each drawn lying that way (slice/sides.ts, SideTurner)
 const sideOptions = computed(() => {
   const p = editing.value
   return p?.trisFile ? sideOptions_(p.lying, downOf(p)) : []
@@ -1048,6 +1094,8 @@ const ICONS: Record<string, string> = {
 
 /* sheets */
 .opts { display: grid; gap: 9px; }
+.where-lbl { margin: 18px 2px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-ink-3); }
+.opt.where-row .go { color: var(--a-accent-text); font-weight: 600; font-size: 15px; flex: none; }
 .opt { appearance: none; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 14px; background: var(--a-surface); border-radius: 18px; padding: 13px 14px; border: 2px solid transparent; box-shadow: var(--a-card-shadow); }
 .opt.on { border-color: var(--a-accent); }
 .opt .ic { width: 42px; height: 42px; border-radius: 13px; background: var(--a-surface-2); display: grid; place-items: center; flex: none; color: var(--a-ink-2); }
@@ -1168,6 +1216,10 @@ const ICONS: Record<string, string> = {
 .addl.busy { color: var(--a-ink-3); cursor: default; }
 .addl:focus-within { outline: 2px solid var(--a-accent); outline-offset: -2px; }
 .file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.warn.short b { display: flex; gap: 8px; align-items: flex-start; }
+.warn.short b svg { width: 19px; height: 19px; flex: none; margin-top: 2px; }
+.warn.short .acts { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.warn.short .a-btn { height: 40px; padding: 0 14px; font-size: 15px; }
 .warn .inline { appearance: none; border: 0; background: none; font: inherit; cursor: pointer; padding: 4px 0 0; justify-self: start; font-size: 14.5px; font-weight: 600; color: var(--a-ink); text-decoration: underline; text-underline-offset: 3px; }
 .dock { position: sticky; bottom: -24px; margin: 0 -20px -24px; padding: 14px 20px 18px; background: linear-gradient(transparent, var(--a-bg) 18px); z-index: 2; }
 .dock .foot { margin-top: 0; }

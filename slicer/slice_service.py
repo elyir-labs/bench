@@ -7,7 +7,8 @@ See docs/slicer.md.
   POST /slice/models             multipart: model. Kept for a day; answers its id, size in mm, and how it
                                  lies: whether its biggest flat side is down, and its size laid flat. A 3MF
                                  answers {models: [...]}: each part in it, with how many times it's placed
-  POST /slice                    JSON {parts: [{model, copies, scale, lay, brim}], printer, purpose, supports, material,
+  POST /slice                    JSON {parts: [{model, copies, scale, lay, brim, paint, support_marks}], printer, purpose,
+                                 supports, supports_where (needed | only), material,
                                  color, slot, thumbnail (PNG, base64)}; {model, scale, lay} for one part; or
                                  multipart with the model itself
   POST /slice/fit                JSON {printer, parts, part}: how many of that part fit on one plate with the rest;
@@ -89,6 +90,7 @@ class Job:
         self.before: Dict[str, str] = {}                  # the same before the person's own changes
         self.brims: List[Dict[str, str]] = []             # each part's brim as sliced: sl.brim_pick (design/brim/)
         self.colors: Optional[Dict[str, Any]] = None      # several colors: each spool's use and every change (design/multi-color/)
+        self.short: List[Dict[str, Any]] = []             # parts the slicer left a piece of out: sl.short_parts
 
     @property
     def model(self) -> str:
@@ -105,10 +107,12 @@ class Job:
                                        for s in r.spools],
                             "purge": r.purge or sl.default_purge(self.printer)} if r.spools else {}),
                         **({"one_after_other": True} if r.one_after_other else {}),
-                        **({"heights": [{"z": h.z, "spool": h.spool} for h in r.heights]} if r.heights else {})},
+                        **({"heights": [{"z": h.z, "spool": h.spool} for h in r.heights]} if r.heights else {}),
+                        **({"supports_where": r.supports_where} if r.supports_where != "needed" else {})},
             "parts": [{"model": p.name, "copies": p.copies, "scale": p.scale, "lay": p.lay, "brim": p.brim, "spool": p.spool,
                        **({"down": p.down} if p.lay == "side" else {}),
                        **({"painted": sorted(p.painted())} if p.paint else {}),
+                       **({"marked": p.marked()} if p.support_marks else {}),
                        **({"brim_pick": self.brims[i]} if i < len(self.brims) else {})} for i, p in enumerate(self.parts)],
             "changes": [c.as_dict() for c in self.changes],
         }
@@ -128,6 +132,7 @@ class Job:
             out["sent"] = self.sent
             out["sent_later"] = self.sent_later
             out["warnings"] = self.warnings
+            out["short"] = self.short
             out["plates"] = [{"plate": i + 1, "seconds": p["result"].get("seconds"),
                               "time": sl.short_duration(p["result"]["seconds"]) if p["result"].get("seconds") else None,
                               "grams": p["result"].get("grams"), "counts": p["counts"],
@@ -157,6 +162,7 @@ class Service:
         self.presets: Dict[str, sl.Presets] = {}               # each printer's own: two printers' "PLA" may differ
         self.beds: Dict[str, Optional[List[float]]] = {}
         self.kinds: Dict[str, str] = {}                        # each printer's usual support, from its process preset
+        self.angles: Dict[str, float] = {}                     # and how far a face may lean and still get it
         # this machine's own printer, whose printer.json is read from its folder ("home") and read again when it
         # changes: the printer learns it from its own files (docs/slicer-profile.md), with no apply in between
         self.homes: Dict[str, Dict[str, Any]] = {}
@@ -187,11 +193,12 @@ class Service:
         except sl.PresetError:
             bed = None
         try:
-            kind = sl.support_kind(presets.resolve(printer.process))
+            process = presets.resolve(printer.process)
+            kind, angle = sl.support_kind(process), sl.support_angle(process)
         except sl.PresetError:
-            kind = "normal"
+            kind, angle = "normal", 30.0
         self.printers[printer.id], self.presets[printer.id] = printer, presets
-        self.beds[printer.id], self.kinds[printer.id] = bed, kind
+        self.beds[printer.id], self.kinds[printer.id], self.angles[printer.id] = bed, kind, angle
 
     # ── this machine's own printer: printer.json in its folder, read again when it changes ──
 
@@ -219,7 +226,7 @@ class Service:
             printer = sl.Printer.from_config(pid, {**pj, "name": d.get("name", pid), "moonraker": d.get("moonraker"),
                                                    "presets": [str(folder / "presets")]})
         except FileNotFoundError:
-            for kept in (self.printers, self.presets, self.beds, self.kinds):
+            for kept in (self.printers, self.presets, self.beds, self.kinds, self.angles):
                 kept.pop(pid, None)
             log.info("printer %s: no printer.json in %s yet", pid, folder)
             return
@@ -462,7 +469,7 @@ class Service:
         return web.json_response({"left": pid})
 
     def _entry(self, pid: str) -> Dict[str, Any]:
-        entry = sl.options({pid: self.printers[pid]}, self.beds, self.kinds)["printers"][0]
+        entry = sl.options({pid: self.printers[pid]}, self.beds, self.kinds, self.angles)["printers"][0]
         return {**entry, "joined": pid in self.joined, "moonraker": self.printers[pid].moonraker}
 
     # ── who is asking ──
@@ -544,8 +551,8 @@ class Service:
         here = {"name": self.name, "here": caller in self.own if caller else None}
         if caller:
             await self._refresh(caller)
-            return web.json_response({**sl.options({caller: self.printers[caller]}, self.beds, self.kinds), "slicer": here})
-        return web.json_response({**sl.options(self.printers, self.beds, self.kinds), "slicer": here})
+            return web.json_response({**sl.options({caller: self.printers[caller]}, self.beds, self.kinds, self.angles), "slicer": here})
+        return web.json_response({**sl.options(self.printers, self.beds, self.kinds, self.angles), "slicer": here})
 
     async def _save_model(self, part, folder: Path) -> Path:
         name = os.path.basename(unquote(part.filename))     # some clients percent-encode "[a]_part.stl"
@@ -621,7 +628,9 @@ class Service:
             _own(sub, caller)
             self.models[mid] = {"id": mid, "name": stl.name, "path": str(stl), "size": size, "lying": lying,
                                 "created": time.time(), "printer": caller}
-            out.append({"model": mid, "name": stl.name, "size": size, "lying": lying, "copies": p["copies"]})
+            marks = sl.runs_of(p.get("marks") or [])
+            out.append({"model": mid, "name": stl.name, "size": size, "lying": lying, "copies": p["copies"],
+                        **({"support_marks": marks} if marks else {})})
         return web.json_response({"models": out, "from": path.name}, status=201)
 
     async def post_slice(self, request: web.Request) -> web.Response:
@@ -663,6 +672,7 @@ class Service:
                 purge=str(fields["purge"]) if fields.get("purge") else None,
                 one_after_other=fields.get("one_after_other") is True,
                 heights=_heights(fields.get("heights")),
+                supports_where=str(fields.get("supports_where") or "needed"),
             )
             problems = req.problems(printer) + [q for p in parts for q in p.problems()] + self._plate_problems(req, parts)
             if problems:
@@ -1062,14 +1072,16 @@ class Service:
         # each model's color (a 3MF that brings its own keeps them)
         ids = [p.spool + 1 for p in job.parts for _ in range(p.copies)] if n > 1 and not job.parts[0].project else None
         painted = {i: part.paint for i, part in enumerate(job.parts) if part.paint}
-        if mixed or job.req.heights or painted:
-            # arranged first, then the 3MF edited (each part's brim, the changes at a height, the paint) and sliced as it is
+        marked = {i: part.support_marks for i, part in enumerate(job.parts) if part.support_marks and job.req.supports != "off"}
+        if mixed or job.req.heights or painted or marked:
+            # arranged first, then the 3MF edited (each part's brim, the changes at a height, the paint, where supports
+            # go) and sliced as it is
             code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient, slice_it=False,
                                                          filaments=n, ids=ids))
             if code == 0 and os.path.exists(three_mf) and job.state != "cancelled":
                 own = os.path.join(job.workdir, "own.3mf")
                 try:
-                    await asyncio.to_thread(_own_plates, job, p, three_mf, own, orca_brims if mixed else None, files, painted)
+                    await asyncio.to_thread(_own_plates, job, p, three_mf, own, orca_brims if mixed else None, files, painted, marked)
                 except ValueError as e:
                     job.state, job.error = "failed", str(e)
                     return
@@ -1092,6 +1104,12 @@ class Service:
             os.remove(three_mf)                          # it carries every plate's G-code again
         n = len(job.parts)
         purge = job.req.purge or sl.default_purge(job.printer)
+        # what each part should come to on the plate, so a piece the slicer leaves out is caught (Orca turning it
+        # or a 3MF's own objects: not known here)
+        tall = None if job.req.orient or job.parts[0].project else \
+            {i: size[2] for i, f in enumerate(files) if (size := await asyncio.to_thread(sl.model_size, f))}
+        first_layer = float(p.process.get("initial_layer_print_height") or 0.2)
+        raft = int(p.process.get("raft_layers") or 0) > 0
         for k, g in enumerate(gcodes, 1):
             placed = where.get(k, [])
             how = sl.counts(placed, n) if where else ([p.copies for p in job.parts] if k == 1 else [0] * n)
@@ -1116,6 +1134,14 @@ class Service:
             if extra and not await asyncio.to_thread(sl.after_start, str(g), extra):
                 job.warnings.append(f"{job.printer.name}'s start G-code has no PRINT_START, so the test's own commands weren't added.")
             result = await asyncio.to_thread(sl.read_result, str(g))
+            if tall:
+                printed = await asyncio.to_thread(sl.printed_heights, str(g))
+                if raft:
+                    printed = {i: (first_layer, hi) for i, (lo, hi) in printed.items()}
+                for sh in sl.short_parts(printed, {i: h for i, h in tall.items() if how[i]}, first_layer):
+                    if sh["part"] not in {x["part"] for x in job.short}:
+                        job.short.append({**sh, "name": sl.display_name(job.parts[sh["part"]].name)})
+                        job.warnings.append(_short_words(job.short[-1]))
             first = next((i for i, c in enumerate(how) if c), 0)
             name = sl.gcode_name(job.parts[first].name, job.req.material, result["seconds"], how, k, len(gcodes))
             dest = os.path.join(job.workdir, name)
@@ -1210,7 +1236,8 @@ def _part(path: str, g: Dict[str, Any], lying: Optional[Dict[str, Any]] = None) 
     return sl.Part(model=path, copies=int(g.get("copies", 1)), scale=float(g.get("scale") or 1),
                    lay=str(g.get("lay") or "file"), lying=lying, down=down if isinstance(down, list) else None,
                    brim=str(g.get("brim") or "auto"), spool=int(g.get("spool") or 0),
-                   paint=g.get("paint") if g.get("paint") not in (None, []) else None)
+                   paint=g.get("paint") if g.get("paint") not in (None, []) else None,
+                   support_marks=g.get("support_marks") if g.get("support_marks") not in (None, []) else None)
 
 
 def _heights(given: Any) -> List[sl.Height]:
@@ -1251,7 +1278,7 @@ def _spools(given: Any) -> List[sl.Spool]:
 
 
 def _own_plates(job: "Job", p: sl.Plan, src: str, dst: str, brims: Optional[List[str]], files: List[str],
-                painted: Dict[int, List[int]]) -> None:
+                painted: Dict[int, List[int]], marked: Optional[Dict[int, List[int]]] = None) -> None:
     heights = None
     if job.req.heights:
         first = float(_one(p.process.get("initial_layer_print_height"), 0.2))
@@ -1263,10 +1290,21 @@ def _own_plates(job: "Job", p: sl.Plan, src: str, dst: str, brims: Optional[List
         if len(states) != len(tris):
             raise ValueError(f"{job.parts[i].name} has {len(tris)} triangles, but its paint is for {len(states)}: paint it again")
         paint[i] = (tris, states)
-    done = sl.edit_plates(src, dst, brims=brims, heights=heights, paint=paint)
+    marks = {}
+    for i, runs in (marked or {}).items():
+        tris, states = sl._triangles(files[i]), sl.unrun(runs)
+        if len(states) != len(tris):
+            raise ValueError(f"{job.parts[i].name} has {len(tris)} triangles, but where its supports go is marked for "
+                             f"{len(states)}: mark it again")
+        marks[i] = (tris, states)
+    done, done_marks = sl.edit_plates(src, dst, brims=brims, heights=heights, paint=paint, marks=marks)
     for i in painted:
         if not done.get(i):
             job.warnings.append(f"{job.parts[i].name}'s paint couldn't be matched to the model as sliced, so it prints in one color.")
+    for i in marks:
+        if not done_marks.get(i):
+            job.warnings.append(f"Where {job.parts[i].name}'s supports go couldn't be matched to the model as sliced, "
+                                "so Orca chose by itself.")
 
 
 def _one(v: Any, default: float) -> Any:
@@ -1291,6 +1329,13 @@ def _colors(job: "Job", assigned: Dict[str, Any]) -> Dict[str, Any]:
     return {"spools": spools, "changes": changes, "hand_swaps": sum(1 for c in changes if c["hand"]),
             "unit_changes": sum(1 for c in changes if not c["hand"]),
             "changes_seconds": len(changes) * job.printer.change_seconds, "grams": []}
+
+
+def _short_words(s: Dict[str, Any]) -> str:
+    if s["all"]:
+        return f"{s['name']} won't print at all: all of it is thinner than the nozzle can lay."
+    ends = [f"the bottom {s['bottom']:g} mm" if s["bottom"] else "", f"the top {s['top']:g} mm" if s["top"] else ""]
+    return f"{' and '.join(e for e in ends if e).capitalize()} of {s['name']} won't print: too thin for the nozzle."
 
 
 def _prepare(parts: List[sl.Part], folder: str) -> List[str]:

@@ -68,7 +68,8 @@
 
   /* scale: 800 px wide panel is the design size; phones scale down, desktops cap */
   --u: clamp(0.55px, min(0.125vw, 0.2083vh), 1.6px); /* 1 design px at 800×480, grows with the smaller side */
-  --tabbar-h: calc(56 * var(--u) + 8px);
+  --tap: 0px;   /* 9 mm on a panel whose size is known (useLayout.ts) */
+  --tabbar-h: max(calc(56 * var(--u) + 8px), var(--tap));
   --safe-b: env(safe-area-inset-bottom, 0px);
 }
 
@@ -169,7 +170,7 @@ body.elyir-bench #app {
   background: var(--a-surface-2);
   border-radius: calc(20 * var(--u) + 4px);
   padding: calc(18 * var(--u) + 6px) calc(20 * var(--u) + 6px);
-  min-height: 48px;
+  min-height: max(48px, var(--tap));
   cursor: pointer;
   text-align: center;
   transition: transform 120ms ease, filter 120ms ease;
@@ -230,3 +231,15 @@ body.elyir-bench #app {
 @media (prefers-reduced-motion: reduce) {
   .a-topline::before { left: 0; width: 100%; opacity: .5; }
 }
+
+/* The 9 mm floor (design/small-screens/): a control that looks small keeps its look and takes the taps around it.
+   :where() keeps this at no specificity, so anything a component positions itself stays where it put it. */
+:where(:root[data-fit]) :where(button, a[href], [role='switch']) { position: relative; }
+:where(:root[data-fit]) :where(button, a[href], [role='switch'])::before {
+  content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: max(100%, var(--tap)); height: max(100%, var(--tap));
+}
+/* Above the page, or its fade clips the taps of what sits on the top bar */
+:root[data-fit] .top { position: relative; z-index: 1; }
+/* On the rail there's room to make them that big to look at too */
+:where(:root[data-fit='rail']) :where(button, [role='switch']) { min-height: var(--tap); }

@@ -44,6 +44,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { printerById, reach, tryOtherAddress } from './printers'
 import { handoff } from './look'
+import { lookFor } from './home-look'
 import PrinterCover from './PrinterCover.vue'
 
 const props = defineProps<{ id: string; current: boolean }>()
@@ -131,7 +132,7 @@ function onMessage(ev: MessageEvent) {
   if (ev.data?.type === 'elyir-bench:status' && ev.data.connected) shown.value = true
   if (ev.origin !== new URL(base.value).origin) return   // only the printer we loaded gets its token
   if (ev.data?.type === 'elyir-bench:ready') {
-    frame.value.contentWindow!.postMessage({ type: 'elyir-bench:token', token: printer.token }, ev.origin)
+    frame.value.contentWindow!.postMessage({ type: 'elyir-bench:token', token: printer.token, looksHome: true }, ev.origin)
     // a deep link that arrived while the frame was still loading: say it again now it listens
     if (path.value !== '/') frame.value.contentWindow!.postMessage({ type: 'elyir-bench:navigate', path: path.value }, ev.origin)
   } else if (ev.data?.type === 'elyir-bench:listening') {
@@ -140,6 +141,10 @@ function onMessage(ev: MessageEvent) {
     tellShown()
     // "Print on Workshop…" from Look at a model: the file goes to this printer's own Print now it listens
     if (handoff.value?.printer === printer.id) frame.value.contentWindow!.postMessage({ type: 'elyir-bench:model', files: [...handoff.value.files] }, ev.origin)
+  } else if (ev.data?.type === 'elyir-bench:look-home') {
+    // found, the frame reloads at home and this answer goes nowhere; not found, the sheet says what to check
+    const origin = ev.origin, asking = frame.value.contentWindow
+    lookFor([printer.id]).then((found) => asking?.postMessage({ type: 'elyir-bench:home-look', found }, origin))
   } else if (ev.data?.type === 'elyir-bench:model-taken') {
     handoff.value = null
     handoffNote.value = ''

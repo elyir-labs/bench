@@ -1,6 +1,7 @@
 <template>
   <router-view />
   <RemovedToast />
+  <AwaySheet />
 </template>
 
 <script setup lang="ts">
@@ -12,6 +13,7 @@ import { pending } from './look'
 import { refreshAccount } from './account'
 import { MODEL_EXT } from '@/look/read.ts'
 import RemovedToast from './RemovedToast.vue'
+import AwaySheet from './AwaySheet.vue'
 
 const router = useRouter()
 

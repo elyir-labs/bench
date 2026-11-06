@@ -121,7 +121,7 @@
       <NowCamera v-if="showCam" :camera="camera!" :progress="intent.job?.progress ?? 0" :thumb="thumbUrl" :alt="intent.job?.name" :pill="pct + '%'" class="hero" @failed="camFailed = true" />
       <!-- no camera: the object built up to the layer it's on -->
       <Ring v-else-if="building" :value="intent.job?.progress ?? 0" :label="remainingLabel" :color="'var(--a-accent)'" class="ring">
-        <template #art><BuildArt :src="thumbUrl" :alt="intent.job?.name" :built="art!.built!" :moving="true" /></template>
+        <template #art><BuildArt :src="thumbUrl" :alt="intent.job?.name" :built="art!.built!" :moving="true" :layers="store.jobLayers" :layer="intent.job?.layer" :color="filament" /></template>
         {{ pct }}<small>%</small>
       </Ring>
       <Ring v-else :value="intent.job?.progress ?? 0" :label="remainingLabel" :color="'var(--a-accent)'" :image="thumbUrl" :alt="intent.job?.name" class="ring">
@@ -181,7 +181,7 @@
       </Ring>
       <!-- paused by a person: the print where it stopped, still and dimmed; nothing is moving -->
       <Ring v-else-if="pausedArt" :value="intent.job?.progress ?? 0" label="" :color="'var(--a-amber)'" :ink="'var(--a-amber-ink)'" class="ring">
-        <template #art><BuildArt :src="thumbUrl" :alt="intent.job?.name" :built="art!.built!" :moving="false" /></template>
+        <template #art><BuildArt :src="thumbUrl" :alt="intent.job?.name" :built="art!.built!" :moving="false" :layers="store.jobLayers" :layer="intent.job?.layer" :color="filament" /></template>
         Paused
       </Ring>
       <StateGlyph v-else-if="!(colourPause && lay === 'panel')" kind="needs_you" class="glyph" />
@@ -224,7 +224,7 @@
     </div>
 
     <!-- Finish setting up (design/getting-started/, C): under Ready, never on the panel -->
-    <SetupCard v-if="lay !== 'panel'" :ready="state === 'ready'" class="setup" />
+    <SetupCard v-if="!ownScreen" :ready="state === 'ready'" class="setup" />
 
     <Vitals v-if="lay !== 'panel'" :intent="intent" tiles class="tiles" />
 
@@ -250,6 +250,7 @@
       </template>
     </div>
     <p v-if="heldBack" class="at-printer">{{ actions.length ? 'The rest is done at the printer.' : 'This is done at the printer.' }}</p>
+    <LookHome v-if="heldBack" />
     <p v-if="error" class="err">{{ error }}</p>
     <FileSheet v-if="lib" :item="opened" :check="opened ? lib.checks.value[opened.filename] : null" :printer="intent?.printer.name || 'the printer'"
                @close="opened = null" @refused="c => (refusal = c)" />
@@ -289,7 +290,7 @@ import { useLibrary } from '@/print/useLibrary'
 import { upNext, type UpRow } from '@/print/upnext'
 import type { Item } from '@/print/library'
 import { careOf } from '@/intent/care'
-import { goneView, nextMemo, type Gone, type PowerMemo } from '@/intent/power'
+import { goneView, nextMemo, printerOff, type Gone, type PowerMemo } from '@/intent/power'
 import HoldButton from '@/components/now/HoldButton.vue'
 import HeadArt from '@/components/now/HeadArt.vue'
 import UnitArt from '@/components/now/UnitArt.vue'
@@ -313,11 +314,12 @@ import { prettyName } from '@/intent/jobs'
 import NowCamera from '@/components/now/NowCamera.vue'
 import Vitals from '@/components/now/Vitals.vue'
 import SetupCard from '@/components/setup/SetupCard.vue'
-import { layout as currentLayout } from '@/shell/useLayout'
+import { layout as currentLayout, ownScreen } from '@/shell/useLayout'
 import type { Layout } from '@/shell/layout'
 import { useCameras } from '@/camera/useCameras'
 import { nowCamera } from '@/camera/cameras'
 import LightButton from '@/components/light/LightButton.vue'
+import LookHome from '@/components/door/LookHome.vue'
 import { lightPlace, nowCameraShown } from '@/intent/light'
 import { embedded } from '@/auth'
 
@@ -353,7 +355,7 @@ const powerWait = computed(() => intent.value?.phase === 'turning_off' || intent
 // Warming up before a print (design/warm-up/, D): Ready shows it instead of the clock
 const warmOn = computed(() => !!intent.value?.warm?.active)
 const camWay = computed(() => nowCamera(intent.value?.state, { warming: warmOn.value }))
-const showCam = computed(() => lay.value !== 'panel' && !!camera.value && !camFailed.value && !!camWay.value && !powerWait.value)
+const showCam = computed(() => !ownScreen.value && lay.value !== 'panel' && !!camera.value && !camFailed.value && !!camWay.value && !powerWait.value)
 watch(showCam, (v) => { nowCameraShown.value = v }, { immediate: true })
 onBeforeUnmount(() => { nowCameraShown.value = false })
 const lightWhere = computed(() => lightPlace({ light: !!intent.value?.light, cameraOnNow: showCam.value, embedded }))
@@ -361,9 +363,9 @@ const lightWhere = computed(() => lightPlace({ light: !!intent.value?.light, cam
 const thumbUrl = computed(() => store.fileUrl(intent.value?.job?.thumbnail))
 // Without a camera (or with it off), the ring shows what the printer is doing (design/now-illustrated/, A).
 // A camera that was there and stopped answering says so, off the panel; one that was never there doesn't.
-const camDown = computed(() => lay.value !== 'panel' && !!camera.value && camFailed.value)
+const camDown = computed(() => !ownScreen.value && lay.value !== 'panel' && !!camera.value && camFailed.value)
 const art = computed(() => intent.value?.art ?? null)
-const building = computed(() => !!thumbUrl.value && art.value?.built != null)
+const building = computed(() => (!!thumbUrl.value || !!store.jobLayers) && art.value?.built != null)
 const pausedArt = computed(() => intent.value?.phase === 'paused' && building.value && !change.value)
 const filament = computed(() => intent.value?.spools.find((s) => s.in_use)?.color ?? null)
 const lastJob = computed(() => store.lastJob)
@@ -391,6 +393,7 @@ watch(() => (store.connected && intent.value ? [intent.value.power, intent.value
 const gone = computed<Gone | null>(() => isPanel ? null : goneView({
   connected: store.connected, name: intent.value?.printer.name || stored<string>(NAME_KEY) || '', memo: powerMemo.value,
   lostFor: lostAt.value == null ? 0 : clockNow.value - lostAt.value, now: clockNow.value,
+  off: printerOff(intent.value) ? intent.value : null,
 }))
 // Up next (design/ready-phone/, C): the panel keeps its Print again card and never loads the library for this
 const lib = isPanel ? null : useLibrary()
@@ -944,4 +947,19 @@ async function onAction(a: IntentAction) {
   .actions { flex-direction: column; }
   .detail { max-width: none; }
 }
+
+/* The rail (design/small-screens/, B): one column, the words first. The ring stays where it says how far along, and
+   whatever doesn't fit scrolls above the buttons, so no message loses its end. */
+:root[data-fit='rail'] .now { padding: 2px calc(20 * var(--u)) 12px; gap: 8px; }
+:root[data-fit='rail'] .body { gap: calc(10 * var(--u)); align-content: start; align-items: start; overflow-y: auto; }
+:root[data-fit='rail'] .body.ready, :root[data-fit='rail'] .body.attention { grid-template-columns: minmax(0, 1fr); }
+:root[data-fit='rail'] .body.two:not(.attention) { grid-template-columns: minmax(0, 1fr) auto; }
+:root[data-fit='rail'] .ring { --size: calc(var(--tap) * 1.75); }
+:root[data-fit='rail'] .glyph, :root[data-fit='rail'] .right.hint, :root[data-fit='rail'] .spools, :root[data-fit='rail'] .chip-meta { display: none; }
+:root[data-fit='rail'] .steps li:not(.step-now):not(.you) { display: none; }
+:root[data-fit='rail'] .detail { max-width: none; }
+:root[data-fit='rail'] .headline, :root[data-fit='rail'] .headline.big { font-size: calc(36 * var(--u) + 6px); line-height: 1.04; white-space: normal; }
+:root[data-fit='rail'] .bigclock { font-size: calc(52 * var(--u) + 14px); }
+:root[data-fit='rail'] .actions .a-btn { padding-block: 6px; font-size: calc(20 * var(--u) + 3px); }
+:root[data-fit='rail'] .check .a-btn { height: var(--tap); }
 </style>

@@ -14,6 +14,7 @@
 #   GET  /printer/intent           (ws: printer.intent)         -> intent object
 #   POST /printer/intent/action    (ws: printer.intent.action)  {action, args}
 #   GET  /printer/intent/check_print?filename=  (ws: printer.intent.check_print)  can it print as loaded?
+#   GET  /printer/intent/layers?filename=  (ws: printer.intent.layers)  every layer's outer wall, for the ring on Now
 #   notification: notify_intent_update [intent]
 #
 # A printer without a filament unit has one spool. What someone said is on it (or the
@@ -81,6 +82,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import uuid
 from collections import deque
@@ -129,6 +131,7 @@ RESYNC_TICKS = 30        # re-read everything subscribed every 30 s
 RESYNC_AFTER_READY = 5.0  # ...and once the other components have subscribed after a restart
 ACE_USB_IDS = {("28e9", "018a")}   # Anycubic ACE Pro
 COLOUR_CACHE_KEPT = 50   # files whose colour changes are remembered
+LAYERS_KEPT = 3          # files whose layers are remembered: up to about 1 MB each
 UPS_CHECK_TICKS = 5      # ask NUT about the UPS every 5 s (design/power-loss/)
 
 # Care > Printer screen: which app the printer's own screen shows. The installer does the switch
@@ -317,6 +320,7 @@ class PrinterIntent:
         self._subs: Dict[str, Any] = {}   # what that subscription asked for
         self._care_entries: Dict[str, Any] = {}
         self._colour_cache: Dict[str, Any] = {}   # filename -> (mtime, size, colour changes)
+        self._layers: Dict[str, Any] = {}   # filename -> ((mtime, size), task reading its layers)
         self.cli, self.klipperscreen_unit = ELYIR_BENCH_CLI, KLIPPERSCREEN_UNIT
         self._screen_switching = False
         self._screen_switch_failed: Optional[str] = None   # what the last switch ran into, for Care
@@ -381,6 +385,10 @@ class PrinterIntent:
         )
         self.server.register_endpoint(
             "/printer/intent/check_print", RequestType.GET, self._handle_check_print,
+            transports=TransportType.HTTP | TransportType.WEBSOCKET,
+        )
+        self.server.register_endpoint(
+            "/printer/intent/layers", RequestType.GET, self._handle_layers,
             transports=TransportType.HTTP | TransportType.WEBSOCKET,
         )
         self.server.register_endpoint(
@@ -670,6 +678,7 @@ class PrinterIntent:
         if not filename:
             self.tracker.set_metadata(None, None)
             return
+        self._read_layers(filename)   # ready by the time Now asks
         try:
             fm: FileManager = self.server.lookup_component("file_manager")
             meta = fm.get_file_metadata(filename)
@@ -703,6 +712,50 @@ class PrinterIntent:
         while len(self._colour_cache) > COLOUR_CACHE_KEPT:
             self._colour_cache.pop(next(iter(self._colour_cache)))
         return changes
+
+    def _read_layers(self, filename: str) -> Optional[asyncio.Task]:
+        """The file's layers (design/now-layers/, A), read once per version of it. A file runs to tens of MB, so
+        it's read in its own process at low priority: not on Moonraker's loop, and never ahead of Klipper."""
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gcode_layers.py")
+        try:
+            fm: FileManager = self.server.lookup_component("file_manager")
+            root = os.path.realpath(fm.get_directory("gcodes"))
+            path = os.path.realpath(os.path.join(root, filename))
+            st = os.stat(path) if path.startswith(root + os.sep) and os.path.exists(script) else None
+        except Exception:
+            st = None
+        if st is None:
+            return None
+        key = (st.st_mtime, st.st_size)
+        hit = self._layers.get(filename)
+        if hit and hit[0] == key and not (hit[1].done() and hit[1].exception()):
+            return hit[1]
+
+        async def read() -> Dict[str, Any]:
+            proc = await asyncio.create_subprocess_exec(
+                "nice", "-n", "15", sys.executable, script, path,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            out, err = await proc.communicate()
+            if proc.returncode:
+                logging.error("intent: reading the layers of %s failed: %s", filename, err.decode(errors="replace")[-500:])
+                raise self.server.error("Its layers couldn't be read.", 500)
+            return json.loads(out)
+
+        task = asyncio.ensure_future(read())
+        task.add_done_callback(lambda t: t.cancelled() or t.exception())   # a failure is logged, not "never retrieved"
+        self._layers.pop(filename, None)
+        self._layers[filename] = (key, task)
+        while len(self._layers) > LAYERS_KEPT:
+            self._layers.pop(next(iter(self._layers)))
+        return task
+
+    async def _handle_layers(self, web_request: WebRequest) -> Dict[str, Any]:
+        """Every layer's outer wall in a file, for the ring on Now. Its slicer's thumbnail stands in until this answers,
+        and for a file without layer marks (count 0)."""
+        task = self._read_layers(web_request.get_str("filename"))
+        if task is None:
+            raise self.server.error("No such file.", 404)
+        return await asyncio.shield(task)
 
     async def _restore_colour_plan(self) -> None:
         try:

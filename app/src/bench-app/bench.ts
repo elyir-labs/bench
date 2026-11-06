@@ -4,6 +4,7 @@
 // Each printer's words are its own (the intent layer); the box only orders them and joins them up.
 
 import type { Intent } from '../intent/types'
+import { printerOff } from '../intent/power.ts'
 import { queueTitle } from './shelf.ts'
 
 export type Tone = 'red' | 'amber' | 'blue' | 'green' | 'off'
@@ -36,7 +37,7 @@ export interface Tile {
 export function tileOf(p: BenchPrinter): Tile {
   const base = { id: p.id, name: p.name, frac: 0, thumbnail: null, action: null, remaining: null }
   const i = p.intent
-  if (!p.live || !i) return { ...base, tone: 'off', word: 'Off', says: '', what: '', rank: 9 }
+  if (!p.live || !i || printerOff(i)) return { ...base, tone: 'off', word: 'Off', says: '', what: '', rank: 9 }
   const job = i.job
   const part = job ? [job.name, job.material?.toUpperCase()].filter(Boolean).join(' · ') : ''
   const firstAct = i.actions.find((a) => a.primary && !a.hold) ?? i.actions.find((a) => !a.hold) ?? null

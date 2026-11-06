@@ -476,10 +476,16 @@ async def test_a_gathered_plates_parts_keep_their_own_way_until_one_is_picked(wo
 async def test_a_side_that_cant_be_kept_is_said_in_words_and_nothing_changes(rig, tmp_path):
     it = await (await rig.client.post("/bench/shelf", data=shape(tmp_path, "step.stl", [((0, 0, 0), (30, 20, 10)), ((30, 0, 0), (60, 20, 5))]))).json()
     for want, words in (({"part": 3, "lay": "file"}, "It has 1 part"), ({"lay": "upside"}, "isn't a way down"),
-                        ({"lay": "side"}, "outward normal"), ({"lay": "side", "down": [0, 0, 0]}, "outward normal"),
-                        ({"lay": "side", "down": [1, 1, 0]}, "can't rest on that side")):
+                        ({"lay": "side"}, "outward normal"), ({"lay": "side", "down": [0, 0, 0]}, "outward normal")):
         r = await put_side(rig.client, it["id"], **want)
         assert r.status == 400 and words in (await r.json())["error"], want
     assert (await rig.client.put(f"/bench/shelf/{it['id']}/side", data=b"{no")).status == 400
     assert (await rig.client.put("/bench/shelf/abcdefabcdef/side", json={"lay": "file"})).status == 404
     assert "sides" not in rig.bench.shelf.item(it["id"])
+
+
+async def test_any_side_can_be_kept_not_only_the_suggested_ones(rig, tmp_path):
+    it = await (await rig.client.post("/bench/shelf", data=shape(tmp_path, "step.stl", [((0, 0, 0), (30, 20, 10)), ((30, 0, 0), (60, 20, 5))]))).json()
+    r = await put_side(rig.client, it["id"], lay="side", down=[1, 1, 0])
+    assert r.status == 200, await r.text()
+    assert rig.bench.shelf.item(it["id"])["sides"]["0"]["down"] == [0.7071067811865475, 0.7071067811865475, 0]

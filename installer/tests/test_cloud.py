@@ -97,11 +97,11 @@ class FakeCloud:
 
 
 ROUTE = ("Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n"
-         "wlan0\t00000000\t0156A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"
-         "wlan0\t0056A8C0\t00000000\t0001\t0\t0\t600\t00FFFFFF\t0\t0\t0\n")
+         "wlan0\t00000000\t010200C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"
+         "wlan0\t000200C0\t00000000\t0001\t0\t0\t600\t00FFFFFF\t0\t0\t0\n")
 ARP = ("IP address       HW type     Flags       HW address            Mask     Device\n"
-       "192.0.2.1     0x1         0x2         7C:D9:5C:AA:BB:CC     *        wlan0\n"
-       "192.0.2.73    0x1         0x2         d8:3a:dd:11:22:33     *        wlan0\n")
+       "192.0.2.1        0x1         0x2         7C:D9:5C:AA:BB:CC     *        wlan0\n"
+       "192.0.2.73       0x1         0x2         d8:3a:dd:11:22:33     *        wlan0\n")
 
 
 @pytest.fixture

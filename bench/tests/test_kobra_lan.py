@@ -45,7 +45,7 @@ class Printer:
     async def info(self, r):
         base = f"http://{r.host}"
         return web.json_response({"modelName": "Anycubic Kobra 3", "modelId": MODEL, "ctrlType": self.mode, "token": TOKEN,
-                                  "ctrlInfoUrl": f"{base}/ctrl", "fileUploadurl": f"{base}/gcode_upload?s=up", "version": "2.4.6.7"})
+                                  "usn": "uuid:fdm:A4-E8-8D-0A-69-90", "ctrlInfoUrl": f"{base}/ctrl", "fileUploadurl": f"{base}/gcode_upload?s=up", "version": "2.4.6.7"})
 
     async def ctrl(self, r):
         q = r.query
@@ -289,6 +289,31 @@ async def test_the_box_adds_a_kobra_over_lan_mode_and_follows_its_switch_both_wa
     await bench._stop_speaking("anycubic-0a6990")
 
 
+async def test_another_kobra_given_its_old_address_is_refused(tmp_path, aiohttp_server, monkeypatch):
+    """27 October 2026: the three Kobras came back on swapped addresses, and Kobra 3 #2's stand-in spoke for the
+    Kobra 3 Max at its old address until the box looked again."""
+    monkeypatch.setattr(L, "RECONNECT", 0.05)
+    FakeMqtt.made = []
+    http = await aiohttp_server(Printer().app())
+    ours = S.Standin("anycubic-0a6990", "Kobra 3", "127.0.0.1", 0, 0, tmp_path / "a", None, None, lambda: [],
+                     via="lan", lan_mqtt=FakeMqtt, lan_port=http.port)
+    other = S.Standin("anycubic-50ac10", "Kobra 3 #2", "127.0.0.1", 0, 0, tmp_path / "b", None, None, lambda: [],
+                      via="lan", lan_mqtt=FakeMqtt, lan_port=http.port)
+    await ours.start()
+    await other.start()
+    try:
+        await until(lambda: ours.up.up)
+        await asyncio.sleep(0.3)
+        assert not other.up.up and len(FakeMqtt.made) == 1
+    finally:
+        await ours.stop()
+        await other.stop()
+
+
+def test_a_kobras_mac_is_read_the_same_from_lan_mode_and_rinkhals():
+    assert L.mac_tail("uuid:fdm:A4-E8-8D-80-3E-82") == L.mac_tail("a4:e8:8d:80:3e:82") == "803e82"
+
+
 async def test_lan_mode_is_preferred_to_rinkhals(aiohttp_server, monkeypatch):
     """Anycubic's own LAN mode when it's on; Rinkhals' Moonraker only when it's off (design/kobra-lan/)."""
     import anycubic as A
@@ -365,6 +390,23 @@ async def test_a_file_sent_without_printing_waits_on_the_box_and_goes_with_its_s
     assert rig.printer.uploads == [("cube.gcode", ORCA.encode())]
     assert [p for p in rig.mqtt.published if p[2] == "start"][-1][3]["filename"] == "cube.gcode"
 
+
+
+async def test_the_now_ring_reads_layers_from_the_boxs_copy_even_by_the_name_the_printer_gave_it(rig):
+    rig.mqtt.info = {"state": "free", "temp": {}}
+    from aiohttp import FormData
+    layered = ORCA + ";LAYER_CHANGE\n;Z:0.2\n;TYPE:Outer wall\nG1 X0 Y0 Z0.2\nG1 X5 Y0 E1\n;LAYER_CHANGE\n;Z:0.4\nG1 Z0.4\nG1 X5 Y5 E2\n"
+    form = FormData()
+    form.add_field("file", layered.encode(), filename="cube.gcode")
+    form.add_field("print", "false")
+    assert (await rig.client.post("/server/files/upload", data=form)).status == 201
+    got = await rig.s.answer(None, "printer.intent.layers", {"filename": "cube.gcode"})
+    assert (got["count"], got["z"], got["walls"]["count"]) == (2, [0.2, 0.4], 2)
+    rig.s.up.store.d["files"]["cube (1).gcode"] = rig.s.up.store.d["files"]["cube.gcode"]
+    assert (await rig.s.answer(None, "printer.intent.layers", {"filename": "cube (1).gcode"}))["count"] == 2
+    with pytest.raises(L.RpcError) as e:
+        await rig.s.answer(None, "printer.intent.layers", {"filename": "never-sent.gcode"})
+    assert e.value.code == 404
 
 def test_the_first_layer_bed_is_the_plates_the_file_was_sliced_for(tmp_path):
     f = tmp_path / "x.gcode"

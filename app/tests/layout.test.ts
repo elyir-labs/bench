@@ -2,9 +2,33 @@
 // The boards there are the spec; if one of these fails, the screens have drifted from them.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { layoutFor, unitFor } from '../src/shell/layout.ts'
+import { layoutFor, panelFit, unitFor } from '../src/shell/layout.ts'
 
 const off = (width: number, height: number) => layoutFor({ panel: false, width, height })
+
+test('a printer panel left tall gets the phone layout (design/small-screens/, tall B)', () => {
+  assert.equal(layoutFor({ panel: true, width: 480, height: 853 }), 'compact')   // 720x1280 at the kiosk's 1.5x
+  assert.equal(layoutFor({ panel: true, width: 480, height: 800 }), 'compact')
+  assert.equal(layoutFor({ panel: true, width: 1280, height: 720 }), 'panel')    // the same panel turned
+})
+
+test('taps are 9 mm whatever the panel, and a size nobody knows changes nothing', () => {
+  const at = (inches: number | null) => panelFit({ inches, width: 800, height: 480 })
+  assert.equal(at(null), null)
+  assert.equal(at(7)?.tap, 48)
+  assert.equal(at(5)?.tap, 67)
+  assert.equal(at(3.5)?.tap, 95)
+})
+
+test('only a short landscape panel gets the rail, with its type grown', () => {
+  const at = (inches: number, width = 800, height = 480) => panelFit({ inches, width, height })
+  assert.deepEqual(at(3.5), { tap: 95, rail: true, unit: '1.40px' })
+  assert.equal(at(4.3)?.rail, false)
+  assert.equal(at(5)?.rail, false)
+  assert.equal(at(7)?.rail, false)
+  assert.equal(at(3.5, 480, 800)?.rail, false)                                  // tall: the phone layout instead
+  assert.equal(at(3.5, 480, 320)?.unit, '0.86px')                               // the same size, fewer pixels
+})
 
 test('the printer panel keeps its own layout whatever its size', () => {
   assert.equal(layoutFor({ panel: true, width: 800, height: 480 }), 'panel')

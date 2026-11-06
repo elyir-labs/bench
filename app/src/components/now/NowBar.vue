@@ -5,7 +5,8 @@
        :aria-label="`${title}. ${line}. Open Now.`" @click="open" @keydown.enter="open">
     <span class="mini" :style="{ '--v': progress }">
       <!-- the object built to the layer it's on, as on Now (design/now-illustrated/, A); still when paused -->
-      <BuildArt v-if="intent.job && built != null && thumb" :src="thumb" :alt="intent.job.name" :built="built" :moving="intent.state === 'printing'" plain class="img round" />
+      <BuildArt v-if="intent.job && built != null && (thumb || store.jobLayers)" :src="thumb" :alt="intent.job.name" :built="built" :moving="intent.state === 'printing'" plain
+                :layers="store.jobLayers" :layer="intent.job.layer" :color="intent.spools.find((s) => s.in_use)?.color" class="img round" />
       <ObjectImage v-else-if="intent.job" :src="thumb" :alt="intent.job.name" round class="img" />
       <span v-else class="glyph" aria-hidden="true">!</span>
     </span>
@@ -23,6 +24,7 @@
 
 <script setup lang="ts">
 import { preparingWord } from '@/intent/colour'
+import { printerOff } from '@/intent/power'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useIntentStore } from '@/intent/store'
@@ -58,7 +60,7 @@ const line = computed(() => {
     case 'preparing': return preparingWord(i)
     case 'printing': return i.job?.eta_clock ? `${pct}% · done at ${i.job.eta_clock}` : `${pct}%`
     case 'needs_you': return 'Tap to see what to do'
-    case 'problem': return 'Stopped. Tap for what happened'
+    case 'problem': return printerOff(i) ? 'Switched off, or off your Wi-Fi' : 'Stopped. Tap for what happened'
     case 'finished': return i.detail
     default: return ''
   }

@@ -479,3 +479,27 @@ def test_a_unit_setup_runs_the_installer_apart_and_hands_each_line_to_the_tracke
                                         "8", "--mcu", "/dev/serial/by-id/usb-Klipper_stm32g0b1xx_1-if00", "--kind", "happy_hare"]
     assert [list(m)[0] for m in heard] == ["started", "progress", "failed"]
     assert comp._unit_run is None
+
+
+# ---- layers (design/now-layers/, A): the file's walls for the ring on Now, read in a process of their own ----
+
+def test_layers_are_read_once_per_version_of_the_file_and_only_inside_gcodes(tmp_path, monkeypatch):
+    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py",
+                                                      "unit_setup.py", "elyir_bench_care.py", "orca_profile.py", "gcode_layers.py"))
+    gcodes = tmp_path / "gcodes"
+    gcodes.mkdir()
+    (tmp_path / "secret.gcode").write_text(";LAYER_CHANGE\n")
+    layer = ";LAYER_CHANGE\n;Z:{z}\n;TYPE:Outer wall\nG1 X0 Y0 Z{z}\nG1 X10 Y0 E1\nG1 X10 Y10 E1\n;TYPE:Sparse infill\nG1 X0 Y10 E1\n"
+    (gcodes / "stand.gcode").write_text("M83\n" + layer.format(z=0.2) + layer.format(z=0.4))
+    server.components["file_manager"] = FakeFileManager(gcodes)
+
+    async def go():
+        got = await comp._handle_layers(FakeWebRequest(filename="stand.gcode"))
+        again = comp._read_layers("stand.gcode")
+        assert again is comp._layers["stand.gcode"][1] and again.done()   # the same read, not a second one
+        return got
+    got = run(go())
+    assert (got["count"], got["z"], got["walls"]["count"]) == (2, [0.2, 0.4], 4)   # two walls a layer; infill isn't a wall
+    for bad in ("../secret.gcode", "missing.gcode"):
+        with pytest.raises(Exception, match="No such file"):
+            run(comp._handle_layers(FakeWebRequest(filename=bad)))

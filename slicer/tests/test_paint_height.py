@@ -97,7 +97,7 @@ def test_paint_finds_its_triangles_moved_reordered_or_one_dropped(tmp_path, orde
     tris = sl._triangles(str(tmp_path / "sign.stl"))
     states = [0] * 12 + [2] * 24                                       # the letters in the plate's second color
     src = _arranged(tmp_path, tris, order=list(reversed(range(len(tris)))) if order else None, drop=drop)
-    done = sl.edit_plates(str(src), str(tmp_path / "own.3mf"), paint={0: (tris, states)},
+    done, _ = sl.edit_plates(str(src), str(tmp_path / "own.3mf"), paint={0: (tris, states)},
                           heights=sl.heights_xml([sl.Height(3.2, 1)], two(), 1, 0.2, 0.2))
     n, data = _paint_of(tmp_path / "own.3mf")
     letters_left = 24 - (1 if drop and order else 0)

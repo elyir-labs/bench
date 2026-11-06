@@ -76,6 +76,13 @@ def test_no_rotation_without_overlay(monkeypatch):
     assert a.detect_rotation()[0] == 0
 
 
+def test_kiosk_unit_carries_the_panel_size():
+    facts = {"user": "pi", "uid": 1000, "panel_rotation": 0, "printer_data": None}
+    assert "ELYIR_BENCH_PANEL_SIZE=3.5\n" in a.render_kiosk_unit(facts, {"port": "8088", "panel_size": "3.5"}, "DSI-1")
+    for unset in ("auto", "small", "0", ""):
+        assert "ELYIR_BENCH_PANEL_SIZE=\n" in a.render_kiosk_unit(facts, {"port": "8088", "panel_size": unset}, "DSI-1")
+
+
 def test_kiosk_unit_carries_rotation():
     facts = {"user": "pi", "uid": 1000, "panel_rotation": 180, "printer_data": None}
     unit = a.render_kiosk_unit(facts, {"port": "8088", "panel_rotation": "auto"}, "DSI-1")

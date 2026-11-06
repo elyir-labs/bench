@@ -42,6 +42,8 @@ test('every setting reads like the board: grouped, with what it replaced', () =>
   assert.equal(g[2].rows[0].color, '#2563EB')
   assert.equal(showValue('support_type', 'tree(auto)'), 'tree')
   assert.equal(showValue('layer_height', '0.12'), '0.12 mm')
+  assert.equal(showValue('wall_generator', 'classic'), 'Left out')
+  assert.equal(showValue('wall_generator', 'arachne'), 'Printed')
   assert.deepEqual(groupChanges([], 'Everyday', 'Workshop'), [])
 })
 

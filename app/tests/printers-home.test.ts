@@ -102,3 +102,12 @@ test('a camera still only while there is a print to watch', () => {
   assert.equal(snapshotOf(K3), null)
   assert.equal(snapshotOf(GONE), null)
 })
+
+test('a Kobra the Bench Box says is off is Off, gray and at home, never Stopped or away', () => {
+  const off = printer('Kobra 3 #2', { state: 'problem', phase: 'printer_off', headline: 'Kobra 3 #2 is off' })
+  assert.deepEqual(grouped([off, Desk]).map((x) => x.group), ['ready', 'off'])
+  assert.deepEqual(rowOf(off, false, NOW), { word: 'Off', line: 'Switched off, or off your Wi-Fi', progress: null })
+  assert.equal(groupLabel('off', [off]), 'Off')
+  assert.equal(groupLabel('off', [off, GONE]), 'Out of reach')
+  assert.equal(markAway(off, [off, Desk]), false)
+})

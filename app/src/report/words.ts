@@ -26,7 +26,7 @@ export function goesWith(context: ReportContext | null): { title: string; line: 
 
 /** What the problem screen showed, for a report sent from it: the moment, not just the printer. */
 export function contextOf(intent: Intent | null, now: Date = new Date()): ReportContext | null {
-  if (!intent || intent.state !== 'problem') return null
+  if (!intent || intent.state !== 'problem' || intent.phase === 'printer_off') return null
   const at = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase().replace(/\s/g, ' ')
   return {
     headline: intent.headline, ...(intent.detail ? { detail: intent.detail } : {}), at,

@@ -29,8 +29,8 @@ export function project(tris: Float32Array, { az = -0.6, el = 0.62 }: View = {})
   const depth = new Float32Array(n)
   const light = new Float32Array(n)
   const keep = new Uint8Array(n)
-  // light from the camera's upper left
-  const L = norm([-0.45, -0.75, 0.6])
+  // light from the camera's upper left; looking up from below, from its lower left, so what faces down isn't in shadow
+  const L = norm([-0.45, -0.75, el < 0 ? -0.6 : 0.6])
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (let t = 0; t < n; t++) {
     const v: number[][] = []

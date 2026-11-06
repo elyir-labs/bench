@@ -51,11 +51,16 @@ export const RESTART_GRACE_S = 3 * 60
 /** Connection lost this long, with no reason known: say so instead of showing the last state. */
 export const UNREACHABLE_AFTER_S = 15
 
+/** A printer the Bench Box speaks for that's switched off or off the Wi-Fi (bench/standin.py, OFF_PHASE). The box still
+ *  answers, so the connection stays: the intent says it, with no actions. Gray, never Stopped. */
+export const printerOff = (i: { state?: string; phase?: string } | null | undefined) => i?.phase === 'printer_off'
+
 const clock = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase()
 
 /** What Now says when the printer doesn't answer, or null to keep showing the last state (a short blip). */
-export function goneView(o: { connected: boolean; name: string; memo: PowerMemo | null; lostFor: number; now: number }): Gone | null {
-  if (o.connected) return null
+export function goneView(o: { connected: boolean; name: string; memo: PowerMemo | null; lostFor: number; now: number;
+                                 off?: { headline: string; detail: string } | null }): Gone | null {
+  if (o.connected) return o.off ? { kind: 'off', headline: o.off.headline, detail: o.off.detail } : null
   const name = o.memo?.name || o.name || 'The printer'
   if (o.memo?.kind === 'off') {
     return { kind: 'off', headline: `${name} is off`, detail: `Turned off at ${clock(o.memo.at)}. Switch it on at the printer, and this page finds it again.` }

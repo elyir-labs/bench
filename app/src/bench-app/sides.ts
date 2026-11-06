@@ -62,7 +62,7 @@ export function sideRow(v: SidesView | null): { value: string; line: string } {
 }
 
 /** Whether there's anything to pick: some part rests on more than one side. */
-export const canPickSide = (v: SidesView | null) => !!v?.parts.some((p) => (p.lying?.sides?.length ?? 0) > 1)
+export const canPickSide = (v: SidesView | null) => !!v?.parts.some((p) => p.lying != null)
 
 /** What a setup is sliced with: a new side is a new setup. */
 export const sidesKey = (v: SidesView | null) => (v ? v.parts.map((p) => (p.normal ? p.normal.map((x) => x.toFixed(3)).join(',') : 'file')).join(';') : '')

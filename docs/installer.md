@@ -51,8 +51,36 @@ printer_name: Workshop
 panel: elyir-bench
 # auto, or a connector name such as DSI-1
 panel_output: auto
+# auto, or 0 | 90 | 180 | 270 for a panel mounted sideways or upside down
+panel_rotation: auto
+# auto, or the screen's diagonal in inches, such as 3.5, for one that doesn't report its size
+panel_size: auto
 port: 8088
 ```
+
+### Turning the panel
+
+`panel_rotation` turns the picture; run `elyir-bench apply` after changing it. `auto` reads the panel's overlay in
+`config.txt`: `invx,invy` means 180, `swapxy` means 90, anything else means 0. A number overrides that. A panel that is
+tall by nature, such as a 720x1280 DSI screen, needs 90 or 270 to sit in landscape.
+
+Two things don't turn with it:
+
+- **Touch.** The kiosk only turns the picture. Touch has to be turned by the panel's own overlay or driver, with
+  `swapxy`, `invx` and `invy` where it offers them. Tap near all four corners after turning: if a tap lands somewhere
+  else, the overlay isn't turning touch.
+- **The boot screen at 90 and 270.** Only 180 reaches the kernel (`video=<output>:panel_orientation=upside_down`), so at
+  90 and 270 the boot screen stays the way the panel is built until the app starts.
+
+A panel left tall gets the phone layout, without the camera: the screen is on the printer, so the print is right there.
+It draws at a device scale so the layout fills panels wider than 480 px.
+
+### The panel's size
+
+The same 800x480 is 76 mm wide on a 3.5" panel and 154 mm on a 7", so the app has to know the size to keep taps at 9 mm
+or more (design/small-screens/). The kiosk reads it from the display and passes the diagonal as `?panel_in=`; a display
+that reports nothing, or under 40x25 mm, needs `panel_size` set by hand. With no size known, nothing changes. A landscape
+panel under 55 mm tall also moves its tabs to a rail down the left, with larger type.
 
 What `apply` converges, in order:
 

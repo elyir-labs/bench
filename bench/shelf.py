@@ -698,9 +698,8 @@ def pick_side(it: dict, want: dict) -> dict:
         length = math.sqrt(sum(x * x for x in down))
         if length < 1e-6:
             raise ValueError("A side is its outward normal, down: [x, y, z].")
+        # any side, not only the suggested ones: the person may turn it however they like (design/any-side/)
         down = [x / length for x in down]
-        if lying.get("sides") and not any(_same(down, s["normal"]) for s in lying["sides"]) and down[2] > -0.996:
-            raise ValueError("It can't rest on that side.")
         if down[2] < -0.996:
             lay = "file"
         elif _same(down, lying.get("flat_normal")):

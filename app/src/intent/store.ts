@@ -7,7 +7,7 @@
 //   4. the host the page was served from (the kiosk case: nginx on the Pi)
 
 import { defineStore } from 'pinia'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { IntentClient, endpointFor, type PrinterEndpoint } from './client'
 import type { Intent, IntentAction, HistoryJob, PrintCheck } from './types'
 import { allowedHere, door } from '@/door'
@@ -17,6 +17,7 @@ import { needsSheet } from './colour'
 import { isPanel } from '@/theme'
 import { demoBase } from '@/demo/socket'
 import { BASE } from '@/base'
+import { stackFrom, type LayerStack } from '@/look/layers'
 
 function resolveEndpoint(configHost?: string, configPort?: number, configSsl?: boolean): PrinterEndpoint {
   if (import.meta.env.VITE_DEMO === '1') return { http: demoBase().replace(/\/$/, ''), ws: 'demo' }   // the printer is in the page
@@ -163,6 +164,28 @@ export const useIntentStore = defineStore('intent', () => {
     }
   }
 
+  /** The file being printed, every layer's outer wall (design/now-layers/, A): read by the printer once per file, for
+   *  the ring on Now and the Now bar. Null until it answers, and for a file without layer marks or a printer that
+   *  can't read them (an older release, a Kobra over LAN); the ring has the slicer's picture then. A big file can
+   *  outlast a call on a Pi, so a call that timed out or lost the connection asks again; the printer goes on reading. */
+  const jobLayers = shallowRef<LayerStack | null>(null)
+  let layersFor = ''
+  watch(() => (client.value ? intent.value?.job?.filename ?? '' : ''), async (filename) => {
+    if (filename === layersFor) return
+    layersFor = filename
+    jobLayers.value = null
+    for (let tries = 0; filename && tries < 8 && layersFor === filename; tries++) {
+      try {
+        const d = await client.value!.call<Parameters<typeof stackFrom>[0]>('printer.intent.layers', { filename })
+        if (layersFor === filename) jobLayers.value = d?.count && d.walls?.count ? stackFrom(d) : null
+        return
+      } catch (e: any) {
+        if (!/timed out|Not connected|Connection closed/.test(String(e?.message))) return
+        await new Promise((r) => setTimeout(r, 15000))
+      }
+    }
+  })
+
   /** Anything but Ready: the printer is doing something or waiting on a person. */
   const busy = computed(() => !!intent.value && intent.value.state !== 'ready')
 
@@ -176,5 +199,5 @@ export const useIntentStore = defineStore('intent', () => {
     return ep.http.replace(/:\d+$/, '') + '/'
   })
 
-  return { start, on, act, call, recentJobs, startPrint, checkPrint, requestPrint, setSpool, fileMetadata, fileUrl, thumbOf, lastJob, busy, intent, connected, busyAction, actionError, endpoint, advancedUrl }
+  return { start, on, act, call, recentJobs, startPrint, checkPrint, requestPrint, setSpool, fileMetadata, fileUrl, thumbOf, lastJob, jobLayers, busy, intent, connected, busyAction, actionError, endpoint, advancedUrl }
 })

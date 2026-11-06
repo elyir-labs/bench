@@ -47,6 +47,8 @@ class FakeKobra:
         self.db = {}
         self.klippy = "ready"
         self.inject = {}              # what Rinkhals' patchers add to every status (mmu_ace: mmu, mmu_machine)
+        self.off = False              # switched off: nothing answers
+        self.mac = "a4:e8:8d:80:3e:82"
 
     def app(self) -> web.Application:
         app = web.Application()
@@ -88,6 +90,8 @@ class FakeKobra:
         self.calls.append((method, p))
         if method == "server.info":
             return {"klippy_state": self.klippy}
+        if method == "machine.system_info":
+            return {"system_info": {"network": {"wlan0": {"mac_address": self.mac}}}}
         if method == "printer.objects.list":
             return {"objects": KOBRA_OBJECTS}
         if method in ("printer.objects.subscribe", "printer.objects.query"):
@@ -121,6 +125,8 @@ class FakeKobra:
         raise LookupError(method)
 
     async def ws(self, request):
+        if self.off:
+            return web.Response(status=503)
         sock = web.WebSocketResponse()
         await sock.prepare(request)
         self.connections += 1
@@ -351,14 +357,66 @@ async def test_the_app_is_served_with_the_box_as_its_parent_and_no_door(rig):
     assert r.status == 404
 
 
-async def test_a_kobra_that_stops_answering_is_off_on_the_bench(rig):
+async def switch_off(r):
+    r.kobra.off = True
+    for sock in list(r.kobra.sockets):
+        await sock.close()
+
+
+async def test_a_kobra_switched_off_reads_as_off_and_its_pages_stay(rig, monkeypatch):
+    """The box still answers, so the apps stay on its home name and say Off, not away (27 October 2026)."""
+    monkeypatch.setattr(S, "DOWN_GRACE", 0.2)
     p = await page(rig)
     await p.call("printer.intent")
-    for sock in list(rig.kobra.sockets):
-        await sock.close()
-    msg = await p.ws.receive(timeout=5)
+    await switch_off(rig)
+    off = await p.until("notify_intent_update", lambda u: u[0]["phase"] == S.OFF_PHASE)
+    assert (off[0]["state"], off[0]["headline"], off[0]["actions"]) == ("problem", "Kobra 3 is off", [])
+    assert not p.ws.closed
+    late = await page(rig)                      # a page opened while it's off is told so too
+    assert (await late.call("printer.intent"))["phase"] == S.OFF_PHASE
+    assert await late.call("printer.objects.subscribe", {"objects": {"extruder": None}}) is not None
+
+
+async def test_a_blip_keeps_the_last_state(rig, monkeypatch):
+    monkeypatch.setattr(S, "DOWN_GRACE", 30)
+    p = await page(rig)
+    await p.call("printer.intent")
+    await switch_off(rig)
+    await until(lambda: rig.s.down_since is not None)
+    assert (await p.call("printer.intent"))["state"] == "ready"
+
+
+async def test_a_kobra_switched_back_on_starts_its_pages_again(rig, monkeypatch):
+    monkeypatch.setattr(S, "DOWN_GRACE", 0.2)
+    p = await page(rig)
+    await p.call("printer.intent")
+    await switch_off(rig)
+    await p.until("notify_intent_update", lambda u: u[0]["phase"] == S.OFF_PHASE)
+    rig.kobra.off = False
+    msg = await p.ws.receive(timeout=5)          # closed once, so it subscribes again from the start
     assert msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING)
-    await until(lambda: rig.s.tracker.klippy_state in ("disconnected", "ready"))
+    await until(lambda: rig.s.tracker.klippy_state == "ready")
+    again = await page(rig)
+    assert (await again.call("printer.intent"))["state"] == "ready"
+
+
+async def test_another_kobra_at_its_address_is_not_spoken_for(tmp_path, aiohttp_server, aiohttp_client, monkeypatch):
+    monkeypatch.setattr(S, "RECONNECT", 0.05)
+    monkeypatch.setattr(S, "DOWN_GRACE", 0.2)
+    kobra = FakeKobra()
+    kobra.mac = "a4:e8:8d:50:ac:10"               # Kobra 3 #2, at the address the Max had
+    k = await aiohttp_server(kobra.app())
+    s = S.Standin("anycubic-803e82", "Kobra 3 Max", "127.0.0.1", k.port, k.port, tmp_path / "max", None, None, lambda: [])
+    await s.start()
+    try:
+        await until(lambda: kobra.connections >= 2)
+        assert s.tracker.klippy_state != "ready" and not kobra.subscribed
+        await asyncio.sleep(0.25)
+        assert s.intent()["phase"] == S.OFF_PHASE
+        kobra.mac = "a4:e8:8d:80:3e:82"
+        await until(lambda: s.tracker.klippy_state == "ready")
+    finally:
+        await s.stop()
 
 
 def free_port():

@@ -1,7 +1,7 @@
 <template>
   <!-- The model in the spool's colour, drawn in the browser (src/slice/render.ts). A STEP file can't
        be read here, so it gets the same stand-in as a print without a picture. turnable: drag to look
-       round the plate (design/plate/), level-ish and never from underneath; it doesn't zoom or move parts. -->
+       round the plate (design/plate/), level-ish and never from underneath (unless below); it doesn't zoom or move parts. -->
   <div ref="box" class="pic" :class="{ turnable, zoomable }"
        @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @lostpointercapture="up" @wheel="wheel">
     <canvas v-if="(tris && tris.length) || layers" ref="canvas" :aria-label="alt" role="img"></canvas>
@@ -25,15 +25,17 @@ import type { SupportLines } from '@/slice/supports'
 // layers: the slice instead of the model, cut at a layer (design/look/, A with C's layers)
 // runs: a color per run of triangles, for a plate of several colors (design/multi-color/)
 // paintable: a tap (not a drag) says which triangle it landed on (design/paint-and-height/, A)
+// below: it opens looking up at it from under the plate, and turns all the way round, so what faces down can be
+// seen and tapped (design/supports-where/, A)
 const props = defineProps<{ tris: Float32Array | null; color: string; alt: string; plate?: boolean; bed?: number[] | null;
   turnable?: boolean; zoomable?: boolean; shift?: number; supports?: SupportLines | null; spin?: boolean; layers?: LayersPicture | null;
-  runs?: Run[] | null; paintable?: boolean }>()
+  runs?: Run[] | null; paintable?: boolean; below?: boolean }>()
 const emit = defineEmits<{ moved: [changed: boolean]; pick: [triangle: number, x: number, y: number] }>()
 const box = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 
 // the view the slicer's own preview uses, until someone turns it
-const AZ = -0.6, EL = 0.62
+const AZ = -0.6, EL = props.below ? -0.55 : 0.62
 const view = { az: AZ, el: EL }
 let zoom = 1
 let shiftNow = props.shift ?? 0       // eased towards props.shift when the card opens or closes
@@ -85,7 +87,7 @@ function move(e: PointerEvent) {
   tap = null
   const w = box.value?.clientWidth || 300
   view.az = drag.az - ((e.clientX - drag.x) / w) * Math.PI
-  view.el = Math.min(1.25, Math.max(0.2, drag.el + ((e.clientY - drag.y) / w) * Math.PI * 0.6))
+  view.el = Math.min(1.25, Math.max(props.below ? -1.25 : 0.2, drag.el + ((e.clientY - drag.y) / w) * Math.PI * 0.6))
   if (!frame) frame = requestAnimationFrame(() => { frame = 0; paint(true) })
 }
 function up(e?: PointerEvent) {
@@ -140,7 +142,9 @@ function picture(w = 1600, h = 1200): Promise<Blob | null> {
   ctx.drawImage(model, 0, 0)
   return new Promise((resolve) => out.toBlob(resolve, 'image/png'))
 }
-defineExpose({ zoomBy, fit, picture })
+/** Which way it is looked at now, so turns can follow the picture (design/any-side/). */
+const angle = () => view.az
+defineExpose({ zoomBy, fit, picture, angle })
 
 let spinning = 0
 function spinFrom(t0: number, az0: number) {
