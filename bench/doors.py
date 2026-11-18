@@ -227,6 +227,19 @@ class Relay:
         return True, (f"claimed {out['address']}; the relay carries it" if out.get("carried") else
                       f"claimed {out['address']}; the relay carries it once Elyir approves it, or with an invite code")
 
+    async def vouch(self, session: ClientSession, by: "Relay") -> Tuple[bool, str]:
+        """A carried sibling on the same box vouches for this name (design/new-kobra/, B): the relay carries it as long
+        as the sibling is carried, with no grant by hand. A relay without the route (404) or a sibling it won't take
+        leaves the name waiting, as before."""
+        r, b = self.load(), by.load()
+        if not (r.get("secret") and b.get("secret")):
+            return False, "nothing to vouch with"
+        code, out = await relay_call(session, self.api, "POST", f"/houses/{r['name']}/vouch",
+                                     {"by": b["name"], "secret": b["secret"]}, r["secret"])
+        if code == 200:
+            return True, f"{b['address']} vouched: the relay carries {r['address']}"
+        return False, "the relay can't take a vouch yet" if code == 404 else refusal(out) if code else "no answer from the relay"
+
     async def carried(self, session: ClientSession) -> Optional[bool]:
         r = self.load()
         if not r.get("secret"):
@@ -287,6 +300,7 @@ class Doors:
         self.running: Dict[str, Dict[str, Any]] = {}     # id -> {door, frpc, address, away, house}
         self.caddy: Optional[Process] = None
         self.session: Optional[ClientSession] = None
+        self.bench_url: Optional[str] = None             # the box's own service, for a phone's Not mine (door --not-mine-url)
 
     def _dir(self, pid: str) -> Path:
         return self.state / "box" if pid == BOX else self.state / "standins" / pid
@@ -308,6 +322,9 @@ class Doors:
     async def claim(self, pid: str, want: str, invite: Optional[str]) -> Tuple[bool, str]:
         return await self.relay(pid).claim(await self._session(), slug(want), invite_code(invite or "") if invite else None, self.tag)
 
+    async def vouch(self, pid: str, by: str) -> Tuple[bool, str]:
+        return await self.relay(pid).vouch(await self._session(), self.relay(by))
+
     def missing(self) -> List[str]:
         out = [n for n in ("caddy", "frpc") if not binary(self.bin_dir, n)]
         if not self.door_py.is_file():
@@ -328,7 +345,8 @@ class Doors:
         door = Process(f"{pid} door", [self.python, str(self.door_py), "--state", str(door_state), "--moonraker", here,
                                        "--app", here, "--camera", f"{here}/webcam", "--address", r["address"],
                                        "--printer-id", r["name"], "--printer-name", printer["name"],
-                                       "--away-port", str(away), "--local-port", str(home), "--home-port", str(house)],
+                                       "--away-port", str(away), "--local-port", str(home), "--home-port", str(house),
+                                       *(["--not-mine-url", f"{self.bench_url}/bench/printers/{pid}/not-mine"] if self.bench_url else [])],
                        self.state / "standins" / pid / "door.log", self.spawn)
         conf = self.state / "standins" / pid / "frpc.toml"
         conf.write_text(render_frpc(r))

@@ -4,7 +4,8 @@ It answers the few Moonraker calls the service makes over its websocket, runs a 
 heating, PAUSE_BASE/RESUME_BASE, CANCEL_PRINT, ELYIR_TOOL as its macro would, and named macros that do
 nothing), and models the filament: each slot's tip, measured from the unit's parking spot, moves with the unit
 until it reaches the extruder's gears, which then hold it and move it. The sensor sits sensor_at mm from park;
-its edges are pushed at once as the gcode_button would, and reported in status every 250 ms as Klipper does.
+its edges are pushed at once as the gcode_button would, and reported in status every 250 ms as Klipper does. With
+hotend_gap, a second switch sits that far past the gears, above the hotend, with its own gcode_button.
 """
 import asyncio
 import json
@@ -14,6 +15,8 @@ from typing import Any, Dict, List, Optional, Set
 from aiohttp import web
 
 SENSOR = "filament_switch_sensor extruder_sensor"
+HOTEND = "gcode_button elyir_units_hotend"
+EXTRUDER_BUTTON = "gcode_button elyir_units_sensor"
 TICK = 0.01
 ASSIST_MM_S = 20.0
 SLACK_MM = 30.0       # the tube takes this much filament pushed back up before it buckles
@@ -21,7 +24,8 @@ SLACK_MM = 30.0       # the tube takes this much filament pushed back up before 
 
 class PretendPrinter:
     def __init__(self, aces: List[Any], sensor_at: float = 600.0, grip: float = 8.0, nozzle: float = 120.0,
-                 loaded: Optional[int] = None, time_scale: float = 1.0, macros=("BEFORE_CHANGE", "AFTER_CHANGE")) -> None:
+                 loaded: Optional[int] = None, time_scale: float = 1.0, macros=("BEFORE_CHANGE", "AFTER_CHANGE"),
+                 hotend_gap: Optional[float] = None, sensor_object: bool = True) -> None:
         self.aces = aces
         self.slots = [(a, k) for a in aces for k in range(len(a.slots))]
         self.sensor_at, self.grip, self.nozzle, self.scale = sensor_at, grip, nozzle, time_scale
@@ -29,6 +33,12 @@ class PretendPrinter:
         if loaded is not None:
             self.x[loaded] = sensor_at + grip + nozzle
         self.blocked: Set[int] = set()          # a slot whose filament jams before the sensor
+        self.hotend_gap = hotend_gap
+        self.sensor_object = sensor_object      # False: Klipper has no filament_switch_sensor, only our button (Studio)
+        self.slipping = False                   # the gears turn without moving the filament (lever open, ground end)
+        self.stuck = False                      # the filament won't come back out of the hotend
+        self.piece = False                      # a cut-off piece left under the hotend switch
+        self.hotend = self._at_hotend()
         self.macros = set(macros)
         self.state = "standby"
         self.paused = False
@@ -41,6 +51,7 @@ class PretendPrinter:
         self.subs: Dict[web.WebSocketResponse, Dict[str, Any]] = {}
         self._last_unit = {g: 0.0 for g in self.x}
         self.pulling = False                   # a forward extruder move is running: feed assist helps then
+        self.e_velocity = 0.0                  # mm/s, as Klipper's motion_report says
         self.buckled: List[int] = []           # slots whose filament the extruder pulled back while feed assist pushed
         self.before_retract = 0.0              # mm the before-change macro pulls back first, as a tip cut does
         self.head = (70.0, 331.0)              # where the nozzle is (x, y)
@@ -55,8 +66,13 @@ class PretendPrinter:
     def _detected(self) -> bool:
         return any(x >= self.sensor_at for x in self.x.values())
 
+    def _at_hotend(self) -> Optional[bool]:
+        if self.hotend_gap is None:
+            return None
+        return self.piece or any(x >= self.sensor_at + self.grip + self.hotend_gap for x in self.x.values())
+
     def gripped(self, g: int) -> bool:
-        return self.x[g] >= self.sensor_at + self.grip - 1e-6
+        return not self.slipping and self.x[g] >= self.sensor_at + self.grip - 1e-6
 
     def _follow_units(self) -> None:
         for g, (ace, k) in enumerate(self.slots):
@@ -81,11 +97,17 @@ class PretendPrinter:
             self.edges.append((d, ace.filament_at(k)))
             self._push("elyir_sensor", {"state": "pressed" if d else "released"})
             self._dirty = True
+        h = self._at_hotend()
+        if h != self.hotend:
+            self.hotend = h
+            self._push("elyir_sensor", {"state": "pressed" if h else "released", "switch": "hotend"})
+            self._dirty = True
 
     async def _extrude(self, mm: float, feed: float) -> None:
         seconds = abs(mm) / (feed / 60.0) / self.scale
         steps = max(1, int(seconds / TICK))
         self.pulling = mm > 0
+        self.e_velocity, self._dirty = (feed / 60.0) * (1 if mm > 0 else -1), True
         if mm < 0:
             for g, (ace, k) in enumerate(self.slots):
                 if not self.gripped(g):
@@ -96,12 +118,13 @@ class PretendPrinter:
         try:
             for _ in range(steps):
                 g = next((i for i in self.x if self.gripped(i)), None)
-                if g is not None:
+                if g is not None and not (self.slipping and mm > 0) and not (self.stuck and mm < 0):
                     self.x[g] += mm / steps
                 self._edge()
                 await asyncio.sleep(seconds / steps)
         finally:
             self.pulling = False
+            self.e_velocity, self._dirty = 0.0, True
 
     async def _tick(self) -> None:
         last = 0.0
@@ -120,8 +143,13 @@ class PretendPrinter:
         self._dirty = True
 
     def status(self) -> Dict[str, Any]:
-        return {SENSOR: {"filament_detected": self.detected}, "print_stats": {"state": self.state},
-                "pause_resume": {"is_paused": self.paused}, "extruder": {"target": self.target, "temperature": self.target}}
+        st = {SENSOR: {"filament_detected": self.detected if self.sensor_object else None},
+              EXTRUDER_BUTTON: {"state": "PRESSED" if self.detected else "RELEASED"}, "print_stats": {"state": self.state},
+              "pause_resume": {"is_paused": self.paused}, "extruder": {"target": self.target, "temperature": self.target}}
+        st["motion_report"] = {"live_extruder_velocity": self.e_velocity}
+        # Moonraker answers an object Klipper doesn't have with each asked-for field as None (Workshop, 15 November)
+        st[HOTEND] = {"state": None if self.hotend is None else "PRESSED" if self.hotend else "RELEASED"}
+        return st
 
     async def run_gcode(self, script: str) -> None:
         for line in script.splitlines():

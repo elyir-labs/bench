@@ -31,7 +31,7 @@ import { asKind, fitScale, matchPrinter, pickSpool, PURPOSES, spoolChoice, SUPPO
 import { compose, leftOutRuns, pickFrom, plateRuns, provisional, severalFrom, type Placed } from './plate'
 import { matchFileColors, sameSpool, unsorted, type FileColor, type PlateSpool, type Purge } from './colors'
 import { drawRuns, flatTop, heightColors, paintUses, toRuns, type Height } from './paint'
-import { changed, fromRuns, isOn, marksToSend, places, strayArea, turned, type Place, type Where } from './places'
+import { changed, fromRuns, isOn, marksToSend, places, strayArea, turned, type PartWhere, type Place, type Where } from './places'
 import type { SupportLines } from './supports'
 import { layOn, parseModel, sizeOf } from './stl'
 import { thumbnail } from './render'
@@ -66,6 +66,8 @@ export interface Part {
                                              // 2 not here; markRaw
   marksV: number                             // counts mark changes, so the plate is sliced again
   marksFile: boolean                         // the marks came in the 3MF
+  where: Where                               // its own: Orca decides with the marks | only where marked
+  noSupports: boolean                        // none on this part, whatever the plate has (round 2, 2A + C)
   project: { colors: FileColor[]; runs: { count: number; filament: number }[] } | null   // a 3MF with its own colors
 }
 
@@ -84,7 +86,6 @@ export const session = reactive({
   printer: null as api.PrinterOption | null,
   purpose: 'everyday' as Purpose,
   supports: 'normal' as SupportKind,
-  where: 'needed' as Where,                  // Orca decides, corrected by the marks | only where marked (design/supports-where/)
   usual: 'normal' as SupportKind,            // the person's usual kind on this printer
   settings: {} as Record<string, string>,    // changed for this print
   kept: {} as Partial<Record<Purpose, Record<string, string>>>,   // changed for good, per purpose
@@ -106,6 +107,8 @@ export const session = reactive({
 })
 
 let generation = 0
+// a new plate (begin, reset); a re-slice of the same plate bumps only generation, so an add still in flight lands
+let plateGeneration = 0
 let timer = 0
 let soon = 0
 let nextKey = 1
@@ -207,7 +210,7 @@ export const tooBig = (p: Part | null | undefined) => !!p && p.scale < 1
 /** What's on the plate, as the slicer sees it: a change to any of it makes the slices stale. */
 export function plateKey(parts: Part[] = session.parts, skipCopiesOf = -1): string {
   return JSON.stringify(parts.map((p, i) => [p.model, i === skipCopiesOf ? 0 : p.copies, p.scale, p.lay, p.down, p.brim, p.spool, p.paintV,
-    p.marksV]).concat(session.where === 'only' ? ['only'] : []))
+    p.marksV, p.where, p.noSupports]))
 }
 
 /** The plate's colors, the first being session.spool. */
@@ -307,7 +310,7 @@ function newPart(name: string, up: api.UploadedModel, tris: Float32Array | null,
     key: nextKey++, name, model: up.model, trisFile: tris ? markRaw(tris) : null, tris: null,
     sizeFile: up.size ?? (tris ? sizeOf(tris) : null), size: null, lying: up.lying ?? null,
     lay: 'file', layAuto: true, down: null, brim: 'auto', scale: 1, fit: 1, copies: Math.max(1, up.copies ?? 1), fill: null,
-    spool: 0, project: null, paint: null, paintV: 0, marks: null, marksV: 0, marksFile: false,
+    spool: 0, project: null, paint: null, paintV: 0, marks: null, marksV: 0, marksFile: false, where: 'needed', noSupports: false,
   }) as Part
   const marks = tris ? fromRuns(up.support_marks, tris.length / 9) : null
   if (marks) { p.marks = markRaw(marks); p.marksFile = true }
@@ -368,13 +371,14 @@ export const retry = () => (last ? begin(...last) : Promise.resolve())
 
 export async function begin(files: File[], spools: SpoolLike[], printerName: string | null | undefined, setup?: Setup): Promise<void> {
   last = [files, spools, printerName, setup]
+  plateGeneration++
   const gen = ++generation
   window.clearTimeout(timer)
   window.clearTimeout(soon)
   dropUnfinished()
   Object.assign(session, {
     stage: 'reading', error: '', errorInfo: null, parts: [], files: files.map(f => f.name), adding: 0, purpose: 'everyday', spool: null, spoolAuto: true,
-    more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false, where: 'needed',
+    more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
     jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null, sent: null, sentLater: [], settings: {}, pending: false,
     left: [], picking: null, undo: null,
   })
@@ -426,11 +430,11 @@ export async function begin(files: File[], spools: SpoolLike[], printerName: str
 /** "Add a model": more parts on the same plate. */
 export async function addFiles(files: File[]): Promise<void> {
   if (!files.length || session.stage !== 'ready') return
-  const gen = generation
+  const plateGen = plateGeneration
   session.adding += files.length
   try {
     const parts = (await Promise.all(files.map(readParts))).flat()
-    if (gen !== generation) return
+    if (plateGen !== plateGeneration) return
     if (parts.some(p => p.project) || session.parts.some(p => p.project)) {
       throw new Error('A 3MF with its own colors prints on a plate of its own.')
     }
@@ -441,19 +445,24 @@ export async function addFiles(files: File[]): Promise<void> {
     if (several) { session.picking = { from: several, first: false }; return }
     await sliceAll()
   } finally {
-    if (gen === generation) session.adding = Math.max(0, session.adding - files.length)
+    if (plateGen === plateGeneration) session.adding = Math.max(0, session.adding - files.length)
   }
 }
 
 function partRequest(p: Part): api.PartRequest {
   return { model: p.model!, copies: p.copies, scale: p.scale, lay: p.lay, ...(p.lay === 'side' && p.down ? { down: p.down } : {}),
     ...(p.brim !== 'auto' ? { brim: p.brim } : {}), ...(multi.value && !p.project ? { spool: p.spool } : {}),
-    ...(multi.value && p.paint && paintable(p) ? paintRequest(p.paint) : {}), ...marksRequest(p) }
+    ...(multi.value && p.paint && paintable(p) ? paintRequest(p.paint) : {}), ...marksRequest(p), ...whereRequest(p) }
+}
+
+function whereRequest(p: Part): { supports_where?: 'only' | 'none' } {
+  if (session.supports === 'off' || p.project) return {}
+  return p.noSupports ? { supports_where: 'none' } : p.where === 'only' ? { supports_where: 'only' } : {}
 }
 
 function marksRequest(p: Part): { support_marks?: number[] } {
-  if (!markable(p) || session.supports === 'off') return {}
-  const out = marksToSend(p.marks, placesOf(p), session.where, p.tris!.length / 9)
+  if (!markable(p) || session.supports === 'off' || p.noSupports) return {}
+  const out = marksToSend(p.marks, placesOf(p), p.where, p.tris!.length / 9)
   const runs = out ? toRuns(out) : null
   return runs ? { support_marks: runs } : {}
 }
@@ -483,7 +492,7 @@ function request(purpose: Purpose, png: string | null, parts: Part[], supports: 
     printer: session.printer!.id, purpose, supports,
     kept: session.kept[purpose] ?? {}, settings: session.settings,
     material: sp.material, color: sp.color, slot: sp.slot == null ? null : sp.slot + 1,
-    thumbnail: png, ...spoolsRequest(), ...(session.where === 'only' && supports !== 'off' ? { supports_where: 'only' as const } : {}),
+    thumbnail: png, ...spoolsRequest(),
   }
 }
 
@@ -653,21 +662,39 @@ export function marksSummary(parts: Part[] = session.parts): { added: number; of
   }
   return { added, off, on, stray, found }
 }
-/** Part i's marks from the Where screen, and the plate's "where". */
-export function setMarks(i: number, marks: Uint8Array, where: Where) {
+/** Part i's marks and its own "where" from the Where screen; none keeps the marks for when it's turned back on. */
+export function setMarks(i: number, marks: Uint8Array, where: PartWhere) {
   const p = session.parts[i]
   if (!p || !markable(p)) return
   p.marks = marks.some(v => v) ? markRaw(marks) : null
   p.marksV++
   p.marksFile = false
-  session.where = where
+  p.noSupports = where === 'none'
+  if (where !== 'none') p.where = where
+  if (where !== 'none' && session.supports === 'off') onlyThisPart(p)
   void sliceAll()
 }
+/** Whether part i gets supports (the Supports sheet's switch). From Off, turning one on brings the usual kind back
+ *  for that part alone. */
+export function setPartSupports(i: number, on: boolean) {
+  const p = session.parts[i]
+  if (!p || p.project) return
+  if (on && session.supports === 'off') onlyThisPart(p)
+  else p.noSupports = !on
+  void sliceAll()
+}
+/** Supports on this part and no other: the plate was Off. */
+function onlyThisPart(p: Part) {
+  for (const q of session.parts) q.noSupports = q !== p
+  session.supports = session.usual === 'off' ? 'normal' : session.usual
+}
+/** Whether a part gets supports as the plate stands. */
+export const partSupported = (p: Part) => session.supports !== 'off' && !p.noSupports && !p.project
 /** One place switched on or off, from outside the Where screen. */
 export function turnPlace(i: number, place: Place, on: boolean) {
   const p = session.parts[i]
   if (!p?.tris) return
-  setMarks(i, turned(place, p.marks, p.tris.length / 9, on), session.where)
+  setMarks(i, turned(place, p.marks, p.tris.length / 9, on), p.where)
 }
 
 /** Undo a change at a height: the heights and colors as they were. */
@@ -886,11 +913,11 @@ export function onlyWhatFits() {
 export async function askFill(i: number): Promise<void> {
   const p = session.parts[i]
   if (!p?.model || !session.printer) return
-  const key = plateKey(session.parts, i)
+  const key = plateKey(session.parts, i) + session.supports
   if (p.fill?.for === key) return
   try {
-    const a = await api.fitPart({ printer: session.printer.id, part: i,
-      parts: session.parts.map(partRequest) })
+    const a = await api.fitPart({ printer: session.printer.id, part: i, parts: session.parts.map(partRequest),
+      supports: session.supports })
     if (session.parts[i] === p) p.fill = { ...a, for: key }
   } catch { /* no number on the chip */ }
 }
@@ -906,6 +933,7 @@ export async function send(): Promise<string> {
 }
 
 export function reset() {
+  plateGeneration++
   generation++
   window.clearTimeout(timer)
   window.clearTimeout(soon)
@@ -913,6 +941,6 @@ export function reset() {
   Object.assign(session, {
     stage: 'idle', error: '', parts: [], files: [], adding: 0, jobs: {}, jobFor: '', kinds: {}, kindsFor: '', lines: {}, placed: null,
     left: [], picking: null, undo: null, pending: false,
-    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false, where: 'needed',
+    sent: null, sentLater: [], spool: null, more: [], purge: null, oneAfterOther: false, heights: [], offerOff: false,
   })
 }

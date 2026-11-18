@@ -15,10 +15,44 @@
     </div>
     <button v-if="awayAll" class="away-chip" @click="askAboutAway(awayIds)"><i aria-hidden="true"></i>Away from home<span class="chev" aria-hidden="true">›</span></button>
 
-    <p v-if="!printers.length && !benches.length" class="empty">
+    <!-- design/account-list/, A: an empty browser gets its printers by signing in -->
+    <div v-if="!printers.length && !benches.length && account.state === 'out'" class="get">
+      <b>Get your printers</b>
+      <span>Sign in and the printers in your account are here.</span>
+      <router-link to="/you" class="a-btn accent">Sign in</router-link>
+    </div>
+    <p v-else-if="!printers.length && !benches.length && account.state === 'in' && (account.me?.devices.length ?? 0) > 0" class="empty">
+      Getting the printers in your account…
+    </p>
+    <p v-else-if="!printers.length && !benches.length" class="empty">
       Add your first printer: on the printer's screen, go to <b>Care</b>, then <b>Phones</b>, then
       <b>Add a phone</b>, and scan the code with this phone's camera.
     </p>
+
+    <!-- design/new-kobra/, B: a printer the Bench Box added and carried this phone to, for a day, with Not mine -->
+    <section v-if="fresh.length" class="group g-new">
+      <h2 class="grp">New on your bench</h2>
+      <div class="cards">
+        <div v-for="p in fresh" :key="p.id" class="printer joined">
+          <router-link :to="`/p/${p.id}`" class="top">
+            <span class="pic" aria-hidden="true"></span>
+            <span class="words">
+              <span class="row">
+                <span class="name">{{ p.name }}</span>
+                <span class="state">{{ rowOf(p, atHomeOnly, now).word }}</span>
+              </span>
+              <span class="line">{{ joinedLine(p) }}</span>
+            </span>
+          </router-link>
+          <p v-if="notMineSay[p.id]" class="say-not-mine">{{ notMineSay[p.id] }}</p>
+          <span class="acts">
+            <router-link :to="`/p/${p.id}`" class="a-btn accent small">Open it</router-link>
+            <button type="button" class="a-btn small" :disabled="busy[p.id]" @click="sayNotMine(p)">
+              {{ asking[p.id] ? 'Yes, take it off' : 'Not mine' }}</button>
+          </span>
+        </div>
+      </div>
+    </section>
 
     <template v-if="wide">
       <component :is="homeOnlyRow(p) ? 'button' : RouterLink" v-for="p in needing" :key="p.id"
@@ -99,6 +133,8 @@
       </div>
     </section>
 
+    <p v-if="accountLine" class="from-account">{{ accountLine }}</p>
+
     <div v-if="!wide" class="quiet">
       <router-link to="/look" class="pill">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" /><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10" /></svg>
@@ -147,7 +183,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { benches, printers, type LiveBench } from '../printers'
+import { benches, notMine, printers, type LiveBench, type LivePrinter } from '../printers'
+import { isNew, notMineWords } from '../joined'
+import { fromAccountWords } from '../account-list'
+import { inAccountCount, waiting } from '../account-follow'
 import { statusOf } from '../status'
 import { allAway, attentionTone, cardOf, groupOf, grouped, groupLabel, loadedColor, markAway, pictureOf, rowOf, snapshotOf } from '../home'
 import { account, dismissPitch, pitchDismissed } from '../account'
@@ -160,13 +199,16 @@ import { askAboutAway } from '../home-look'
 const props = defineProps<{ wide?: boolean }>()
 
 const benchWord = (b: LiveBench) => (b.reach === 'away' ? '' : b.reach === 'checking' ? 'Looking…' : b.reach === 'unpaired' ? 'Not paired any more' : "Can't reach it")
-const groups = computed(() => grouped(printers))
+const fresh = computed(() => printers.filter((p) => isNew(p, now.value)))
+const groups = computed(() => grouped(printers.filter((p) => !isNew(p, now.value))))
 const needing = computed(() => groups.value.find((g) => g.group === 'attention')?.printers ?? [])
 const others = computed(() => groups.value.filter((g) => g.group !== 'attention').flatMap((g) => g.printers))
 const noCamera = reactive<Record<string, boolean>>({})
 const awayAll = computed(() => allAway(printers))
 const awayIds = computed(() => printers.filter((p) => p.reach === 'away').map((p) => p.id))
 const broken = reactive<Record<string, boolean>>({})
+
+const accountLine = computed(() => (account.state === 'in' ? fromAccountWords(inAccountCount.value, waiting.value.length) : null))
 
 const dismissed = ref(pitchDismissed())
 const pitch = computed(() => printers.length > 0 && !dismissed.value && account.state !== 'checking' && account.state !== 'error' &&
@@ -181,6 +223,24 @@ onMounted(async () => { kept.value = await recent() })
 
 // "2:30 pm" turns into "Yesterday" overnight
 const now = ref(Date.now())
+
+const asking = reactive<Record<string, boolean>>({})
+const busy = reactive<Record<string, boolean>>({})
+const notMineSay = reactive<Record<string, string>>({})
+function joinedLine(p: LivePrinter): string {
+  const mins = Math.max(0, Math.round((now.value - (p.joined ?? now.value)) / 60_000))
+  const when = mins < 2 ? 'just now' : mins < 60 ? `${mins} min ago` : `${Math.round(mins / 60)} h ago`
+  const line = rowOf(p, atHomeOnly.value, now.value).line
+  return `The Bench Box added it ${when}` + (line ? ` · ${line}` : '')
+}
+async function sayNotMine(p: LivePrinter) {
+  if (!asking[p.id]) { asking[p.id] = true; notMineSay[p.id] = notMineWords(p.name, 'confirm'); return }
+  busy[p.id] = true
+  const out = await notMine(p.id)
+  busy[p.id] = false
+  asking[p.id] = false
+  notMineSay[p.id] = out === 'done' ? '' : notMineWords(p.name, out)
+}
 let minutes = 0
 onMounted(() => { minutes = window.setInterval(() => { now.value = Date.now() }, 60_000) })
 onBeforeUnmount(() => window.clearInterval(minutes))
@@ -236,6 +296,18 @@ button.away-chip { appearance: none; border: 0; font-family: inherit; cursor: po
 .g-attention .printer { box-shadow: 0 0 0 2px var(--a-red), var(--a-card-shadow); }
 .g-attention .tone-amber { box-shadow: 0 0 0 2px var(--a-amber), var(--a-card-shadow); }
 .g-off .printer { background: color-mix(in srgb, var(--a-surface) 60%, transparent); box-shadow: none; }
+.get { display: grid; gap: 10px; justify-items: center; text-align: center; margin: 56px 18px 24px; }
+.get b { font-size: 24px; line-height: 1.2; }
+.get span { color: var(--a-ink-3); font-size: 16px; line-height: 1.4; margin-bottom: 6px; }
+.get .a-btn { width: auto; height: 48px; font-size: 17px; padding: 0 24px; text-decoration: none; }
+.from-account { margin: 14px 10px 0; font-size: 13px; color: var(--a-ink-3); }
+.g-new .grp { color: var(--a-accent-text); }
+.printer.joined { flex-direction: column; align-items: stretch; gap: 10px; cursor: default;
+  box-shadow: 0 0 0 2px var(--a-accent), var(--a-card-shadow); }
+.joined .top { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+.joined .acts { display: flex; gap: 8px; padding-left: 66px; }
+.joined .a-btn.small { width: auto; height: 38px; font-size: 15px; padding: 0 16px; flex: none; }
+.say-not-mine { margin: 0; padding-left: 66px; font-size: 14px; color: var(--a-ink-2); }
 
 .pic { width: 52px; height: 52px; border-radius: 14px; flex: none; object-fit: contain; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 38%, var(--a-obj-hi), var(--a-obj-lo)); }

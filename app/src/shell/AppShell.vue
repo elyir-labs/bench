@@ -41,6 +41,8 @@
     </header>
 
     <main class="content">
+      <!-- A USB stick (design/usb/): the line over a print here; its sheet goes over any screen -->
+      <PrinterUsb v-if="intent" :name="printerName" />
       <!-- Check and measure a filament unit (design/unit-setup/, B): the flow takes the screen, as drawn, until Done -->
       <UnitSetupFlow v-if="settingUp" :us="intent!.unit_setup!" :phone="layout !== 'panel'" :printer="printerName" />
       <UnitCheckFlow v-else-if="checking" :uc="intent!.unit_check!" />
@@ -48,7 +50,7 @@
       <nav v-if="pane" class="areas" aria-label="Sections">
         <router-link
           v-for="t in areaTabs" :key="t.to" :to="t.to" class="area"
-          :class="{ on: !cameraInPane && isArea(t.to), locked: t.to === '/print' && busy }"
+          :class="{ on: !cameraInPane && isArea(t.to), dot: t.to === '/care' && careDot, locked: t.to === '/print' && busy }"
           :aria-disabled="t.to === '/print' && busy ? 'true' : undefined"
           @click="onArea($event, t.to)"
         >{{ t.label }}</router-link>
@@ -67,7 +69,7 @@
     <nav v-if="!pane && !benchChrome && !checking && !settingUp" class="tabs" aria-label="Sections">
       <router-link
         v-for="t in tabs" :key="t.to" :to="t.to" class="tab"
-        :class="{ attention: t.to === '/' && needsAttention, locked: t.to === '/print' && busy, 'router-link-active': t.to !== '/' && route.path.startsWith(t.to + '/') }"
+        :class="{ attention: t.to === '/' && needsAttention, dot: t.to === '/care' && careDot, locked: t.to === '/print' && busy, 'router-link-active': t.to !== '/' && route.path.startsWith(t.to + '/') }"
         :aria-disabled="t.to === '/print' && busy ? 'true' : undefined"
         @click="t.to === '/print' && busy && $event.preventDefault()"
       >
@@ -78,6 +80,7 @@
 
     <CameraViewer v-if="cameraOpen && camera && !cameraInPane" :camera="camera" @close="cameraOpen = false" />
     <LightSheet />
+    <TagSheet />
     <PanelGlance v-if="railed" :open="glanceOpen" @close="glanceOpen = false" />
     <AdvancedDoor v-if="advancedOpen" :url="advancedUrl" @close="advancedOpen = false" />
     <AskCard />
@@ -112,6 +115,7 @@ import NowBar from '@/components/now/NowBar.vue'
 import CameraViewer from '@/components/camera/CameraViewer.vue'
 import LightButton from '@/components/light/LightButton.vue'
 import LightSheet from '@/components/light/LightSheet.vue'
+import TagSheet from '@/components/tags/TagSheet.vue'
 import { lightPlace, nowCameraShown } from '@/intent/light'
 import { useCameras } from '@/camera/useCameras'
 import { cameraOpen, cameraFull } from '@/camera/viewer'
@@ -122,6 +126,8 @@ import UnitCheckFlow from '@/components/unitcheck/UnitCheckFlow.vue'
 import { flowShown } from '@/intent/unitCheck'
 import UnitSetupFlow from '@/components/unitsetup/UnitSetupFlow.vue'
 import { setupShown } from '@/intent/unitSetup'
+import { updateDot } from '@/intent/update'
+import PrinterUsb from '@/components/usb/PrinterUsb.vue'
 import { leftToPanel } from '@/components/unitsetup/handover'
 
 const store = useIntentStore()
@@ -194,6 +200,8 @@ const tabs = [
   { to: '/materials', label: 'Materials', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>' },
   { to: '/care', label: 'Care', icon: '<svg viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>' },
 ]
+
+const careDot = computed(() => updateDot(intent.value?.update))   // design/updates/: a newer version waits
 
 // The tab and the Home Screen icon carry the printer's name, so two printers stay apart.
 watch(printerName, (n) => {
@@ -368,6 +376,10 @@ onBeforeUnmount(() => {
 .tab .icon :deep(svg) { width: 100%; height: 100%; display: block; }
 .tab.router-link-active { color: var(--a-ink); }
 .tab.locked { color: color-mix(in srgb, var(--a-ink-3) 45%, transparent); cursor: default; }
+.tab.dot::after, .area.dot::after { content: ''; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--a-amber); }
+.tab.dot::after { top: 8px; right: calc(50% - 22px); }
+.area.dot { position: relative; }
+.area.dot::after { top: 6px; right: 6px; }
 .tab.attention::after {
   content: '';
   position: absolute;

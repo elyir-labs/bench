@@ -191,8 +191,11 @@ def test_a_card_is_mounted_read_only_and_unmounted_after(monkeypatch):
 
 def test_the_sudo_rule_mounts_a_card_only_read_only_where_bring_reads_it():
     rule = a.render_sudoers("pi")
-    mounts = [ln for ln in rule.replace(", \\\n    ", "\n").splitlines() if "/mount " in ln]
-    assert mounts and all(" -o ro" in ln and "/run/elyir-bench-bring/sd[a-z]" in ln for ln in mounts)
+    lines = rule.replace(", \\\n    ", "\n").splitlines()
+    mounts = [ln for ln in lines if "/mount " in ln and "/run/elyir-bench-bring/" in ln]
+    assert mounts and all(" -o ro" in ln for ln in mounts)
+    # a USB stick's report (design/usb/) is the only writable mount, and never where bring reads an old card
+    assert all("/run/elyir-bench-usb/sd" in ln and "noexec" in ln for ln in lines if "/mount " in ln and " -o rw" in ln)
     assert "ro\\,noload" in rule                     # a comma in a sudoers command is escaped
     assert "umount /run/elyir-bench-bring/sd[a-z][0-9]" in rule and "rw" not in " ".join(mounts)
 

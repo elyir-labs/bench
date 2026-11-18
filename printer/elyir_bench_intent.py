@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import logging
 import math
 import os
 import re
@@ -43,6 +44,8 @@ def _sibling(name: str):
 
 
 filament_units = _sibling("filament_units")
+spots = _sibling("spots")
+spool_tags = _sibling("spool_tags")
 unit_check = _sibling("unit_check")
 unit_setup = _sibling("unit_setup")
 
@@ -144,6 +147,8 @@ PREP_STEPS: List[Dict[str, Any]] = [
     {"id": "heating", "label": "Heating the nozzle", "match": ["heating toolhead", "heating nozzle", "heating extruder"]},
 ]
 PRINT_STARTED_MARKERS = ["printing, good luck", "printing..."]
+SHARED_START_PRINTED_S = 10.0   # print time with no PRINT_START stage: the file is past it (_observe_shared_start)
+UNIT_RESUME_GRACE_S = 5.0       # a finished in-print tool change, until Klipper says printing again
 # A start routine that names no step (Anycubic's on a Kobra, a slicer's own start G-code) is followed by what the
 # printer does: homing or a bed at temperature is leveling, and the nozzle's target reaching the file's first-layer
 # temperature (this, when the file doesn't say) is heating it to print. A Kobra heats to 170° to clean the nozzle first.
@@ -405,12 +410,14 @@ MATERIAL_TEMPS = {"PLA": 210, "PETG": 240, "ABS": 250, "ASA": 255, "TPU": 225, "
 COLOR_MATCH = 70   # RGB distance under which two colours count as the same filament
 FLAPPING_WINDOW = 120      # seconds of USB history kept per filament unit
 RECENT_SPOOLS = 4          # spools remembered on a printer without a unit, as quick answers
+HOTEND_BUTTON = "gcode_button elyir_units_hotend"   # the unit service's switch above the hotend
 HEAD_MISMATCH_SECONDS = 10    # head sensor and loaded slot must disagree this long before saying so
 SWAP_QUIET_SECONDS = 30       # ...and not right after a swap, while filament is still moving
 # Console lines from the filament unit's tool change, in order, mapped to steps people see.
 SWAP_STEPS = [
     ("unload", ["unloading tool"]),
     ("feed", ["loading tool", "feeding from gate"]),
+    ("through", []),          # our service only, with a hotend switch: it reports the step itself
     ("nozzle", ["feeding to nozzle", "feeding to toolhead"]),
     ("clean", ["poop macro"]),
 ]
@@ -461,7 +468,13 @@ COLOUR_MARK_LINES = 5         # a COLOR_CHANGE marker this many lines from an M6
 COLOUR_PLAN_FRESH_SECONDS = 15 * 60   # a plan is for the print started right after it, not the same file days later
 COLOUR_PLAN_MAX = 50          # colour changes in one file, at most
 CHECKED_FILES_KEPT = 20       # files whose colour changes the Print sheet has shown, for checking the plan sent back
-SWITCH_STEPS = ("unload", "feed", "nozzle", "clean")   # the unit's own tool change, as SWAP_STEPS reports it
+SWITCH_STEPS = ("unload", "feed", "nozzle", "clean")
+# Our service's own tool change steps (units/toolchange.py) as the swap steps people see
+SERVICE_FEED_STEPS = ("in", "through", "nozzle", "after", "resume")   # the new filament is the one moving
+SERVICE_SWAP_STEPS = {"out": "unload", "park": "unload", "in": "feed", "through": "through", "nozzle": "nozzle",
+                      "after": "clean"}
+NOT_THROUGH_DETAIL = "It reached the extruder but didn't come through the gears. Check the extruder's lever is closed and the end isn't bent, then try again. Nothing was pushed into the nozzle."
+STUCK_DETAIL = "The extruder backed it out but it's still in the hotend, so the unit stopped pulling and nothing snapped. Give it a minute hotter, or open the extruder's lever and pull it out by hand."   # the unit's own tool change, as SWAP_STEPS reports it
 _HEX_RE = re.compile(r"#([0-9A-Fa-f]{6})(?![0-9A-Fa-f])")
 _STATS_LAYER_RE = re.compile(r"CURRENT_LAYER=(\d+)", re.I)
 
@@ -991,6 +1004,11 @@ class IntentTracker:
         self._warm: Optional[Dict[str, Any]] = None   # warming up before a print: material, targets, when warm
         self._hands: Optional[Dict[str, Any]] = None  # a job from Move and heat holding the printer: kind, until
         self._hands_heat: set = set()                 # heaters set by hand, turned off after HANDS_IDLE_SECONDS
+        # spots the printer goes to (design/spots/, B with C under Advanced): its own safe moves and saves
+        self.spots = spots.Spots(lambda: self.status, lambda s: self._change_queue.append(("gcode", s)),
+                                 self.hands_why_not, self._hands_limits, self._hands_position, self.homed)
+        # spool tags (design/spool-tags/): a tag held on the reader asks which spool it's for, and is written
+        self.tags = spool_tags.SpoolTags(self.spools, self.has_ace)
         self._hands_until: Optional[float] = None
         self._hands_aim: Optional[tuple] = None       # (position, when) of the last move sent
         self._hands_homing: Optional[float] = None    # G28 sent then, not homed yet
@@ -1021,6 +1039,9 @@ class IntentTracker:
         self._print_started = False
         self._own_start = False                         # this job runs Elyir Bench's start macro (elyir-bench.cfg)
         self._own_stage_was = ""                        # ...and its stage at the last look
+        self._shared_stage_was = ""                     # the shared PRINT_START's stage at the last look
+        self._unit_change_last: Optional[Dict[str, Any]] = None   # the in-print tool change last seen going
+        self._unit_change_ended: Optional[float] = None
         self._pause_reason: Optional[Dict[str, Any]] = None
         self._pause_since: Optional[float] = None
         self._finished_ack = False
@@ -1122,6 +1143,7 @@ class IntentTracker:
         """Catch the few console lines that carry meaning raw status doesn't."""
         now = time.time() if now is None else now
         low = (line or "").lower()
+        self.spots.on_console(line)
         if "spool is empty" in low or "filament runout" in low or "runout detected" in low:
             self._pause_reason = {"phase": "runout", "slot": self._spool_in_head(), "at": now}
         elif "ace sensor error" in low or "feed timeout" in low:
@@ -1535,6 +1557,7 @@ class IntentTracker:
                 self._mesh_at = None
                 self._print_started = False
                 self._own_start = False
+                self._shared_stage_was = ""
                 self._finished_ack = False
                 self._pause_reason = None
                 self._cancelled_at = None
@@ -1583,6 +1606,8 @@ class IntentTracker:
         if isinstance(layer, (int, float)) and layer >= 1:
             self._print_started = True
         self._observe_own_start(state)
+        self._observe_shared_start(state)
+        self._observe_unit_change(state, now)
         if state == "printing" and not self._print_started:
             self._observe_steps()
 
@@ -1629,6 +1654,38 @@ class IntentTracker:
             self._prep_index = len(PREP_STEPS)
         self._own_stage_was = stage
 
+    def _observe_shared_start(self, state: str) -> None:
+        """The shared PRINT_START's end, from what stays put rather than its "Printing, good luck!" M117: a tool
+        change on the file's next line can overwrite that inside one status batch, and the screen then said
+        Getting ready for the whole print (Workshop, 9 November). Its stage leaving `resume` is the file resuming;
+        print time with no stage is a file past PRINT_START (Klipper doesn't count the paused prep), which also
+        covers Moonraker starting mid-print."""
+        st = self.status.get("gcode_macro _PRINT_START")
+        if not isinstance(st, dict) or "stage" not in st:
+            return
+        stage = str(st.get("stage") or "")
+        if not stage and state in ("printing", "paused") and not self._print_started and not self._own_start:
+            printed = float((self.status.get("print_stats") or {}).get("print_duration") or 0)
+            if self._shared_stage_was == "resume" or printed >= SHARED_START_PRINTED_S:
+                self._print_started = True
+                self._prep_index = len(PREP_STEPS)
+        self._shared_stage_was = stage
+
+    def _observe_unit_change(self, state: str, now: float) -> None:
+        fu = self.unit_state()
+        ch = fu.get("change") if fu else None
+        if ch and ch.get("in_print") and not ch.get("error"):
+            self._unit_change_last, self._unit_change_ended = dict(ch), None
+        elif self._unit_change_last is not None and self._unit_change_ended is None:
+            self._unit_change_ended = now
+        if state != "paused":
+            self._unit_change_last = self._unit_change_ended = None
+        key = SERVICE_SWAP_STEPS.get((ch or {}).get("step"))
+        if key and self._swap and not self._swap.get("error"):
+            i = [k for k, _ in SWAP_STEPS].index(key)
+            if i > self._swap["step"]:
+                self._swap["step"] = i
+
     def _match_prep_step(self, low: str) -> None:
         if not low:
             return
@@ -1659,12 +1716,19 @@ class IntentTracker:
         """The filament units in one shape, whatever drives them (filament_units.py); None without one."""
         return None if self.direct else filament_units.read(self.status)
 
-    def _unit_change(self, pstate: str) -> Optional[Dict[str, Any]]:
+    def _unit_change(self, pstate: str, now: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """A tool change our service is doing in a print (the quiet pause pauses the file), or one that failed and
         left it paused. A change asked for from the screen shows as the swap it is."""
         fu = self.unit_state()
         ch = fu.get("change") if fu else None
-        if not ch or not ch.get("in_print") or pstate != "paused":
+        if pstate != "paused":
+            return None
+        if not ch and self._unit_change_ended is not None and now is not None \
+                and now - self._unit_change_ended < UNIT_RESUME_GRACE_S:
+            # The service clears its change once RESUME_BASE returns; Klipper's "printing" can come a batch
+            # later, and that moment read as Needs you, with a push, at the end of every change.
+            return self._unit_change_last
+        if not ch or not ch.get("in_print"):
             return None
         return ch
 
@@ -1678,7 +1742,11 @@ class IntentTracker:
             headline = f"Switching to {what}" if to is not None and to >= 0 else "Unloading the filament"
             return ("preparing", "tool_change", headline, "The file asks for it here. Nobody's needed.", [stop], "")
         low = ch["error"].lower()
-        if "reach" in low:
+        if "didn't take" in low:
+            detail = NOT_THROUGH_DETAIL
+        elif "stuck in the hotend" in low:
+            detail = STUCK_DETAIL
+        elif "reach" in low:
             detail = "The filament didn't get where it should. Check the tube between the unit and the head is clear, then try again."
         elif "come out" in low:
             detail = "The old filament didn't come out of the head. Check the head, then try again."
@@ -1689,6 +1757,44 @@ class IntentTracker:
         retry = _action("swap_slot", "Try again", primary=True, style="red", slot=to) if to is not None and to >= 0 else None
         return ("problem", "tool_change_failed", f"Switching to {what} didn't finish.", detail,
                 [a for a in (retry, stop) if a], ch["error"])
+
+    def _head_switches(self) -> Optional[Dict[str, Any]]:
+        """The head's switches, drawn beside a tool change the unit's service is doing or one that just failed
+        (design/filament-units/, A): the extruder switch, and the hotend switch only where the printer has one
+        configured (Workshop has none, 15 November); None without a change."""
+        fu = self.unit_state()
+        if not fu or not isinstance(fu.get("switches"), dict):
+            return None
+        two = bool(fu.get("hotend_switch"))
+        ch = fu.get("change") or {}
+        going = self._swap or ch
+        if not going:
+            return None
+        low = str((self._swap or {}).get("error") or ch.get("error") or "").lower()
+        to, frm = going.get("to"), going.get("from")
+        loads, unloads = isinstance(to, int) and to >= 0, isinstance(frm, int) and frm >= 0
+        # the filament in the head: the old one until the new one starts feeding (Studio, 9 November: red was drawn
+        # while gray ASA was still coming out)
+        new_in = ch.get("step") in SERVICE_FEED_STEPS or "didn't take" in low
+        slot = to if loads and (new_in or not unloads) else frm
+        color = next((s.get("color") for s in self.spools() if s["slot"] == slot), None) if slot is not None else None
+        failed = ("hotend" if two and ("didn't take" in low or "stuck in the hotend" in low)
+                  else "extruder" if "didn't reach the toolhead" in low else None)
+        return {"extruder": fu["switches"].get("extruder"), "hotend": fu["switches"].get("hotend") if two else None,
+                "hotend_switch": two, "gears": fu["switches"].get("gears"), "failed": failed, "color": color}
+
+    def has_ace(self) -> bool:
+        """An Anycubic ACE is here, through KlipperACE or our own driver: its tags are the ones to write."""
+        st = self.status
+        return bool(st.get("ace") or (st.get("elyir_units") or {}).get("units"))
+
+    def _tags_view(self) -> Optional[Dict[str, Any]]:
+        self.tags.tick()
+        try:
+            return self.tags.view()
+        except Exception:   # a bad tag never takes the screens down
+            logging.exception("intent: spool tags view")
+            return None
 
     def unit_commands(self) -> Optional[Any]:
         """The commands the unit's driver takes, or None when Bench can only watch it."""
@@ -2216,9 +2322,12 @@ class IntentTracker:
 
     @staticmethod
     def head_sensor_name(object_names: List[str]) -> Optional[str]:
-        """The filament sensor nearest the nozzle: a toolhead sensor, else the extruder one."""
+        """The filament sensor nearest the nozzle: the unit service's hotend switch (the one its loads go by,
+        design/filament-units/), else a sensor named for the hotend or the toolhead, else the extruder one."""
+        if HOTEND_BUTTON in object_names:
+            return HOTEND_BUTTON
         sensors = [o for o in object_names if o.startswith("filament_switch_sensor ")]
-        for word in ("toolhead", "extruder"):
+        for word in ("hotend", "toolhead", "extruder"):
             for o in sensors:
                 if word in o.lower():
                     return o
@@ -2227,7 +2336,10 @@ class IntentTracker:
     def head_loaded(self) -> Optional[bool]:
         if not self.head_sensor:
             return None
-        v = (self.status.get(self.head_sensor) or {}).get("filament_detected")
+        st = self.status.get(self.head_sensor) or {}
+        if self.head_sensor == HOTEND_BUTTON:
+            return st["state"].upper() == "PRESSED" if isinstance(st.get("state"), str) else None
+        v = st.get("filament_detected")
         return bool(v) if isinstance(v, bool) else None
 
     def begin_swap(self, to: int, frm: Optional[int], purge: bool, now: Optional[float] = None) -> None:
@@ -2236,6 +2348,7 @@ class IntentTracker:
         if to < 0 and frm is not None and frm in spools:
             self._last_unloaded = {"color": spools[frm]["color"], "material": spools[frm]["material"]}
         self._swap = {"to": to, "from": frm, "purge": purge, "started": now, "step": -1, "error": None,
+                      "through": bool((self.unit_state() or {}).get("hotend_switch")),
                       "to_name": spools.get(to, {}).get("name") if to >= 0 else None,
                       "from_name": spools.get(frm, {}).get("name") if frm is not None else None}
         self._mismatch = None
@@ -2282,6 +2395,7 @@ class IntentTracker:
     def _swap_labels(sw: Dict[str, Any]) -> List[tuple]:
         return [("unload", f"Taking out {sw['from_name'] or 'the old filament'}"),
                 ("feed", f"Feeding {sw['to_name'] or 'the new filament'}"),
+                ("through", "Through the extruder"),
                 ("nozzle", "Feeding it to the nozzle"),
                 ("clean", "Cleaning the nozzle")]
 
@@ -2289,7 +2403,8 @@ class IntentTracker:
     def _swap_wanted(sw: Dict[str, Any]) -> List[str]:
         return [k for k, _ in SWAP_STEPS
                 if (k != "unload" or sw["from"] is not None)
-                and (k not in ("feed", "nozzle") or sw["to"] >= 0)
+                and (k not in ("feed", "through", "nozzle") or sw["to"] >= 0)
+                and (k != "through" or sw.get("through"))
                 and (k != "clean" or sw["purge"])]
 
     # ---- changing filament by hand (and the check after a swap) ------------------
@@ -4467,8 +4582,8 @@ class IntentTracker:
         elif self._outage_shown() and (paused or pstate == "paused"):
             state, phase, headline, detail, actions, steps = self._outage_intent(job, now)
 
-        elif self._unit_change(pstate) is not None:
-            state, phase, headline, detail, actions, raw = self._unit_change_view(self._unit_change(pstate), spools)
+        elif self._unit_change(pstate, now) is not None:
+            state, phase, headline, detail, actions, raw = self._unit_change_view(self._unit_change(pstate, now), spools)
 
         elif self._swap is not None and self._swap.get("error"):
             sw = self._swap
@@ -4477,7 +4592,11 @@ class IntentTracker:
             headline = (f"Loading {what} didn't finish." if sw["to"] >= 0
                         else f"Unloading {sw['from_name'] or 'the filament'} didn't finish.")
             low = sw["error"].lower()
-            if "not ready" in low:
+            if "didn't take" in low:
+                detail = NOT_THROUGH_DETAIL
+            elif "stuck in the hotend" in low:
+                detail = STUCK_DETAIL
+            elif "not ready" in low:
                 detail = "That slot doesn't have filament ready. Push the filament into the unit until it catches, then try again."
             elif "sensor" in low or "timeout" in low or "did not" in low or "didn't" in low:
                 detail = "The filament didn't get where it should. Check the tube between the unit and the head is clear, then try again."
@@ -4784,6 +4903,9 @@ class IntentTracker:
             "new_spool": self.new_spool_notice(spools) if state == "ready" else None,
             "carried": self._carried_view(now),
             "head": self.head(now),
+            "head_switches": self._head_switches(),
+            "spots": self.spots.view(now) if self.klippy_state == "ready" else None,
+            "tags": self._tags_view(),
             "care": dict(self.care, hint=self.care["hint"] if phase == "care_due" else None) if self.care else None,
             "power": self._power_view(),
             "outage": self._outage_view(now),
@@ -5054,6 +5176,8 @@ class ActionPlan:
     COLOUR = "colour"        # payload {"op": "plan" | "choose", ...}, for IntentTracker.colour_input; a plan is also
                              # stored in Moonraker's database at elyir-bench/colour_plan (design/colour-change/)
     HANDS = "hands"          # payload {"op", ...}, for IntentTracker.hands_input (design/hands-on/)
+    SPOT = "spot"            # payload {"op", ...}, for IntentTracker.spots.input (design/spots/)
+    TAG = "tag"              # payload {"op", ...}, for IntentTracker.tags.input (design/spool-tags/)
     OUTAGE = "outage"        # payload {"op": "keep"}, for IntentTracker.outage_input (design/power-loss/)
     LOST = "lost"            # payload {"op": "dismiss"}, for IntentTracker.lost_input
     LIGHT = "light"          # payload {"op": "on" | "off" | "try" | "pick", "name"?}, for IntentTracker.light_input
@@ -5068,6 +5192,10 @@ HANDS_OPS = {"hands_home": "home", "hands_motors_off": "motors_off", "hands_move
              "hands_clear": "clear", "hands_clean": "clean", "hands_nozzle": "nozzle", "hands_lower": "lower",
              "hands_done": "done", "hands_keep": "keep", "hands_push": "push"}
 LIGHT_OPS = {"light_on": "on", "light_off": "off", "light_try": "try", "light_pick": "pick"}
+SPOT_OPS = {"spot_start": "start", "spot_move": "move", "spot_next": "next", "spot_back": "back", "spot_try": "try",
+            "spot_answer": "answer", "spot_cancel": "cancel", "spot_set": "set", "spot_go": "go"}
+TAG_OPS = {"tag_pick": "pick", "tag_library": "library", "tag_back": "back", "tag_formats": "formats",
+           "tag_format": "format", "tag_write": "write", "tag_close": "close", "tag_rewrite": "rewrite", "tag_copy": "copy"}
 HANDS_MOVES = {"hands_home", "hands_motors_off", "hands_move", "hands_clear", "hands_clean", "hands_lower", "hands_push"}
 
 
@@ -5115,6 +5243,12 @@ def plan_action(action_id: str, args: Optional[Dict[str, Any]], tracker: IntentT
         if tracker.klippy_state != "ready" or not tracker.light_objects:
             return []
         return [(ActionPlan.LIGHT, dict(args, op=LIGHT_OPS[action_id]))]
+    if action_id in TAG_OPS:
+        return [(ActionPlan.TAG, dict(args, op=TAG_OPS[action_id]))]
+    if action_id in SPOT_OPS:
+        if action_id != "spot_cancel" and tracker.hands_why_not():
+            return []
+        return [(ActionPlan.SPOT, dict(args, op=SPOT_OPS[action_id]))]
     if action_id in HANDS_OPS:
         if tracker.hands_why_not() or (action_id in HANDS_MOVES and not tracker.can_move()):
             return []

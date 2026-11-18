@@ -1,5 +1,8 @@
 // The one object every screen renders. Mirrors elyir_bench_intent.py exactly.
 
+import type { UpdateView } from './update'
+import type { UsbView } from './usb'
+import type { IntentTags } from './tags'
 import type { CareSummary } from './care'
 import type { PowerView } from './power'
 import type { LightView } from './light'
@@ -347,6 +350,12 @@ export interface Intent {
   job: IntentJob | null
   art?: IntentArt | null
   change?: IntentChange | null
+  /** Both head switches beside the unit's tool change, on a head with a hotend switch (design/filament-units/, A). */
+  head_switches?: IntentHeadSwitches | null
+  /** Spots the printer goes to (design/spots/): Care's rows, and the guide while one is being set. */
+  spots?: IntentSpots | null
+  /** Spool tags (design/spool-tags/): the reader, and the sheet while a tag is on it. */
+  tags?: IntentTags | null
   /** Paused at a colour change on a printer with a unit (design/colour-change/, A). */
   colour?: IntentColour | null
   warm?: IntentWarm | null
@@ -358,6 +367,10 @@ export interface Intent {
   care?: CareSummary | null   // maintenance the printer counts itself (see ./care.ts)
   /** Turn off / Restart (design/power/): offered or why not, and the wait while it cools (see ./power.ts). */
   power?: PowerView | null
+  /** This printer's release and the updater's last word (design/updates/, see ./update.ts). */
+  update?: UpdateView | null
+  /** A USB stick in it, what's on it and what taking from it is doing (design/usb/, see ./usb.ts). */
+  usb?: UsbView | null
   /** A print held on a UPS's battery, or carrying on once the power is back (design/power-loss/, A). */
   outage?: OutageView | null
   /** A print the power took, on Ready: where it got to (design/power-loss/, A). */
@@ -410,6 +423,8 @@ export interface Intent {
     screen_switch_failed?: string | null   // the last switch didn't come up and was undone: what happened
     /** The printer's screen is on trial after the setup card's Try it (docs/setup-card.md): the panel asks Keep? */
     screen_trial?: { seconds_left: number } | null
+    /** 'bench': a printer the Bench Box speaks for (bench/standin.py). */
+    standin?: string | null
     simulated?: boolean
     scenario?: string
   }
@@ -427,3 +442,44 @@ export interface HistoryJob {
   filament_used: number
   metadata?: Record<string, any>
 }
+
+/** The extruder switch (before the gears) and the hotend switch (after them); null where a switch hasn't been read. */
+export interface IntentHeadSwitches {
+  extruder: boolean | null
+  hotend: boolean | null
+  /** The printer has a hotend switch configured; false draws the extruder switch alone. Missing: an older printer,
+   *  which only sent this drawing with both. */
+  hotend_switch?: boolean
+  /** Which way the extruder's gears are turning, from Klipper's own report; null while still. */
+  gears?: 'in' | 'out' | null
+  failed: 'extruder' | 'hotend' | null
+  color: string | null
+}
+
+export interface IntentSpotValue { id: string; label: string; value: number | null; set: boolean }
+
+export interface IntentSpotRow { kind: string; name: string; set: boolean; line: string; values: IntentSpotValue[] }
+
+/** A spot being set, one step at a time (design/spots/, B). */
+export interface IntentSpotGuide {
+  kind: string
+  name: string
+  n: number
+  of: number
+  step: string
+  title: string
+  detail: string
+  done: string
+  /** The axes the arrows move: 'x', or 'xy' while lining up with the screw. */
+  axis: string | null
+  steps: number[]
+  test: boolean
+  position: { x: number; y: number; z: number }
+  kept: Record<string, number>
+  trying: boolean
+  asked: { title: string; detail: string; yes: string; no: string } | null
+  error: string | null
+  pressed?: number
+}
+
+export interface IntentSpots { rows: IntentSpotRow[]; why_not: string | null; guide: IntentSpotGuide | null; error: string | null }

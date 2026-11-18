@@ -249,9 +249,19 @@ def test_a_pin_set_in_elyir_bench_conf_keeps_its_pull_up_and_the_override_gets_i
 
 def test_a_printer_with_its_own_sensor_keeps_it(tmp_path, monkeypatch):
     c, config, *_ = rig(tmp_path, monkeypatch)
-    monkeypatch.setitem(LOADED, "filament_switch_sensor toolhead", {"switch_pin": "PG12"})
+    monkeypatch.setitem(LOADED, "filament_switch_sensor extruder_sensor", {"switch_pin": "PG12"})
     a.FilamentUnits().apply(c)
     assert "[filament_switch_sensor" not in (config / "elyir_units.cfg").read_text()
+
+
+def test_a_sensor_under_another_name_doesnt_take_ours_out(tmp_path, monkeypatch):
+    # Studio, 16 November: its second head switch as toolhead_sensor left the service no extruder_sensor to read
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    c.s["units_sensor_pin"] = "^EBBCan:PB8"
+    c.s["units_hotend_sensor_pin"] = "^EBBCan:PB9"
+    monkeypatch.setitem(LOADED, "filament_switch_sensor toolhead_sensor", {"switch_pin": "^EBBCan:PB9"})
+    a.FilamentUnits().apply(c)
+    assert "[filament_switch_sensor extruder_sensor]\nswitch_pin: ^EBBCan:PB8\n" in (config / "elyir_units.cfg").read_text()
 
 
 def test_a_changed_setting_reaches_a_printer_already_switched_and_the_service_restarts(tmp_path, monkeypatch):
@@ -268,3 +278,38 @@ def test_a_changed_setting_reaches_a_printer_already_switched_and_the_service_re
     assert state["settings"]["park"] == 160.0 and state["settings"]["purge_moves"] == "70,348 25,349" and state["selected"] == 3
     assert calls.count(("systemctl", "restart", a.UNITS_UNIT)) == before + 1
     assert a.FilamentUnits().check(c) == (True, "Bench's own service, KlipperACE off")
+
+
+def test_a_hotend_switch_gets_its_own_button_and_shares_the_override(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    c.s["units_sensor_pin"] = "^EBBCan:PB8"
+    c.s["units_hotend_sensor_pin"] = "^EBBCan:PB9"
+    a.FilamentUnits().apply(c)
+    ours = (config / "elyir_units.cfg").read_text()
+    assert "pins: EBBCan:PB8, EBBCan:PB9\n" in ours
+    assert "[gcode_button elyir_units_hotend]\npin: ^EBBCan:PB9\n" in ours
+    assert 'press_gcode: {action_call_remote_method("elyir_sensor", state="pressed", switch="hotend")}' in ours
+    assert "{{" not in ours
+
+
+def test_without_a_hotend_switch_the_file_is_as_before(tmp_path, monkeypatch):
+    c, config, *_ = rig(tmp_path, monkeypatch)
+    a.FilamentUnits().apply(c)
+    ours = (config / "elyir_units.cfg").read_text()
+    assert "elyir_units_hotend" not in ours and "{hotend_button}" not in ours
+
+
+def test_the_hotend_switch_is_found_by_name_but_never_from_toolhead(monkeypatch):
+    def settings(found):
+        monkeypatch.setattr(a, "http_json", lambda url, timeout=None, **kw:
+                            {"result": {"status": {"configfile": {"settings": found}}}})
+    facts = {"moonraker": {"url": "http://x"}}
+    settings({"filament_switch_sensor hotend_sensor": {"switch_pin": "^EBBCan:PB9"}})
+    assert a.units_hotend_pin(facts, {}) == "^EBBCan:PB9"
+    settings({"filament_switch_sensor toolhead_sensor": {"switch_pin": "^EBBCan:PB9"}})
+    assert a.units_hotend_pin(facts, {}) is None
+    assert a.units_hotend_pin(facts, {"units_hotend_sensor_pin": "PG11"}) == "PG11"
+
+
+def test_the_hotend_length_reaches_the_service():
+    assert a.units_settings({"units_hotend_sensor_to_nozzle": "48"}) == {"hotend_to_nozzle": 48.0}

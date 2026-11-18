@@ -85,6 +85,21 @@ DOOR_VENV = BASE / "venv"
 DOOR_UNITS = ("elyir-bench-door.service", "elyir-bench-caddy.service", "elyir-bench-frpc.service")
 # The printer's name at home (docs/door.md, *Home first*): its certificate, kept by a timer.
 HOMECERT_UNITS = ("elyir-bench-homecert.service", "elyir-bench-homecert.timer")
+UPDATE_UNITS = ("elyir-bench-update.service", "elyir-bench-update.timer")
+UPDATE_FILE = BASE / "update.json"        # what the updater last did, for Care (printer component, bench/box.py)
+# A USB stick (design/usb/): its udev rule, the unit each stick starts, and the one that does what a screen asked for
+USB_UNITS = ("elyir-bench-usb.service", "elyir-bench-usb@.service")
+USB_RULE = "/etc/udev/rules.d/90-elyir-bench-usb.rules"
+USB_RW_MOUNTS = Path("/run/elyir-bench-usb")      # a stick mounted writable, only while a report is written to it
+UPDATE_ASKED = BASE / "update-now"        # Update now: the next run isn't the nightly one
+INCOMING = BASE / "incoming"              # downloaded releases (install.sh keeps them here too)
+RELEASES_URL = os.environ.get("ELYIR_BENCH_RELEASES", "https://releases.elyir.dev/bench")
+# the same key as install.sh and install/release-key.pem (tests/test_update.py keeps them equal)
+RELEASE_KEY = """-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfaKjjsM3JWh6jJRkzIYYtJK8eQ3w
+M4RNEaiHewKV5Ka1a2bVRcxQAXCLcKcW2pkwMty0iQ7zPCJunlr6EtNzOw==
+-----END PUBLIC KEY-----
+"""
 HOME_FILE = DOOR_STATE / "home.json"
 HOME_CERT = DOOR_STATE / "home-cert"
 LEGO_DIR = DOOR_STATE / "lego"
@@ -126,7 +141,7 @@ UNITS_SETTINGS = {"units_before_macro": ("before_macro", str), "units_after_macr
                   "units_sensor_to_nozzle": ("sensor_to_nozzle", float), "units_park": ("park", float),
                   "units_temp": ("temp", int), "units_purge_moves": ("purge_moves", str),
                   "units_push_start": ("push_start", str), "units_push_end": ("push_end", str),
-                  "units_backoff": ("backoff", float)}
+                  "units_backoff": ("backoff", float), "units_hotend_sensor_to_nozzle": ("hotend_to_nozzle", float)}
 BENCH_PORT = 8096
 SLICER_PORT = 8095
 # A new printer's first Wi-Fi (docs/setup.md, setup/wifi_setup.py): with no network, its own setup Wi-Fi
@@ -288,8 +303,11 @@ def render_sudoers(user: str) -> str:
         f"{tee} {XWRAPPER}",
         f"{ln} -sf /etc/nginx/sites-available/{NGINX_SITE} /etc/nginx/sites-enabled/{NGINX_SITE}",
         f"{apt} update -q", f"{apt} install -y -q --no-install-recommends *",
-        *(f"{tee} /etc/systemd/system/{u}" for u in DOOR_UNITS + HOMECERT_UNITS + (SLICER_UNIT, BENCH_UNIT)),
-        *(f"{sc} * {u}" for u in DOOR_UNITS + HOMECERT_UNITS + (SLICER_UNIT, BENCH_UNIT)),
+        # the spool tag reader (design/spool-tags/): pcscd lets Moonraker's user in
+        f"{tee} {PCSC_POLKIT_RULES}", f"{tee} {PCSC_POLKIT_PKLA}", f"{sudo_bin('mkdir')} -p {PCSC_POLKIT_RULES.parent}",
+        f"{sudo_bin('mkdir')} -p {PCSC_POLKIT_PKLA.parent}", f"{sc} enable --now pcscd.socket", f"{sc} restart pcscd",
+        *(f"{tee} /etc/systemd/system/{u}" for u in DOOR_UNITS + HOMECERT_UNITS + UPDATE_UNITS + USB_UNITS + (SLICER_UNIT, BENCH_UNIT)),
+        *(f"{sc} * {u}" for u in DOOR_UNITS + HOMECERT_UNITS + UPDATE_UNITS + (USB_UNITS[0], SLICER_UNIT, BENCH_UNIT)),
         # a slicer that lends says so on the Wi-Fi (docs/slicer.md, "Slicing for other printers")
         f"{tee} {SLICER_AVAHI}", f"{sudo_bin('mkdir')} -p {SLICER_AVAHI.parent}", f"{sudo_bin('rm')} -f {SLICER_AVAHI}",
         f"{tee} {PRINTER_AVAHI}",   # and every printer says so too, for a Bench Box (docs/bench.md)
@@ -310,7 +328,7 @@ def render_sudoers(user: str) -> str:
         f"{tee} {LOGIND_POWER}", f"{sudo_bin('rm')} -f {LOGIND_POWER}", f"{sc} kill -s HUP systemd-logind", f"{sc} poweroff",
         f"{sc} reboot",   # a Bench Box's Restart (bench/box.py)
         f"{sc} * {NM_WAIT_UNIT}",   # network_wait
-    ] + boot_screen_sudo_cmds() + bring_sudo_cmds()
+    ] + boot_screen_sudo_cmds() + bring_sudo_cmds() + usb_sudo_cmds(user)
     return ("# Managed by elyir-bench: lets the installer and the setup page manage Elyir Bench's own\n"
             "# services without a password. Remove this file to take that away.\n"
             f"{user} ALL=(root) NOPASSWD: " + ", \\\n    ".join(cmds) + "\n")
@@ -325,6 +343,26 @@ def bring_sudo_cmds() -> list[str]:
         mp = f"{BRING_MOUNTS}/{g}"
         out += [f"{mkdir} -p {mp}", f"{mount} -t ext4 -o ro\\,noload /dev/{g} {mp}", f"{mount} -t vfat -o ro /dev/{g} {mp}",
                 f"{umount} {mp}"]
+    return out
+
+
+def usb_sudo_cmds(user: str) -> list[str]:
+    """A USB stick (design/usb/): an exFAT one read-only too, and a stick of either kind writable for a report
+    (owned by this user, nothing on it run), in the same mount points; its rule, a new SSH key's server turned on."""
+    mount, sc = sudo_bin("mount"), sudo_bin("systemctl")
+    try:
+        pw = pwd.getpwnam(user)
+        ids = f"uid={pw.pw_uid}\\,gid={pw.pw_gid}"
+    except KeyError:
+        ids = "uid=1000\\,gid=1000"
+    out = [f"{sudo_bin('tee')} {USB_RULE}", f"{sudo_bin('rm')} -f {USB_RULE}", f"{sudo_bin('udevadm')} control --reload-rules",
+           f"{sc} enable --now ssh"]
+    for g in BRING_DEV_GLOBS:
+        out.append(f"{mount} -t exfat -o ro /dev/{g} {BRING_MOUNTS}/{g}")
+        # writable only here, never where bring reads an old card (an old card is never written to)
+        mp = f"{USB_RW_MOUNTS}/{g}"
+        out += [f"{sudo_bin('mkdir')} -p {mp}", f"{sudo_bin('umount')} {mp}"]
+        out += [f"{mount} -t {fs} -o rw\\,nosuid\\,nodev\\,noexec\\,{ids} /dev/{g} {mp}" for fs in USB_FS]
     return out
 
 
@@ -939,7 +977,7 @@ def save_settings(facts: dict, s: dict) -> Path:
         "# The filament unit's driver (design/ace-driver/): auto (Bench's own for an ACE Pro that KlipperACE doesn't\n"
         "# drive) | elyir (Bench's own service, in KlipperACE's place) | klipperace\n"
         f"filament_units: {'auto' if s.get('units_auto') else s.get('filament_units', 'auto')}\n"
-        + "".join(f"{k}: {s[k]}\n" for k in (*UNITS_SETTINGS, "units_sensor_pin") if s.get(k))
+        + "".join(f"{k}: {s[k]}\n" for k in (*UNITS_SETTINGS, "units_sensor_pin", "units_hotend_sensor_pin") if s.get(k))
         # the ones set only by hand (a staging printer's cloud_api and printers_app, docs/cloud.md): kept when present
         + "".join(f"{k}: {s[k]}\n" for k in ("relay_api", "relay_addr", "relay_zone", "acme_ca", "cloud_api", "printers_app",
                                             "printer_id", "remote_former")
@@ -1603,8 +1641,8 @@ class Legacy(Step):
 
 class Component(Step):
     name = "moonraker component"
-    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py",
-             "gcode_layers.py"]
+    FILES = ["elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "spots.py", "elyir_bench_care.py", "printer_intent.py", "orca_profile.py",
+             "gcode_layers.py", "spool_tags.py", "tag_formats.py", "filament_library.py", "tag_reader.py"]
     def check(self, c):
         comp = Path(c.facts["moonraker"]["components"])
         wrong = [f for f in self.FILES
@@ -1989,26 +2027,32 @@ def render_units_moonraker(text: str, on: bool) -> str:
     return "\n".join(out)
 
 
-def render_units_cfg(template: str, pin: str, own_sensor: bool) -> str:
+def render_units_cfg(template: str, pin: str, own_sensor: bool, hotend: str | None = None) -> str:
     tools = "".join(f"\n[gcode_macro T{i}]\ngcode: ELYIR_TOOL T={i}\n" for i in range(UNITS_TOOLS))
+    button = "" if not hotend else (
+        "\n# The switch after the extruder's gears, just above the hotend (design/filament-units/, A).\n"
+        f"[gcode_button elyir_units_hotend]\npin: {hotend}\n"
+        'press_gcode: {action_call_remote_method("elyir_sensor", state="pressed", switch="hotend")}\n'
+        'release_gcode: {action_call_remote_method("elyir_sensor", state="released", switch="hotend")}\n')
+    bare = ", ".join(p.lstrip("^~! ") for p in (pin, hotend) if p)
     # KlipperACE makes the head's filament_switch_sensor itself; without it, ours keeps it for the screens
     head = "" if own_sensor else (f"# The head's filament sensor, which KlipperACE made itself; the screens read it.\n"
                                   f"[filament_switch_sensor extruder_sensor]\nswitch_pin: {pin}\npause_on_runout: False\n")
     # [duplicate_pin_override] takes the bare pin; the sections using it carry the pull-up (^) or inversion (!)
-    return template.format(sensor_pin=pin, sensor_bare=pin.lstrip("^~! "), tool_macros=tools, head_sensor=head)
+    return template.format(sensor_pin=pin, sensor_bare=bare, tool_macros=tools, head_sensor=head, hotend_button=button)
 
 
 def units_own_sensor(facts: dict, folder: Path) -> bool:
-    """A filament_switch_sensor among the sections Klipper loaded from the printer's own files. KlipperACE's never
-    shows there (it makes its sensor itself), and the one our file adds is left out."""
+    """The printer's own files make filament_switch_sensor extruder_sensor, the one the service and the screens read.
+    KlipperACE's never shows there (it makes its sensor itself). A sensor under another name doesn't stand in for it:
+    Studio's second head switch (toolhead_sensor) took ours out, and the service read None as an empty head (16 November)."""
     try:
         loaded = http_json(f"{facts['moonraker']['url']}/printer/objects/query?configfile=config",
                            timeout=4)["result"]["status"]["configfile"]["config"]
     except Exception:
         return False
     ours = "[filament_switch_sensor extruder_sensor]" in read(folder / UNITS_CFG)
-    return any(k.startswith("filament_switch_sensor ") and not (ours and k == "filament_switch_sensor extruder_sensor")
-               for k in loaded)
+    return not ours and "filament_switch_sensor extruder_sensor" in loaded
 
 
 def units_sensor_pin(facts: dict, s: dict | None = None) -> str | None:
@@ -2029,6 +2073,25 @@ def units_sensor_pin(facts: dict, s: dict | None = None) -> str | None:
     head = [v for k, v in sensors.items() if any(w in k for w in ("extruder", "toolhead", "head"))]
     pick = head or (list(sensors.values()) if len(sensors) == 1 else [])
     return pick[0]["switch_pin"] if pick else None
+
+
+def units_hotend_pin(facts: dict, s: dict | None = None) -> str | None:
+    """The switch after the extruder's gears, above the hotend: units_hotend_sensor_pin in elyir-bench.conf, else our
+    own button's once written, else a filament_switch_sensor named for the hotend. Never guessed from "toolhead", which
+    some printers call the only switch they have."""
+    if s and s.get("units_hotend_sensor_pin"):
+        return s["units_hotend_sensor_pin"]
+    try:
+        settings = http_json(f"{facts['moonraker']['url']}/printer/objects/query?configfile=settings",
+                             timeout=4)["result"]["status"]["configfile"]["settings"]
+    except Exception:
+        return None
+    ours = (settings.get("gcode_button elyir_units_hotend") or {}).get("pin")
+    if ours:
+        return ours
+    pick = [v["switch_pin"] for k, v in settings.items()
+            if k.startswith("filament_switch_sensor ") and "hotend" in k and v.get("switch_pin")]
+    return pick[0] if len(pick) == 1 else None
 
 
 def units_settings(s: dict) -> dict:
@@ -2098,7 +2161,8 @@ class FilamentUnits(Step):
             pin = units_sensor_pin(c.facts, c.s)
             if not src.is_file() or pin is None:
                 return None
-            want[folder / UNITS_CFG] = render_units_cfg(read(src), pin, units_own_sensor(c.facts, folder))
+            want[folder / UNITS_CFG] = render_units_cfg(read(src), pin, units_own_sensor(c.facts, folder),
+                                                        units_hotend_pin(c.facts, c.s))
         return want
 
     def _stale_settings(self, c) -> bool:
@@ -3898,12 +3962,828 @@ class NetworkWait(Step):
             st = load_state(); st["network_wait_disabled"] = False; save_state(st)
 
 
+# ── updates (design/updates/, A + A) ─────────────────────────────────────────
+# A printer or box set up with the install command looks for a new release at night and installs it when it isn't
+# printing; Care's Update now runs the same thing at once. The new release's own installer applies it, so its health
+# check and its going back on a failure are apply's (docs/installer.md, "Updates").
+
+def current_built() -> int | None:
+    try:
+        return int(read(CURRENT / "BUILT").strip())
+    except ValueError:
+        return None
+
+
+def version_date(v: str) -> _dt.date | None:
+    m = re.match(r"(\d{4})\.(\d{2})\.(\d{2})", v or "")
+    try:
+        return _dt.date(*map(int, m.groups())) if m else None
+    except ValueError:
+        return None
+
+
+def is_newer(latest: dict, have: str | None, have_built: int | None) -> bool:
+    """Never older: by build time when both have one, else by date; the same day without build times stays put (a
+    hand deploy of a later commit that day isn't replaced by that day's release)."""
+    if not have:
+        return True
+    if latest.get("version") == have:
+        return False
+    built = latest.get("built")
+    if isinstance(built, int) and have_built:
+        return built > have_built
+    ld, hd = version_date(latest.get("version", "")), version_date(have)
+    return bool(ld and hd and ld > hd)
+
+
+def save_update(**fields) -> dict:
+    try:
+        u = json.loads(UPDATE_FILE.read_text())
+    except (OSError, ValueError):
+        u = {}
+    u.update(fields, at=int(time.time()))
+    tmp = UPDATE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(u))
+    os.replace(tmp, UPDATE_FILE)
+    return u
+
+
+def release_open(url: str, timeout: float = 30):
+    # releases.elyir.dev is behind Cloudflare, which refuses Python's own User-Agent (403); curl's gets through
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": f"elyir-bench/{current_version() or 'new'}"}),
+                                  timeout=timeout)
+
+
+def fetch_latest(url: str | None = None) -> dict:
+    url = url or RELEASES_URL
+    try:
+        with release_open(f"{url}/latest.json", timeout=15) as r:
+            m = json.loads(r.read().decode())
+    except Exception as e:
+        raise StepFailed(f"Couldn't reach {url.split('//')[-1].split('/')[0]}. Is it on the internet?") from e
+    ok = (isinstance(m, dict) and all(isinstance(m.get(k), str) for k in ("version", "file", "sha256", "signature"))
+          and all(re.fullmatch(r"[A-Za-z0-9._-]+", m[k]) for k in ("file", "signature"))
+          and re.fullmatch(r"[0-9a-f]{64}", m["sha256"]))
+    if not ok:
+        raise StepFailed("The list of releases didn't make sense.")
+    return m
+
+
+def update_busy(facts: dict, s: dict, nightly: bool) -> str | None:
+    """Why not now: a printer printing or paused (or, at night, with a print waiting in line); a box with one of the
+    printers it speaks for printing, since its screens restart."""
+    if role(facts, s) == "controller":
+        try:
+            mine = {pid: p["name"] for pid, p in json.loads((DOOR_STATE / "bench" / "printers.json").read_text()).items()
+                    if isinstance(p, dict) and p.get("standin")}
+        except (OSError, ValueError, AttributeError):
+            mine = {}
+        if not mine:
+            return None
+        try:
+            intents = http_json(f"http://127.0.0.1:{s['port']}/bench/intents", timeout=20)
+        except Exception:
+            return None
+        for pid, name in mine.items():
+            i = intents.get(pid) or {}
+            if i.get("state") in ("preparing", "printing") or i.get("phase") == "paused":
+                return f"{name} is printing."
+        return None
+    if facts.get("print_state") == "printing":
+        return "It's printing."
+    if facts.get("print_state") == "paused":
+        return "It has a print paused."
+    if nightly:
+        try:
+            if http_json(f"{facts['moonraker']['url']}/server/job_queue/status")["result"].get("queued_jobs"):
+                return "A print is waiting in line."
+        except Exception:
+            pass
+    return None
+
+
+def download(url: str, dest: Path) -> None:
+    tmp = dest.with_name(dest.name + ".part")
+    with release_open(url) as r, open(tmp, "wb") as out:
+        of, done, said = int(r.headers.get("Content-Length") or 0), 0, 0.0
+        while True:
+            chunk = r.read(256 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            done += len(chunk)
+            if time.time() - said > 0.5:
+                save_update(done=done, of=of or None)
+                said = time.time()
+    save_update(done=done, of=done)
+    os.replace(tmp, dest)
+
+
+def verify_release(tarball: Path, sig: Path, sha256: str) -> None:
+    h = hashlib.sha256()
+    with open(tarball, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    if h.hexdigest() != sha256:
+        tarball.unlink(missing_ok=True)
+        raise StepFailed("The download came out damaged. It tries again next time.")
+    verify_signature(tarball, sig)
+
+
+def trusted_keys() -> list[str]:
+    """Elyir's release key; a developer build also trusts the developer key its release carries (scripts/usb/stick.sh
+    --build signs with it). The public copy turns DEV_KEY_TRUSTED off (scripts/public/rules.txt)."""
+    keys = [RELEASE_KEY]
+    dev = Path(__file__).resolve().parent / DEV_KEY_FILE
+    if DEV_KEY_TRUSTED and dev.is_file():
+        keys.append(read(dev))
+    return keys
+
+
+def verify_signature(tarball: Path, sig: Path) -> None:
+    for pem in trusted_keys():
+        with tempfile.NamedTemporaryFile("w", suffix=".pem") as key:
+            key.write(pem)
+            key.flush()
+            if run(["openssl", "dgst", "-sha256", "-verify", key.name, "-signature", str(sig), str(tarball)],
+                   check=False).returncode == 0:
+                return
+    tarball.unlink(missing_ok=True)
+    raise StepFailed("It isn't signed by Elyir, so it wasn't installed.")
+
+
+def install_release(tarball: Path, version: str, have: str | None) -> tuple[str, str | None]:
+    """A checked release, installed by its own installer's apply (whose health check goes back by itself).
+    ("done" | "other" | "failed" | "went_back", why)."""
+    unpack = INCOMING / ".installer"
+    shutil.rmtree(unpack, ignore_errors=True)
+    unpack.mkdir(parents=True)
+    with tarfile.open(tarball) as t:   # by folder, not by name: the public copy renames the installer
+        members = [m for m in t.getmembers() if m.name.startswith("installer/") and m.name.endswith(".py") and m.isfile()]
+        t.extractall(unpack, members=members, **({"filter": "data"} if sys.version_info >= (3, 12) else {}))
+    ours = sorted(p for p in (unpack / "installer").glob("*.py") if not p.name.endswith("_os.py"))
+    if len(ours) != 1:
+        raise StepFailed("The new version has no installer in it.")
+    if ours[0].name != Path(__file__).name:
+        # a developer build (the private names) never takes a public release: it would install beside itself
+        return "other", "A developer build: releases don't replace it."
+    p = run([sys.executable, str(ours[0]), "--json", "apply", str(tarball)], check=False, timeout=1800)
+    now = current_version()
+    if p.returncode == 0 and now == version:
+        for old in sorted(INCOMING.glob("*.tar.gz"), key=lambda f: f.stat().st_mtime)[:-2]:
+            old.unlink(missing_ok=True)
+            Path(str(old) + ".sig").unlink(missing_ok=True)
+        return "done", None
+    if now == have:
+        return "went_back", "The new version didn't start properly, so it went back to this one."
+    return "failed", f"It didn't finish ({(load_state().get('last_failure') or 'no reason given')[:200]})."
+
+
+def update_main(facts: dict, s: dict, nightly: bool, as_json: bool) -> int:
+    asked = UPDATE_ASKED.exists()
+    UPDATE_ASKED.unlink(missing_ok=True)
+    nightly = nightly and not asked
+    have = current_version()
+    say = lambda out: print(json.dumps(out) if as_json else out.get("line") or out.get("why") or out["state"])
+    save_update(state="checking", why=None, done=None, of=None)
+    try:
+        latest = fetch_latest()
+    except StepFailed as e:
+        say(save_update(state="idle", why=str(e)))
+        return 1
+    newer = is_newer(latest, have, current_built())
+    save_update(latest={k: latest.get(k) for k in ("version", "built", "published")}, newer=newer, checked=int(time.time()))
+    if not newer:
+        say(save_update(state="idle", version=have))
+        return 0
+    busy = update_busy(facts, s, nightly)
+    if busy:
+        say(save_update(state="waiting", why=busy, version=have))
+        return 0 if nightly else 3
+    INCOMING.mkdir(parents=True, exist_ok=True)
+    tarball, sig = INCOMING / latest["file"], INCOMING / (latest["file"] + ".sig")
+    try:
+        save_update(state="downloading", version=have)
+        if not tarball.exists():
+            download(f"{RELEASES_URL}/{latest['file']}", tarball)
+        download(f"{RELEASES_URL}/{latest['signature']}", sig)
+        save_update(state="installing", done=None, of=None)
+        verify_release(tarball, sig, latest["sha256"])
+        result, why = install_release(tarball, latest["version"], have)
+    except (StepFailed, OSError, urllib.error.URLError, tarfile.TarError, subprocess.TimeoutExpired) as e:
+        why = str(e) if isinstance(e, StepFailed) else "The download stopped. It tries again next time."
+        say(save_update(state="failed", why=why, version=current_version()))
+        return 1
+    if result == "other":
+        say(save_update(state="idle", newer=False, why=why, version=have))
+        return 0
+    if result == "done":
+        say(save_update(state="done", version=current_version(), previous=have, why=None, newer=False))
+        return 0
+    say(save_update(state="failed", why=why, version=current_version(), went_back=result == "went_back"))
+    return 1
+
+
+def render_update_units(facts: dict) -> dict[str, str]:
+    head = "# Managed by elyir-bench (design/updates/, docs/installer.md).\n"
+    return {
+        "elyir-bench-update.service": head + "[Unit]\nDescription=Elyir Bench: a new version, when it isn't printing\n"
+            "After=network-online.target\nWants=network-online.target\n\n"
+            f"[Service]\nType=oneshot\nUser={facts['user']}\nEnvironment=HOME={HOME}\nTimeoutStartSec=45min\n"
+            f"ExecStart={sys.executable} {CURRENT}/installer/elyir_bench.py update --nightly\n",
+        "elyir-bench-update.timer": head + "[Unit]\nDescription=Elyir Bench: look for a new version at night\n\n"
+            "[Timer]\nOnCalendar=*-*-* 03:00:00\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n",
+    }
+
+
+class Updates(Step):
+    """The nightly look for a new release, and the service Care's Update now starts (design/updates/, A + A)."""
+    name = "updates"
+    roles = ("printer", "controller")
+
+    def _want(self, c: Ctx) -> dict[str, str]:
+        return {f"/etc/systemd/system/{u}": t for u, t in render_update_units(c.facts).items()}
+
+    def check(self, c):
+        stale = [Path(p).name for p, t in self._want(c).items() if read(p) != t]
+        if stale:
+            return (False, "needs writing: " + ", ".join(stale))
+        if not is_enabled("elyir-bench-update.timer"):
+            return (False, "the nightly look isn't on")
+        return (True, "looks for a new version at night")
+
+    def apply(self, c):
+        for path, text in self._want(c).items():
+            if read(path) != text:
+                sudo_write(path, text)
+        sudo("systemctl", "daemon-reload")
+        sudo("systemctl", "enable", "--now", "elyir-bench-update.timer")
+
+
+# ── a USB stick (design/usb/: 1 A, all of 2, 3 A) ─────────────────────────────
+# A stick with an elyir-bench/ folder brings a release, a card's whole OS, an SSH key or a Wi-Fi network to a printer
+# or box with no internet or no SSH, and a report can go away on any stick. udev starts elyir-bench-usb@<partition>
+# (`usb in`): it reads the stick read-only, says in usb.json what's on it, and unmounts it. A screen asks; what's
+# ticked there (usb-take.json) is done by elyir-bench-usb.service (`usb run`), which copies first so the stick can come
+# out, then checks the signature and installs as an update from the internet would (docs/installer.md, "A USB stick").
+
+USB_FILE = BASE / "usb.json"            # the stick that's in, what's on it, and what taking it did
+USB_ASK = BASE / "usb-take.json"        # what a screen asked for (the printer component, bench/box.py)
+USB_LOCK = BASE / ".usb.lock"
+USB_FOLDER = "elyir-bench"              # on a stick: only this folder is looked at
+USB_FS = ("vfat", "exfat")
+USB_FALLBACK = 120                      # seconds: a screen that hasn't said it saw the stick by then isn't answering
+USB_GOING = ("copying", "report", "waiting", "checking", "installing", "restarting")
+OS_TOOL = "/usr/local/sbin/elyir-bench-os"
+OS_VERSION_FILE = Path("/usr/local/share/elyir-bench/os-version")   # a flashed card's own release
+DEV_KEY_TRUSTED = False                  # False in the public copy: Elyir's key only
+DEV_KEY_FILE = "dev-release-key.pem"    # beside this file in a developer's release (scripts/build-release.sh)
+SSH_KEY_KINDS = ("ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+                 "sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-nistp256@openssh.com")
+
+
+def boot_id() -> str:
+    return read("/proc/sys/kernel/random/boot_id").strip() or "no-boot-id"
+
+
+@contextlib.contextmanager
+def usb_locked():
+    import fcntl
+    BASE.mkdir(parents=True, exist_ok=True)
+    with open(USB_LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
+
+
+def load_usb() -> dict:
+    """usb.json for this boot; from an earlier boot only the skipped releases carry over (the stick was looked at
+    again when the machine started, if it's still in)."""
+    try:
+        u = json.loads(USB_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(u, dict):
+        return {}
+    return u if u.get("boot") == boot_id() else {"skips": u.get("skips") or []}
+
+
+def save_usb(u: dict) -> dict:
+    u = {**u, "boot": boot_id(), "at": int(time.time())}
+    BASE.mkdir(parents=True, exist_ok=True)
+    tmp = USB_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(u))
+    os.replace(tmp, USB_FILE)
+    return u
+
+
+def take_say(**fields) -> dict:
+    """What taking from the stick is doing now (usb.json `take`), for the sheet."""
+    with usb_locked():
+        u = load_usb()
+        u["take"] = {**(u.get("take") or {}), **fields}
+        return save_usb(u)
+
+
+def usb_block(dev: str) -> dict | None:
+    """One partition on a USB disk (or a stick with no partition table), as lsblk tells it. None for anything else;
+    system: a USB disk this machine runs from (a Pi booting from a USB SSD)."""
+    p = run(["lsblk", "-J", "-o", "NAME,TRAN,TYPE,FSTYPE,LABEL,UUID,MOUNTPOINT"], check=False)
+    try:
+        disks = json.loads(p.stdout or "{}").get("blockdevices") or []
+    except ValueError:
+        return None
+    for disk in disks:
+        if (disk.get("tran") or "").lower() != "usb":
+            continue
+        parts = disk.get("children") or [disk]
+        for c in parts:
+            if c.get("name") == dev and BRING_DEV.fullmatch(dev):
+                mounts = [x.get("mountpoint") or "" for x in parts]
+                return {"dev": dev, "fstype": c.get("fstype") or "", "label": c.get("label") or "",
+                        "uuid": c.get("uuid") or "", "mountpoint": c.get("mountpoint") or None,
+                        "card": any(x.get("fstype") == "ext4" for x in parts),   # an old printer's card in a reader
+                        "system": any(m and not m.startswith((str(BRING_MOUNTS), "/media/", "/mnt/")) for m in mounts)}
+    return None
+
+
+def parse_ssh_key(line: str) -> dict | None:
+    """One public key line ({id, kind, name, fp, line}), or None: its blob has to name its own kind."""
+    f = line.strip().split(None, 2)
+    if len(f) < 2 or f[0] not in SSH_KEY_KINDS:
+        return None
+    try:
+        blob = base64.b64decode(f[1], validate=True)
+    except ValueError:
+        return None
+    n = int.from_bytes(blob[:4], "big")
+    if blob[4:4 + n].decode("ascii", "replace") != f[0]:
+        return None
+    digest = hashlib.sha256(blob)
+    return {"id": digest.hexdigest()[:12], "kind": f[0].split("@")[0], "name": f[2].strip() if len(f) > 2 else "",
+            "fp": "SHA256:" + base64.b64encode(digest.digest()).decode().rstrip("="), "line": " ".join(f)}
+
+
+def parse_wifi(text: str) -> tuple[str, str]:
+    """wifi.txt: `name: …` and `password: …` lines (ssid, network, psk, key and = also work), or the name on the
+    first line and the password on the second."""
+    lines = [l.strip() for l in text.splitlines() if l.strip() and not l.strip().startswith("#")]
+    found: dict[str, str] = {}
+    for l in lines:
+        m = re.match(r"(?i)(name|ssid|network|wi-?fi|password|passphrase|pass|psk|key)\s*[:=]\s*(.*)$", l)
+        if m:
+            k = "name" if m.group(1).lower() in ("name", "ssid", "network", "wifi", "wi-fi") else "password"
+            found.setdefault(k, m.group(2).strip().strip('"').strip("'"))
+    if found:
+        return found.get("name", ""), found.get("password", "")
+    return (lines[0] if lines else ""), (lines[1] if len(lines) > 1 else "")
+
+
+def stick_folder(root: Path) -> Path | None:
+    try:   # FAT keeps a name's case but doesn't care about it
+        return next((d for d in root.iterdir() if d.is_dir() and d.name.lower() == USB_FOLDER), None)
+    except OSError:
+        return None
+
+
+def stick_release(folder: Path) -> dict | None:
+    """The newest app release in the folder: its tarball, whether its signature is beside it, and what's inside."""
+    best = None
+    for f in sorted(folder.glob("*.tar.gz")):
+        if f.name.startswith("."):          # a Mac's ._ files
+            continue
+        try:
+            with tarfile.open(f) as t:
+                names = t.getnames()
+                version = t.extractfile("VERSION").read().decode().strip()
+                built_f = t.extractfile("BUILT") if "BUILT" in names else None
+                built = int(built_f.read().decode().strip()) if built_f else None
+        except (tarfile.TarError, OSError, AttributeError, ValueError, KeyError):
+            continue
+        installer = sorted(Path(n).name for n in names if n.startswith("installer/") and n.endswith(".py")
+                           and not n.endswith("_os.py"))
+        r = {"file": f.name, "version": version, "built": built, "installer": installer, "size": f.stat().st_size,
+             "signed": (folder / (f.name + ".sig")).is_file()}
+        if best is None or is_newer(r, best["version"], best["built"]):
+            best = r
+    return best
+
+
+def stick_os(folder: Path) -> dict | None:
+    """A card's whole OS (elyir-bench-os-<version>-<board>.tar, in os/ or the folder itself), the newest one."""
+    best = None
+    for f in [*sorted(folder.glob("os/*.tar")), *sorted(folder.glob("*.tar"))]:
+        m = re.fullmatch(r"[\w-]+-os-(\d{4}\.\d{2}\.\d{2}-[\w.-]+?)-(pi\d+)\.tar", f.name)
+        if not m or f.name.startswith("."):
+            continue
+        r = {"file": str(f.relative_to(folder)), "version": m.group(1), "board": m.group(2), "size": f.stat().st_size,
+             "signed": f.with_name(f.name + ".sig").is_file()}
+        if best is None or is_newer(r, best["version"], None):
+            best = r
+    return best
+
+
+def stick_keys(folder: Path) -> list[dict]:
+    """Public keys in *.pub files that can't sign in here yet."""
+    have = {k["id"] for k in map(parse_ssh_key, read(HOME / ".ssh" / "authorized_keys").splitlines()) if k}
+    out: list[dict] = []
+    for f in sorted(folder.glob("*.pub")):
+        if f.name.startswith("."):
+            continue
+        for line in read(f).splitlines()[:20]:
+            k = parse_ssh_key(line)
+            if k and k["id"] not in have and all(o["id"] != k["id"] for o in out):
+                out.append(k)
+    return out[:8]
+
+
+def stick_wifi(folder: Path) -> tuple[str, str] | None:
+    try:
+        f = next((p for p in folder.iterdir() if p.is_file() and p.name.lower() == "wifi.txt"), None)
+    except OSError:
+        return None
+    if not f:
+        return None
+    name, password = parse_wifi(read(f))
+    return (name[:32], password) if name else None
+
+
+def stick_contents(root: Path, facts: dict) -> dict:
+    """What a stick holds for this machine, and why each thing it holds can't be taken (why: None when it can)."""
+    folder = stick_folder(root)
+    if not folder:
+        return {"folder": False, "app": None, "os": None, "keys": [], "wifi": None}
+    have, card = current_version(), OS_VERSION_FILE.exists()
+    app = stick_release(folder)
+    if app:
+        why = None
+        if not app.pop("signed"):
+            why = "unsigned"
+        elif app["installer"] != [Path(__file__).name]:
+            why = "other_build"     # a developer build never takes a public release, nor a public one a developer's
+        elif not is_newer(app, have, current_built()):
+            why = "same" if app["version"] == have else "older"
+        app = {**{k: v for k, v in app.items() if k != "installer"}, "why": why}
+    osb = stick_os(folder)
+    if osb:
+        board = (re.search(r"Raspberry Pi (\d+)", facts.get("model") or "") or [None, None])[1]
+        why = None
+        signed = osb.pop("signed")
+        if not card:
+            why = "not_card"
+        elif osb["board"] != f"pi{board}":
+            why = "board"
+        elif not signed:
+            why = "unsigned"
+        else:
+            have_os = read(OS_VERSION_FILE).strip() or None
+            if not is_newer(osb, have_os, None):
+                why = "same" if osb["version"] == have_os else "older"
+        osb = {**osb, "why": why, "on": f"pi{board}" if board else None}
+        if why is None and app and app["why"] is None:
+            app["why"] = "with_os"    # a card's OS carries its own app: one at a time
+    wifi = stick_wifi(folder)
+    keys = [{k: v for k, v in key.items() if k != "line"} for key in stick_keys(folder)]
+    return {"folder": True, "app": app, "os": osb, "keys": keys,
+            "wifi": {"name": wifi[0], "can": bool(facts.get("network_manager"))} if wifi else None}
+
+
+def usb_offers(u: dict) -> dict:
+    """What can be taken from the stick that's in."""
+    return {"app": bool(u.get("app") and u["app"].get("why") is None),
+            "os": bool(u.get("os") and u["os"].get("why") is None),
+            "keys": [k["id"] for k in u.get("keys") or []],
+            "wifi": bool(u.get("wifi") and u["wifi"].get("can"))}
+
+
+def skip_key(u: dict) -> str:
+    """A stick's updates, as Not now remembers them across a restart with the stick still in."""
+    return f"{u.get('id')}/{(u.get('app') or {}).get('version')}/{(u.get('os') or {}).get('version')}"
+
+
+def start_usb_unit() -> None:
+    sudo("systemctl", "start", "--no-block", USB_UNITS[0], timeout=20)
+
+
+def usb_in(dev: str, facts: dict, s: dict) -> int:
+    """A stick went in: read it and say what's on it; while printing, its update is copied now and waits for the
+    print; if no screen says it saw the stick in USB_FALLBACK seconds, its update goes by itself (design/usb/, 1 A:
+    a screen that isn't answering is the broken part)."""
+    part = usb_block(dev)
+    if not part or part["system"]:
+        return 0
+    u = {"dev": dev, "id": part["uuid"] or f"{part['label']}:{dev}", "label": part["label"], "present": True,
+         "seen": False, "skipped": False, "take": None, "readable": True, "why": None}
+    if part["fstype"] not in USB_FS:
+        u.update(readable=False, why=part["fstype"] or "unknown")
+    else:
+        try:
+            with mounted(part) as root:
+                u.update(stick_contents(root, facts))
+        except (StepFailed, OSError, subprocess.TimeoutExpired) as e:
+            u.update(readable=False, why=str(e)[:200])
+    with usb_locked():
+        old = load_usb()
+        u["skips"] = (old.get("skips") or [])[-20:]
+        if (old.get("take") or {}).get("state") in USB_GOING:
+            u["take"] = old["take"]     # a stick that came out after its copy and went back in: that keeps going
+        u["skipped"] = skip_key(u) in u["skips"]
+        u = save_usb(u)
+    offers = usb_offers(u)
+    if not (offers["app"] or offers["os"]) or u["skipped"] or u["take"]:
+        return 0
+    if update_busy(facts, s, nightly=False):
+        (USB_ASK).write_text(json.dumps({"id": u["id"], "app": offers["app"], "os": offers["os"], "auto": "print"}))
+        start_usb_unit()
+        return 0
+    end = time.time() + USB_FALLBACK
+    while time.time() < end:
+        time.sleep(2)
+        now = load_usb()
+        if now.get("id") != u["id"] or not now.get("present") or now.get("seen") or now.get("skipped") or now.get("take"):
+            return 0
+    USB_ASK.write_text(json.dumps({"id": u["id"], "app": offers["app"], "os": offers["os"], "auto": "screen"}))
+    start_usb_unit()
+    return 0
+
+
+def usb_out(dev: str) -> int:
+    with usb_locked():
+        u = load_usb()
+        if u.get("dev") == dev and u.get("present"):
+            u["present"] = False
+            save_usb(u)
+    return 0
+
+
+def copy_from_stick(src: Path, dst: Path, done: int) -> int:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(dst.name + ".part")
+    said = 0.0
+    with open(src, "rb") as i, open(tmp, "wb") as o:
+        for chunk in iter(lambda: i.read(1 << 20), b""):
+            o.write(chunk)
+            done += len(chunk)
+            if time.time() - said > 0.5:
+                take_say(done=done)
+                said = time.time()
+        o.flush()
+        os.fsync(o.fileno())
+    os.replace(tmp, dst)
+    take_say(done=done)
+    return done
+
+
+def add_ssh_keys(lines: list[str]) -> int:
+    ssh = HOME / ".ssh"
+    ssh.mkdir(mode=0o700, exist_ok=True)
+    f = ssh / "authorized_keys"
+    text = read(f)
+    have = {k["id"] for k in map(parse_ssh_key, text.splitlines()) if k}
+    new = [l for l in lines if (k := parse_ssh_key(l)) and k["id"] not in have]
+    if new:
+        f.write_text(text + ("" if not text or text.endswith("\n") else "\n") + "\n".join(new) + "\n")
+        f.chmod(0o600)
+        sudo("systemctl", "enable", "--now", "ssh", check=False, timeout=60)   # a card can come with SSH off
+    return len(new)
+
+
+def join_wifi(name: str, password: str) -> None:
+    """Into NetworkManager as a keyfile written through stdin (the password is never on a command line), then up if
+    it's in reach; it stays known either way."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "network"
+    esc = lambda v: v.replace("\\", "\\\\").replace("\n", "")
+    lines = ["[connection]", f"id={esc(name)}", f"uuid={uuid.uuid5(uuid.NAMESPACE_DNS, 'elyir-usb-' + name)}", "type=wifi",
+             "autoconnect=true", "", "[wifi]", "mode=infrastructure", f"ssid={esc(name)}"]
+    if password:
+        lines += ["", "[wifi-security]", "key-mgmt=wpa-psk", f"psk={esc(password)}"]
+    lines += ["", "[ipv4]", "method=auto", "", "[ipv6]", "method=auto"]
+    path = f"/etc/NetworkManager/system-connections/elyir-bench-wifi-{slug}.nmconnection"
+    p = subprocess.run(["sudo", "-n", sudo_bin("install"), "-m", "600", "-o", "root", "-g", "root", "/dev/stdin", path],
+                       input="\n".join(lines) + "\n", capture_output=True, text=True)
+    if p.returncode != 0:
+        raise StepFailed(f"Couldn't add {name}: {p.stderr.strip()[-200:]}")
+    sudo("nmcli", "connection", "load", path, check=False)
+    sudo("nmcli", "connection", "up", "id", name, check=False, timeout=60)
+
+
+def report_name(s: dict, facts: dict) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (s.get("printer_name") or facts.get("host") or "printer").lower()).strip("-") or "printer"
+    return f"{slug}-report-{_dt.datetime.now().strftime('%Y-%m-%d-%H%M')}.tar.gz"
+
+
+def usb_run(facts: dict, s: dict) -> int:
+    """Does what was asked for at a screen (usb-take.json): copy, unmount, then keys, Wi-Fi and the update."""
+    try:
+        ask = json.loads(USB_ASK.read_text())
+    except (OSError, ValueError):
+        return 0
+    USB_ASK.unlink(missing_ok=True)
+    u = load_usb()
+    part = usb_block(u.get("dev") or "") if u.get("present") and ask.get("id") == u.get("id") else None
+    if not part:
+        take_say(state="failed", why="The stick came out before it was read. Put it back in to try again.")
+        return 1
+    offers = usb_offers(u)
+    want = {"app": bool(ask.get("app")) and offers["app"], "os": bool(ask.get("os")) and offers["os"],
+            "keys": [k for k in ask.get("keys") or [] if k in offers["keys"]], "wifi": bool(ask.get("wifi")) and offers["wifi"],
+            "report": bool(ask.get("report"))}
+    files = []
+    if want["app"]:
+        files += [(u["app"]["file"], INCOMING / u["app"]["file"]), (u["app"]["file"] + ".sig", INCOMING / (u["app"]["file"] + ".sig"))]
+    if want["os"]:
+        name = Path(u["os"]["file"]).name
+        files += [(u["os"]["file"], INCOMING / "os" / name), (u["os"]["file"] + ".sig", INCOMING / "os" / (name + ".sig"))]
+    with usb_locked():
+        cur = load_usb()
+        cur["take"] = {"state": "copying" if files else "report" if want["report"] else "installing", "done": 0, "of": None,
+                       "out": False, "why": None, "auto": ask.get("auto"), "app": u["app"]["version"] if want["app"] else None,
+                       "os": u["os"]["version"] if want["os"] else None, "keys": len(want["keys"]),
+                       "wifi": u["wifi"]["name"] if want["wifi"] else None, "report": None, "result": None}
+        save_usb(cur)
+    keys, wifi, have = [], None, current_version()
+    try:
+        with mounted(part) as root:
+            folder = stick_folder(root)
+            if folder:
+                take_say(of=sum((folder / src).stat().st_size for src, _ in files) or None)
+                if want["os"]:
+                    need = (folder / u["os"]["file"]).stat().st_size
+                    INCOMING.mkdir(parents=True, exist_ok=True)
+                    if shutil.disk_usage(INCOMING).free < need * 1.1 + 200e6:
+                        raise StepFailed("There isn't room on this card to copy the new system first.")
+                    for old in (INCOMING / "os").glob("*"):
+                        old.unlink(missing_ok=True)     # one at a time: they're 900 MB
+                done = 0
+                for src, dst in files:
+                    done = copy_from_stick(folder / src, dst, done)
+                keys = [k["line"] for k in stick_keys(folder) if k["id"] in want["keys"]]
+                wifi = stick_wifi(folder) if want["wifi"] else None
+        if want["report"]:
+            take_say(state="report")
+            meta, bundle = gather_report(facts, s, "other")
+            name = report_name(s, facts)
+            with mounted(part, rw=True) as root:
+                out = (stick_folder(root) or root / USB_FOLDER) / "reports"
+                out.mkdir(parents=True, exist_ok=True)
+                (out / name).write_bytes(bundle or b"")
+                os.sync()
+            take_say(report=name)
+    except (StepFailed, OSError, subprocess.TimeoutExpired) as e:
+        why = str(e) if isinstance(e, StepFailed) else "The stick came out before everything was copied. Put it back in to try again."
+        take_say(state="failed", why=why)
+        return 1
+    take_say(out=True)
+    added = add_ssh_keys(keys) if keys else 0
+    try:
+        if wifi:
+            join_wifi(*wifi)
+    except StepFailed as e:
+        take_say(why=str(e))
+        wifi = None
+    with usb_locked():   # what was taken isn't offered again while the stick stays in
+        cur = load_usb()
+        cur["keys"] = [k for k in cur.get("keys") or [] if k["id"] not in want["keys"]]
+        if wifi:
+            cur["wifi"] = None
+        cur["take"] = {**(cur.get("take") or {}), "keys": added}
+        save_usb(cur)
+    if not (want["app"] or want["os"]):
+        take_say(state="done")
+        return 0
+    while True:
+        try:
+            facts["print_state"] = http_json(f"{facts['moonraker']['url']}/printer/objects/query?print_stats")[
+                "result"]["status"]["print_stats"]["state"]
+        except Exception:
+            pass
+        busy = update_busy(facts, s, nightly=False)
+        if not busy:
+            break
+        take_say(state="waiting", why=busy)
+        time.sleep(15)
+        if load_usb().get("skipped"):
+            take_say(state="skipped", why=None)
+            return 0
+    try:
+        take_say(state="checking", why=None)
+        if want["app"]:
+            tarball = INCOMING / u["app"]["file"]
+            verify_signature(tarball, Path(str(tarball) + ".sig"))
+            take_say(state="installing")
+            save_update(state="installing", done=None, of=None)
+            result, why = install_release(tarball, u["app"]["version"], have)
+            save_update(state="done" if result == "done" else "failed", version=current_version(), why=why,
+                        went_back=result == "went_back", **({"previous": have, "newer": False} if result == "done" else {}))
+            take_say(state="done" if result == "done" else "failed", why=why, result=result)
+            if result == "done":
+                with usb_locked():
+                    cur = load_usb()
+                    if cur.get("app"):
+                        cur["app"]["why"] = "same"
+                    save_usb(cur)
+            return 0 if result == "done" else 1
+        bundle = INCOMING / "os" / Path(u["os"]["file"]).name
+        take_say(state="installing")
+        p = sudo(OS_TOOL, "stage", str(bundle), check=False, timeout=3600)
+        if p.returncode != 0:
+            raise StepFailed(((p.stderr or p.stdout).strip().splitlines() or ["The new system didn't go on."])[-1][:200])
+        take_say(state="restarting")
+        sudo(OS_TOOL, "try", check=False, timeout=600)     # restarts into it; goes back by itself if it doesn't start
+        return 0
+    except (StepFailed, OSError, tarfile.TarError, subprocess.TimeoutExpired) as e:
+        take_say(state="failed", why=str(e) if isinstance(e, StepFailed) else "It didn't finish.")
+        return 1
+
+
+def render_usb_units(facts: dict) -> dict[str, str]:
+    head = "# Managed by elyir-bench (design/usb/, docs/installer.md).\n"
+    py = f"{sys.executable} {CURRENT}/installer/elyir_bench.py"
+    env = f"User={facts['user']}\nEnvironment=HOME={HOME}\n"
+    return {
+        USB_UNITS[0]: head + "[Unit]\nDescription=Elyir Bench: what was asked for from a USB stick\n\n"
+            f"[Service]\nType=oneshot\n{env}TimeoutStartSec=infinity\nExecStart={py} usb run\n",
+        USB_UNITS[1]: head + "[Unit]\nDescription=Elyir Bench: a USB stick (%I)\nBindsTo=dev-%i.device\nAfter=dev-%i.device\n\n"
+            f"[Service]\nType=oneshot\nRemainAfterExit=yes\n{env}TimeoutStartSec={USB_FALLBACK + 180}\n"
+            f"ExecStart={py} usb in %I\nExecStopPost={py} usb out %I\n",
+    }
+
+
+USB_RULE_TEXT = ("# Managed by elyir-bench (design/usb/): a USB stick's partition starts elyir-bench-usb@<it>, which reads its\n"
+                 "# elyir-bench/ folder. Its unit stops when the stick comes out.\n"
+                 'ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_USAGE}=="filesystem", '
+                 'KERNEL=="sd[a-z]|sd[a-z][0-9]|sd[a-z][0-9][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}+="elyir-bench-usb@%k.service"\n')
+
+
+class UsbSticks(Step):
+    """A USB stick with an update, a key or Wi-Fi on it, read when it goes in (design/usb/)."""
+    name = "usb stick"
+    roles = ("printer", "controller")
+
+    def _want(self, c: Ctx) -> dict[str, str]:
+        return {**{f"/etc/systemd/system/{u}": t for u, t in render_usb_units(c.facts).items()}, USB_RULE: USB_RULE_TEXT}
+
+    def check(self, c):
+        stale = [Path(p).name for p, t in self._want(c).items() if read(p) != t]
+        if stale:
+            return (False, "needs writing: " + ", ".join(stale))
+        return (True, "reads a USB stick when it goes in")
+
+    def apply(self, c):
+        for path, text in self._want(c).items():
+            if read(path) != text:
+                sudo_write(path, text)
+        sudo("systemctl", "daemon-reload")
+        sudo("udevadm", "control", "--reload-rules", check=False)
+
+
+ACS_USB_VENDOR = "072f"
+PCSC_POLKIT_RULES = Path("/etc/polkit-1/rules.d/50-elyir-bench-pcsc.rules")
+PCSC_POLKIT_PKLA = Path("/etc/polkit-1/localauthority/50-local.d/elyir-bench-pcsc.pkla")
+
+
+def tag_reader_plugged() -> bool:
+    return any(read(v).strip().lower() == ACS_USB_VENDOR for v in Path("/sys/bus/usb/devices").glob("*/idVendor"))
+
+
+def render_pcsc_polkit(user: str) -> tuple[str, str]:
+    """Debian's pcscd asks polkit, which refuses a service with no login session: Moonraker's user is let in."""
+    rules = ("polkit.addRule(function(action, subject) {\n"
+             "  if ((action.id == \"org.debian.pcsc-lite.access_pcsc\" || action.id == \"org.debian.pcsc-lite.access_card\")"
+             f" && subject.user == \"{user}\") {{ return polkit.Result.YES; }}\n}});\n")
+    pkla = (f"[Elyir Bench spool tag reader]\nIdentity=unix-user:{user}\n"
+            "Action=org.debian.pcsc-lite.access_pcsc;org.debian.pcsc-lite.access_card\nResultAny=yes\n")
+    return rules, pkla
+
+
+class TagReader(Step):
+    """Spool tags (design/spool-tags/): pcscd and the CCID driver, only where an ACS reader is plugged in."""
+    name = "spool tag reader"
+    def check(self, c):
+        if not tag_reader_plugged():
+            return (True, "no tag reader plugged in")
+        if not (shutil.which("pcscd") or Path("/usr/sbin/pcscd").exists()):
+            return (False, "a tag reader is plugged in; pcscd isn't installed")
+        if not PCSC_POLKIT_RULES.exists():
+            return (False, "pcscd won't let Moonraker in yet")
+        return (True, "pcscd ready for the tag reader")
+    def apply(self, c):
+        apt_install("pcscd", "libccid")
+        rules, pkla = render_pcsc_polkit(c.facts["user"])
+        for dest, text in ((PCSC_POLKIT_RULES, rules), (PCSC_POLKIT_PKLA, pkla)):
+            sudo(sudo_bin("mkdir"), "-p", str(dest.parent))
+            sudo_write(str(dest), text)
+        sudo(sudo_bin("systemctl"), "enable", "--now", "pcscd.socket", check=False)
+        sudo(sudo_bin("systemctl"), "restart", "pcscd", check=False)
+        c.restart_moonraker = True
+        c.notes.append("pcscd installed for the spool tag reader")
+
+
 STEPS: list[Step] = [Preflight(), Release(), Legacy(), Component(), MoonrakerConf(), StartMacro(), FilamentUnits(), Web(),
                      Announce(), Panel(),
                      WifiSetup(),
                      KlipperScreenMenu(),
                      DoorRuntime(), DoorBinaries(), RemoteName(), DoorServices(), SlicerEngine(), SlicerService(), BenchService(),
-                     BootScreen(), PowerKey(), PowerPermission(), NetworkWait()]
+                     BootScreen(), PowerKey(), PowerPermission(), NetworkWait(), Updates(), UsbSticks(), TagReader()]
 
 
 # `elyir-bench panel <mode>` (also run by the panel itself, Care > Printer screen) only touches the screen
@@ -4681,14 +5561,25 @@ def usb_partitions() -> list[dict]:
 
 
 @contextlib.contextmanager
-def mounted(part: dict):
+def mounted(part: dict, rw: bool = False):
     """A card's partition, read-only, for as long as it's read: ext4 without replaying its journal (noload), so
-    not one byte on the card changes. Already mounted by someone else: read where it is, and left so."""
+    not one byte on the card changes. Already mounted by someone else: read where it is, and left so. rw: a USB
+    stick's FAT or exFAT, writable by this user for a report (design/usb/), never anything else."""
     mine = not part.get("mountpoint") or part["mountpoint"].startswith(str(BRING_MOUNTS))
-    mp = Path(part["mountpoint"]) if part.get("mountpoint") else BRING_MOUNTS / part["dev"]
+    mp = Path(part["mountpoint"]) if part.get("mountpoint") else (USB_RW_MOUNTS if rw else BRING_MOUNTS) / part["dev"]
+    if rw and (part.get("mountpoint") or part.get("card")):
+        raise StepFailed("That looks like a printer's card, so nothing is written to it." if part.get("card")
+                         else "The stick is open somewhere else.")
     if not part.get("mountpoint"):
         sudo("mkdir", "-p", str(mp))
-        opts = ["-t", "ext4", "-o", "ro,noload"] if part["fstype"] == "ext4" else ["-t", "vfat", "-o", "ro"]
+        if rw:
+            if part["fstype"] not in USB_FS:
+                raise StepFailed(f"Can't write to a {part['fstype']} stick.")
+            opts = ["-t", part["fstype"], "-o", f"rw,nosuid,nodev,noexec,uid={os.getuid()},gid={os.getgid()}"]
+        elif part["fstype"] == "ext4":
+            opts = ["-t", "ext4", "-o", "ro,noload"]
+        else:
+            opts = ["-t", "exfat" if part["fstype"] == "exfat" else "vfat", "-o", "ro"]
         sudo("mount", *opts, f"/dev/{part['dev']}", str(mp), timeout=60)
     try:
         yield mp
@@ -6334,11 +7225,16 @@ def remove(c: Ctx) -> bool:
     if unit_exists("elyir-bench-firstboot.service"):
         sudo("systemctl", "disable", "elyir-bench-firstboot.service", check=False)
         lines.append(("done", "first boot", "the card's first-boot install won't run again"))
-    units = [u for u in (KIOSK_UNIT, WIFI_UNIT, *DOOR_UNITS, *HOMECERT_UNITS, SLICER_UNIT, BENCH_UNIT, POWER_KEY_UNIT, UNITS_UNIT)
+    units = [u for u in (KIOSK_UNIT, WIFI_UNIT, *DOOR_UNITS, *HOMECERT_UNITS, *UPDATE_UNITS, SLICER_UNIT, BENCH_UNIT, POWER_KEY_UNIT, UNITS_UNIT)
              if unit_exists(u)]
     for u in units:
         sudo("systemctl", "disable", "--now", u, check=False)
         sudo("rm", "-f", f"/etc/systemd/system/{u}", check=False)
+    usb = [p for p in (*(f"/etc/systemd/system/{u}" for u in USB_UNITS), USB_RULE) if Path(p).exists()]
+    if usb:
+        sudo("rm", "-f", *usb, check=False)
+        sudo("udevadm", "control", "--reload-rules", check=False)
+        units.append("the USB stick's")
     if units:
         sudo("systemctl", "daemon-reload", check=False)
         lines.append(("done", "services", ", ".join(units) + " removed"))
@@ -6421,6 +7317,11 @@ def main(argv: list[str] | None = None) -> int:
     sm.add_argument("mode", choices=["on", "off"])
     sm.add_argument("--force", action="store_true", help="change it even while printing (Klipper reads it at its next restart)")
     sub.add_parser("homecert", help="keep the printer's name at home and its certificate current (the timer runs this)")
+    up = sub.add_parser("update", help="install the newest release when it isn't printing (the nightly timer and Care's Update now)")
+    up.add_argument("--nightly", action="store_true", help="as the timer: also waits for a print waiting in line")
+    us = sub.add_parser("usb", help="a USB stick (design/usb/): in/out (its udev unit), run (what a screen asked for), status")
+    us.add_argument("what", choices=["in", "out", "run", "status"])
+    us.add_argument("dev", nargs="?", default="", help="in/out: the partition, as sda1")
     r = sub.add_parser("remote", help="an invite code for Elyir's relay, or your own relay's token (kept out of elyir-bench.conf)")
     r.add_argument("what", choices=["invite", "token", "phones"])
     r.add_argument("value", nargs="?", default="")
@@ -6506,6 +7407,12 @@ def main(argv: list[str] | None = None) -> int:
         print("Run elyir-bench as the printer's user, not root (it uses sudo where it needs to).")
         return 2
 
+    if args.cmd == "usb" and args.what in ("out", "status"):
+        if args.what == "out":
+            return usb_out(args.dev)
+        print(json.dumps(load_usb(), indent=1))
+        return 0
+
     facts = detect()
     if args.cmd == "report":
         s = load_settings(facts)
@@ -6552,6 +7459,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "pair":
         print("\n".join(pair_lines(facts, settings)))
         return 0
+
+    if args.cmd == "update":
+        return update_main(facts, settings, args.nightly, args.json)
+
+    if args.cmd == "usb":
+        if not BRING_DEV.fullmatch(args.dev or "") and args.what == "in":
+            print("elyir-bench usb in <partition, as sda1>")
+            return 2
+        return usb_in(args.dev, facts, settings) if args.what == "in" else usb_run(facts, settings)
 
     if args.cmd == "bring":
         return bring_main(args, facts, settings)

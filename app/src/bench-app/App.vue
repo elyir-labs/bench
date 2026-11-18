@@ -7,8 +7,11 @@
       <!-- design/loading/, A: the page's shape while the box says who this is -->
       <section v-else class="first"><BenchShape /></section>
     </main>
-    <!-- one tab bar on every page, an opened printer too; not on the first run, nor on the way in -->
-    <BenchTabs v-if="here.checked && !landing && !BARE.includes(route.path)" />
+    <!-- one bar at a time: inside a printer, the printer's own sections take its place (design/bench-7in/, A);
+         none on the first run, nor on the way in -->
+    <BenchTabs v-if="here.checked && !landing && !BARE.includes(route.path) && !route.path.startsWith('/p/')" />
+    <!-- a USB stick in the box (design/usb/, 3 A): asks over any page, at home -->
+    <BoxUsb v-if="here.checked && !here.away" />
   </div>
 </template>
 
@@ -18,6 +21,7 @@ import { useRoute } from 'vue-router'
 import BenchTabs from './pages/BenchTabs.vue'
 import PairPage from './pages/PairPage.vue'
 import BenchShape from './pages/BenchShape.vue'
+import BoxUsb from './pages/BoxUsb.vue'
 import { here } from './here'
 
 const BARE = ['/setup', '/join', '/pair']

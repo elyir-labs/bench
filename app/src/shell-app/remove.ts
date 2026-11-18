@@ -20,7 +20,13 @@ export interface SheetWords {
   offerSub: string | null
 }
 
-export function sheetWords(name: string, c: RemoveCase): SheetWords {
+export function sheetWords(name: string, c: RemoveCase, inAccount = false): SheetWords {
+  // design/account-list/, A: the account is the list, so Remove is for every phone signed in to it
+  if (inAccount) {
+    return { title: `Remove ${name} from your account?`,
+      body: `It goes from your list on every phone and computer signed in. ${name} keeps its prints and files, and stops being backed up.`,
+      note: c === 'gone' ? `${name} can't be reached right now. It leaves your account all the same.` : null, offer: null, offerSub: null }
+  }
   const title = `Remove ${name} from this phone?`
   if (c === 'reachable') {
     return { title, body: `It goes from your list here. ${name} keeps its prints, files and other phones.`, note: null,
@@ -38,7 +44,8 @@ export function canUndo(c: RemoveCase, alsoOff: boolean, stillKnown: boolean): b
   return !(c === 'reachable' && alsoOff) || stillKnown
 }
 
-export function toastWords(name: string, stillKnown: boolean): string {
+export function toastWords(name: string, stillKnown: boolean, inAccount = false): string {
+  if (inAccount) return `${name} is out of your account.`
   return stillKnown
     ? `${name} is off this phone. It may still know this phone: Care › Phones on its screen takes it off there.`
     : `${name} is off this phone.`

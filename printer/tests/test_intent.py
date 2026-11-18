@@ -313,6 +313,52 @@ def test_print_start_pause_is_getting_ready_not_paused():
     assert t.intent(T0 + 120)["state"] == "printing"
 
 
+def _through_print_start(t, now):
+    t.update_status({"print_stats": {"state": "printing", "filename": "x.gcode", "info": {}, "print_duration": 0.2},
+                     "gcode_macro _PRINT_START": {"stage": ""}}, now=now)
+    assert t.intent(now)["state"] == "preparing"
+    t.update_status({"print_stats": {"state": "paused", "print_duration": 0.4}, "pause_resume": {"is_paused": True},
+                     "gcode_macro _PRINT_START": {"stage": "warming"}}, now=now + 1)
+    t.update_status({"gcode_macro _PRINT_START": {"stage": "prime"}, "display_status": {"message": "Purge complete!"}}, now=now + 300)
+    t.update_status({"gcode_macro _PRINT_START": {"stage": "resume"}}, now=now + 330)
+
+
+def test_print_start_ending_counts_when_a_tool_change_overwrites_its_message():
+    # The file's T1 pauses again and purges inside one status batch: "Printing, good luck!" never arrives
+    t = ready_tracker()
+    _through_print_start(t, T0)
+    t.update_status({"gcode_macro _PRINT_START": {"stage": ""}, "display_status": {"message": "Purge complete!"}}, now=T0 + 331)
+    t.update_status({"print_stats": {"state": "printing", "print_duration": 1.0}, "pause_resume": {"is_paused": False}}, now=T0 + 400)
+    assert t.intent(T0 + 400)["state"] == "printing"
+
+
+def test_print_start_cancelled_while_soaking_is_not_a_print_started():
+    t = ready_tracker()
+    t.update_status({"print_stats": {"state": "paused", "filename": "x.gcode", "info": {}, "print_duration": 0.4},
+                     "pause_resume": {"is_paused": True}, "gcode_macro _PRINT_START": {"stage": "soaking"}}, now=T0)
+    t.update_status({"gcode_macro _PRINT_START": {"stage": ""}}, now=T0 + 60)
+    assert t._print_started is False
+
+
+def test_moonraker_starting_mid_print_sees_the_print_not_getting_ready():
+    t = IntentTracker("Workshop", now=T0)
+    t.set_klippy_state("ready", now=T0)
+    t.update_status({"print_stats": {"state": "printing", "filename": "x.gcode", "info": {}, "print_duration": 600.0},
+                     "pause_resume": {"is_paused": False}, "display_status": {"message": "Purge complete!"},
+                     "gcode_macro _PRINT_START": {"stage": ""},
+                     "heater_bed": {"temperature": 105.0, "target": 105.0},
+                     "extruder": {"temperature": 260.0, "target": 260.0}}, now=T0)
+    assert t.intent(T0)["state"] == "printing"
+
+
+def test_a_start_routine_of_its_own_is_not_cut_short_by_print_time():
+    # No shared PRINT_START: the file's own start G-code runs unpaused, so print time says nothing
+    t = ready_tracker()
+    t.update_status({"print_stats": {"state": "printing", "filename": "x.gcode", "info": {}, "print_duration": 120.0},
+                     "heater_bed": {"temperature": 50.0, "target": 105.0}}, now=T0)
+    assert t.intent(T0)["state"] == "preparing"
+
+
 def test_print_start_seen_straight_from_standby_resets_the_job():
     t = ready_tracker()
     t.update_status({"print_stats": {"state": "printing", "filename": "x.gcode", "info": {"current_layer": 9}}}, now=T0)

@@ -12,7 +12,12 @@
       <li v-for="f in found" :key="f.id" class="row">
         <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3" width="17" height="18" rx="2" /><path d="M3.5 7.5h17M8 12.5h8M12 7.5v5M7 17.5h10" /></svg></span>
         <span class="t"><b>{{ f.name }}</b><span>{{ line(f) }}</span></span>
-        <span v-if="f.on" class="chip green"><i></i>Added</span>
+        <span v-if="f.on && f.new" class="pair">
+          <span class="chip blue"><i></i>New</span>
+          <button class="a-btn ghost" :disabled="busy.has(f.id)" @click="notMine(f)">{{ confirming === f.id ? 'Yes, take it off' : 'Not mine' }}</button>
+        </span>
+        <span v-else-if="f.on" class="chip green"><i></i>Added</span>
+        <button v-else-if="f.hidden" class="a-btn ghost" :disabled="busy.has(f.id)" @click="bringBack(f)">Bring back</button>
         <button v-else-if="f.kind === 'anycubic'" class="a-btn" :class="f.why ? 'accent' : 'ghost'" @click="guiding = f.id">Set it up</button>
         <button v-else-if="f.door && (!f.ask || ['refused', 'expired', 'unreachable'].includes(f.ask.state))" class="a-btn ghost" :disabled="asking.has(f.id)" @click="ask(f)">{{ f.ask ? 'Ask again' : 'Ask' }}</button>
         <span v-else-if="f.ask?.state === 'waiting'" class="chip">Waiting</span>
@@ -36,6 +41,8 @@ interface Found {
   id: string; name: string; host: string; door: boolean; on: boolean; ask: { state: string; words: string } | null
   kind?: 'anycubic'; why?: string | null   // a printer the box speaks for (design/bench-kobra/, A): added here, not asked
   via?: 'lan' | 'moonraker' | null         // how: Anycubic's LAN mode, or Rinkhals' Moonraker (design/kobra-lan/, B)
+  new?: boolean                            // joined by itself in the last day (design/new-kobra/, B)
+  hidden?: boolean                         // someone said it isn't theirs: never added again until brought back
 }
 const found = ref<Found[]>([])
 const looked = ref(false)
@@ -65,8 +72,10 @@ const lead = computed(() => {
   return 'Each one is asked on its own screen. Once it says yes, this box can see and run everything it does.'
 })
 function line(f: Found): string {
-  if (f.kind === 'anycubic') return f.on ? (f.via === 'lan' ? 'On the bench, over LAN mode' : 'On the bench, through Rinkhals')
-    : f.why ? 'Anycubic · on its cloud' : `Anycubic · LAN mode is on`
+  const how = f.via === 'lan' ? 'over LAN mode' : 'through Rinkhals'
+  if (f.kind === 'anycubic' && f.on && f.new) return `Joined by itself · ${how}`
+  if (f.kind === 'anycubic' && f.hidden) return "Anycubic · you said it isn't yours"
+  if (f.kind === 'anycubic') return f.on ? `On the bench, ${how}` : f.why ? 'Anycubic · on its cloud' : `Anycubic · LAN mode is on`
   if (f.on) return 'Said yes'
   if (f.ask) return f.ask.words
   return f.door ? f.host : 'Its door is off, so it has nothing to ask yet'
@@ -77,6 +86,20 @@ async function ask(f: Found) {
   try { await fetch(`/bench/ask/${encodeURIComponent(f.id)}`, { method: 'POST' }) } finally { asking.value.delete(f.id); await look() }
 }
 async function askAll() { await Promise.all(askable.value.map(ask)) }
+
+const busy = ref(new Set<string>())
+const confirming = ref<string | null>(null)
+async function notMine(f: Found) {
+  if (confirming.value !== f.id) { confirming.value = f.id; return }
+  busy.value.add(f.id)
+  try { await fetch(`/bench/printers/${encodeURIComponent(f.id)}/not-mine`, { method: 'POST' }) } finally {
+    busy.value.delete(f.id); confirming.value = null; await look(); await loadBench()
+  }
+}
+async function bringBack(f: Found) {
+  busy.value.add(f.id)
+  try { await fetch(`/bench/add/${encodeURIComponent(f.id)}`, { method: 'POST' }) } finally { busy.value.delete(f.id); await look() }
+}
 
 async function look() {
   try {
@@ -107,6 +130,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
 .chip { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; border-radius: 999px; padding: 6px 14px; font-size: 16px; background: var(--a-surface-2); color: var(--a-ink-2); white-space: nowrap; }
 .chip i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
 .chip.green { background: color-mix(in srgb, var(--a-green) 18%, transparent); color: var(--a-green-text); }
+.chip.blue { background: color-mix(in srgb, var(--a-accent) 14%, transparent); color: var(--a-accent-text); }
+.pair { display: inline-flex; align-items: center; gap: 12px; flex: none; }
 .row .a-btn { width: auto; flex: none; height: 52px; font-size: 20px; padding: 0 22px; }
 .acts { display: flex; gap: 16px; margin-top: 16px; }
 .acts .a-btn { width: auto; height: 68px; font-size: 24px; padding: 0 34px; text-decoration: none; display: inline-flex; align-items: center; }

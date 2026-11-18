@@ -20,6 +20,7 @@ trap cleanup EXIT
 if [ "${DIRTY:-}" = "1" ]; then
   SRC="$ROOT"
   VERSION="$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)"
+  BUILT="$(date +%s)"
   # uncommitted builds get a unique name so the printer never reuses a stale unpack
   git diff --quiet HEAD -- app printer kiosk installer door slicer bench setup || VERSION="$VERSION-dirty.$(date +%H%M%S)"
 else
@@ -29,17 +30,22 @@ else
   ln -s "$ROOT/app/node_modules" "$WT/app/node_modules"
   SRC="$WT"
   VERSION="$(git log -1 --format=%cd --date=format:%Y.%m.%d "$REF")-$(git rev-parse --short "$REF")"
+  BUILT="$(git log -1 --format=%ct "$REF")"
 fi
 
 # a release built from the public copy keeps the private commit's name (scripts/release/publish.sh)
 VERSION="${RELEASE_VERSION:-$VERSION}"
+# the commit's time, so two releases of one day are told apart (installer is_newer, design/updates/)
+BUILT="${RELEASE_BUILT:-$BUILT}"
 
 (cd "$SRC/app" && npm run build --silent >/dev/null && npm run build:bench --silent >/dev/null)
 
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/app" "$STAGE/printer" "$STAGE/kiosk" "$STAGE/installer" "$STAGE/door" "$STAGE/slicer" "$STAGE/bench-app" "$STAGE/bench" "$STAGE/setup"
 cp -R "$SRC/app/dist/." "$STAGE/app/"
-cp "$SRC/printer/elyir_bench_intent.py" "$SRC/printer/filament_units.py" "$SRC/printer/unit_check.py" "$SRC/printer/unit_setup.py" "$SRC/printer/elyir_bench_care.py" "$SRC/printer/printer_intent.py" "$SRC/printer/orca_profile.py" "$SRC/printer/gcode_layers.py" "$SRC/printer/power_key.py" "$STAGE/printer/"
+cp "$SRC/printer/elyir_bench_intent.py" "$SRC/printer/filament_units.py" "$SRC/printer/unit_check.py" "$SRC/printer/unit_setup.py" "$SRC/printer/spots.py" "$SRC/printer/elyir_bench_care.py" "$SRC/printer/printer_intent.py" "$SRC/printer/orca_profile.py" "$SRC/printer/gcode_layers.py" "$SRC/printer/power_key.py" "$SRC/printer/spool_tags.py" "$SRC/printer/tag_formats.py" "$SRC/printer/filament_library.py" "$SRC/printer/tag_reader.py" "$STAGE/printer/"
+# spool tags' filament library and TigerTag's tables, found beside the modules (design/spool-tags/)
+cp -R "$SRC/printer/tag_data" "$STAGE/printer/"
 # the start macro the installer writes into the config folder (elyir-bench startmacro on, docs/start-macro.md)
 mkdir -p "$STAGE/printer/klipper"
 cp "$SRC/printer/klipper/elyir-bench.cfg" "$STAGE/printer/klipper/"
@@ -61,6 +67,7 @@ if [ -d "$SRC/units" ]; then   # the filament-unit service (design/ace-driver/);
   cp "$SRC/units/klipper/elyir_units.cfg" "$STAGE/units/klipper/"
 fi
 echo "$VERSION" > "$STAGE/VERSION"
+echo "$BUILT" > "$STAGE/BUILT"
 
 # The built app talks to whatever host served it (nginx proxies Moonraker), never a fixed printer.
 python3 - "$STAGE/app" <<'EOF'
@@ -82,6 +89,6 @@ OUT="$ROOT/dist/elyir-bench-$VERSION.tar.gz"
 # macOS's tar would add ._ files and extended attributes; GNU tar (a Linux build) has neither flag, and adds neither
 MAC_TAR=""
 tar --version 2>/dev/null | grep -q bsdtar && MAC_TAR="--no-xattrs --no-mac-metadata"
-COPYFILE_DISABLE=1 tar $MAC_TAR -czf "$OUT" -C "$STAGE" VERSION app printer kiosk installer door slicer bench-app bench setup \
+COPYFILE_DISABLE=1 tar $MAC_TAR -czf "$OUT" -C "$STAGE" VERSION BUILT app printer kiosk installer door slicer bench-app bench setup \
   $([ -d "$STAGE/units" ] && echo units)
 echo "$OUT"

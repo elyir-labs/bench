@@ -375,7 +375,9 @@ class Planner:
             items = [await self.shelf._models(self.shelf.item(sid)) for sid, _ in members]
             for again in (False, True):
                 parts = [p for it, (_, n) in zip(items, members) for p in plate_parts(it, n, how_of(it))]
-                async with self.shelf.session.post(f"{self.shelf.slicer}/slice/fit", json={"printer": pid, "parts": parts, "part": None}) as r:
+                supports = how_of(items[0]).get("supports")       # a group shares its supports
+                ask = {"printer": pid, "parts": parts, "part": None, **({"supports": supports} if supports else {})}
+                async with self.shelf.session.post(f"{self.shelf.slicer}/slice/fit", json=ask) as r:
                     body = await r.json(content_type=None)
                 if r.status == 400 and "no such model" in str(body.get("error")) and not again:
                     items = [await self.shelf._upload(it) for it in items]

@@ -7,6 +7,8 @@ each one (it says yes on its own screen), and each printer's live intent passed 
   POST   /bench/ask/{id}                          ask one, at its door's home name; the answer is followed here
   POST   /bench/add/{id}                          an Anycubic in LAN mode (or with Rinkhals): the box speaks for it (standin.py)
   DELETE /bench/printers/{id}                     take one off the bench
+  POST   /bench/printers/{id}/not-mine            a Kobra the box added by itself isn't ours: off the bench, never added again
+  DELETE /bench/hidden/{id}                       bring a Kobra said to be not ours back (it's added again when it's seen)
   GET    /bench/p/{id}/websocket                  its Moonraker websocket, through here
   GET    /bench/p/{id}/server/files/gcodes/{path} its pictures, through here
   GET    /bench/p/{id}/camera                     its camera, if it has one: how it's mounted, and where to see it
@@ -59,6 +61,7 @@ log = logging.getLogger("bench")
 PRINTER_MDNS = "_elyir-printer._tcp.local"   # every printer says so (installer, Announce)
 SCAN_EVERY = 10          # seconds a scan of the Wi-Fi is kept
 FOLLOW_EVERY = 2         # seconds between looks at an ask
+NEW_FOR = 86400          # a Kobra the box added by itself is "new" this long (design/new-kobra/, B)
 KOBRAS_EVERY = 60        # a Kobra the box speaks for that stopped answering is looked for this often (it may have moved)
 ORIGINS_EVERY = 600      # the box's addresses, told to each printer's door again
 CAMERAS_FOR = 60         # seconds a printer's camera list is kept
@@ -198,6 +201,10 @@ class Bench:
             self.printers: Dict[str, dict] = json.loads((state / "printers.json").read_text())
         except (OSError, ValueError):
             self.printers = {}
+        try:
+            self.hidden: List[str] = json.loads((state / "hidden.json").read_text())
+        except (OSError, ValueError):
+            self.hidden = []
         self.found: list[dict] = []
         self.scanned = 0.0
         self.asks: Dict[str, dict] = {}          # id → {state, words, handle, home, at}
@@ -262,6 +269,8 @@ class Bench:
         app.router.add_post("/bench/p/{id}/remote", self.post_remote)
         app.router.add_delete("/bench/p/{id}/remote", self.delete_remote)
         app.router.add_delete("/bench/printers/{id}", self.delete_printer)
+        app.router.add_post("/bench/printers/{id}/not-mine", self.post_not_mine)
+        app.router.add_delete("/bench/hidden/{id}", self.delete_hidden)
         app.router.add_get("/bench/p/{id}/websocket", self.ws)
         app.router.add_get("/bench/p/{id}/server/files/gcodes/{path:.*}", self.picture)
         app.router.add_get("/bench/p/{id}/camera", self.camera)
@@ -285,6 +294,7 @@ class Bench:
         self.feeds = ClientSession(connector=TCPConnector(family=socket.AF_INET), timeout=ClientTimeout(total=None, sock_connect=5, sock_read=20))
         self.shelf.session = ClientSession(connector=TCPConnector(family=socket.AF_INET), timeout=ClientTimeout(total=300))
         app["keep"] = asyncio.create_task(self._keep_origins())
+        self._tell_left()
         app["kobras"] = asyncio.create_task(self._follow_kobras())
         app["doors"] = asyncio.create_task(self._keep_doors())
         for pid, p in self.printers.items():
@@ -411,17 +421,39 @@ class Bench:
 
     async def _follow_kobras(self) -> None:
         """No fixed address needed: a Kobra the box can't reach is looked for on the Wi-Fi by its MAC, and spoken
-        for at its new address (_scan_anycubic)."""
+        for at its new address (_scan_anycubic). A Kobra new to the Wi-Fi in LAN mode joins by itself (_join_new)."""
         while True:
             await asyncio.sleep(KOBRAS_EVERY)
             lost = [pid for pid, (s, _) in self.standins.items() if not s.up.up]
             lost += [pid for pid, p in self.printers.items() if p.get("standin") and pid not in self.standins]
             if lost and self.finder:
                 self.anycubic_scanned = 0.0
-                try:
-                    await self._scan_anycubic()
-                except Exception:
-                    log.exception("following the Kobras")
+            try:
+                await self._join_new()
+                await self._join_slicer()
+            except Exception:
+                log.exception("following the Kobras")
+
+    async def _join_slicer(self) -> None:
+        """A Kobra's own page slices on the box's slicer through its door, which only slices for printers joined to it:
+        each one the box speaks for is joined when it's on the bench, not only when the box's own Print asks (Kobra 3 #3,
+        added by hand, said "hasn't joined this slicer yet" from its page on 7 November 2026)."""
+        for pid, p in list(self.printers.items()):
+            if p.get("standin"):
+                await self.shelf._join(pid)
+
+    async def _join_new(self) -> None:
+        """design/new-kobra/, B: a Kobra the box can speak for, not on the bench and not said to be someone else's, is
+        added with no tap, and its door follows its siblings' (_add)."""
+        spoken = {p["standin"]["printer"] for p in self.printers.values() if p.get("standin")}
+        for f in await self._scan_anycubic():
+            # one the scan couldn't name by its MAC (named by address) may be one already here: never by itself (Kobra 3
+            # and Kobra 3 Max came back as "Kobra 3 #4" and "Kobra 3 Max #2" on 7 November 2026, phones and all)
+            if f["host"] in spoken or f["id"] == anycubic.id_of(None, f["host"]):
+                continue
+            if f.get("via") and f["id"] not in self.printers and f["id"] not in self.hidden:
+                status, out = await self._add(f, by="itself")
+                log.info("%s: %s", f["id"], out.get("words") or out.get("error"))
 
     async def _scan_anycubic(self) -> list[dict]:
         if self.finder and self.now() - self.anycubic_scanned > SCAN_EVERY:
@@ -447,26 +479,187 @@ class Bench:
         f = next((x for x in await self._scan_anycubic() if x["id"] == pid), None)
         if f is None:
             return web.json_response({"error": f"{pid} isn't on this Wi-Fi right now."}, status=404)
+        if pid in self.hidden:
+            self.hidden.remove(pid)
+            self._save_hidden()
+            self._tell_left()
+        status, out = await self._add(f, by="setup")
+        return web.json_response(out, status=status)
+
+    async def _add(self, f: dict, by: str) -> tuple[int, dict]:
+        pid = f["id"]
         via = f.get("via") or ("lan" if f.get("lan") else "moonraker" if f.get("rinkhals") else None)
         if not via:
-            return web.json_response({"error": f"{f['name']}: {f['why']}."}, status=409)
+            return 409, {"error": f"{f['name']}: {f['why']}."}
         if pid not in self.printers:
             taken = {p["name"] for p in self.printers.values()}
             name = f["name"] if f["name"] not in taken else next(f"{f['name']} #{n}" for n in itertools.count(2)
                                                                  if f"{f['name']} #{n}" not in taken)
             port = self._free_port()
             if port is None:
-                return web.json_response({"error": f"The box has no free port left to speak for {f['name']} on."}, status=503)
+                return 503, {"error": f"The box has no free port left to speak for {f['name']} on."}
             self.printers[pid] = {"name": name, "host": self.standin_address, "port": port, "moonraker_port": port, "home": None,
-                                  "token": None, "joined": self.now(),
+                                  "token": None, "joined": self.now(), "joined_by": by,
                                   "standin": {"printer": f["host"], "moonraker_port": f.get("moonraker_port", 7125),
                                               "web_port": f.get("web_port", 80), "model": f.get("model"), "via": via,
                                               "lan_port": f.get("lan_port", 18910)}}
+            if self._siblings_open(pid):
+                self.printers[pid]["remote"] = True      # reached from away like the others, whatever the box's own setting
             self.save()
             await self._speak_for(pid)
+            asyncio.create_task(self.shelf._join(pid, fresh=True))
             if self._door_wanted(self.printers[pid]):
                 asyncio.create_task(self._open_door(pid))
-        return web.json_response({"state": "added", "words": f"The box speaks for {self.printers[pid]['name']}."}, status=201)
+        return 201, {"state": "added", "words": f"The box speaks for {self.printers[pid]['name']}."}
+
+    # ── a Kobra that joined by itself (design/new-kobra/, B) ──
+
+    def _siblings(self, pid: str) -> List[str]:
+        return [q for q, p in self.printers.items() if q != pid and p.get("standin")]
+
+    def _siblings_open(self, pid: str) -> List[str]:
+        return [q for q in self._siblings(pid) if self.doors.house(q) is not None or self.printers[q].get("remote") is True]
+
+    def _door_file(self, pid: str, name: str) -> Path:
+        return self.state / "standins" / pid / "door" / name
+
+    def _carry_phones(self, pid: str) -> List[str]:
+        """The phones that have this box's other Kobras (not guests, not a box) get this one too: their records copied
+        into its door before it opens, with every token they hold for a sibling, so the Printers app reaches it with a
+        token it already has. One record per phone: the same push subscription (or name) is the same phone."""
+        target = self._door_file(pid, "phones.json")
+        try:
+            have: List[dict] = json.loads(target.read_text())
+        except (OSError, ValueError):
+            have = []
+        known = {h for x in have for h in [x["token"], *x.get("also", [])]}
+        endpoint = lambda ph: ((ph.get("push") or {}).get("subscription") or {}).get("endpoint")
+        # a phone already paired here (the same push subscription) takes the sibling's tokens instead of a second record
+        mine = {endpoint(x): x for x in have if endpoint(x)}
+        merged: Dict[str, dict] = {}
+        carried: Dict[str, List[str]] = {}
+        for sid in self._siblings(pid):
+            try:
+                phones = json.loads(self._door_file(sid, "phones.json").read_text())
+            except (OSError, ValueError):
+                continue
+            for ph in phones:
+                if ph.get("kind") in ("guest", "bench") or ph.get("token") in known:
+                    continue
+                own = mine.get(endpoint(ph))
+                if own is not None:
+                    own.setdefault("also", []).append(ph["token"])
+                    known.add(ph["token"])
+                    carried.setdefault(sid, []).append(ph["id"])
+                    continue
+                key = endpoint(ph) or "name:" + ph.get("name", "")
+                m = merged.get(key)
+                if m is None:
+                    merged[key] = {"id": os.urandom(6).hex(), "name": ph.get("name") or "A phone", "token": ph["token"],
+                                   "also": [], "joined": self.now(), "last_seen": None, "push": ph.get("push"),
+                                   "carried_from": [sid]}
+                else:
+                    m["also"].append(ph["token"])
+                    m["carried_from"].append(sid)
+                    m["push"] = m["push"] or ph.get("push")
+                carried.setdefault(sid, []).append(ph["id"])
+        if merged or any(c for c in carried.values()):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_suffix(".tmp")
+            tmp.write_text(json.dumps(have + list(merged.values()), indent=1))
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, target)
+        self.printers[pid]["carried"] = {sid: ids for sid, ids in carried.items()}
+        self.save()
+        log.info("%s: carried %d phone(s) from %s", pid, len(merged), ", ".join(carried) or "nobody")
+        return list(carried)
+
+    def _tell_siblings(self, pid: str, home: Optional[str] = None) -> None:
+        """Each sibling's door lists this one in /door/me for the phones carried from it (door joined_for)."""
+        p, r = self.printers.get(pid) or {}, self.doors.relay(pid).load()
+        for sid in self._siblings(pid):
+            path = self._door_file(sid, "joined.json")
+            try:
+                items = [j for j in json.loads(path.read_text()) if j.get("box_id") != pid]
+            except (OSError, ValueError):
+                items = []
+            ids = (p.get("carried") or {}).get(sid)
+            if ids and r.get("name"):
+                items.append({"box_id": pid, "id": r["name"], "name": p["name"], "phones": ids, "at": p.get("joined") or self.now(),
+                              "addresses": {"away": f"https://{r['address']}", "home": f"https://{home}" if home else None}})
+            if items or path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(items, indent=1))
+
+    def _tell_left(self) -> None:
+        """Each Kobra's door lists, in /door/me, the names of the ones taken off the bench as not ours, and the Printers
+        app drops the record it picked up for one (a Kobra the box added twice stayed on every phone as a dead duplicate
+        after it was taken off, 9 November 2026)."""
+        names = sorted({n for n in (self.doors.relay(pid).load().get("name") for pid in self.hidden) if n})
+        for sid, p in self.printers.items():
+            path = self._door_file(sid, "left.json")
+            if p.get("standin") and (names or path.exists()):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(names))
+
+    async def _vouch(self, pid: str) -> None:
+        if self.doors.link(pid) == "on":
+            return
+        for sid in self._siblings(pid):
+            if (self.doors.links.get(sid) or await self.doors.look(sid)) != "on":
+                continue
+            ok, words = await self.doors.vouch(pid, sid)
+            log.info("%s: %s", pid, words)
+            if ok:
+                await self.doors.look(pid)
+                return
+
+    async def _announce(self, pid: str) -> None:
+        """Told once, when the phones can reach it: the relay carries its name."""
+        p = self.printers.get(pid)
+        house = self.doors.house(pid)
+        if not p or not p.get("joined_by") or p.get("announced") or house is None or self.doors.link(pid) != "on":
+            return
+        try:
+            async with self.session.post(f"http://127.0.0.1:{house}/door/announce", json={
+                    "title": f"{p['name']} is on your bench",
+                    "body": "The Bench Box found it on the Wi-Fi and added it. Not yours? Open it to say so."}) as r:
+                if r.status in (200, 409):
+                    p["announced"] = self.now()
+                    self.save()
+        except (ClientError, OSError, asyncio.TimeoutError):
+            pass
+
+    async def post_not_mine(self, request: web.Request) -> web.Response:
+        """Not ours (from the box's screen, or a carried phone through the Kobra's door): off the bench, its door closed,
+        gone from its siblings' /door/me, and never added again until it's brought back."""
+        pid = request.match_info["id"]
+        if pid not in self.printers:
+            return web.json_response({"error": "not on the bench"}, status=404)
+        if pid not in self.hidden:
+            self.hidden.append(pid)
+            self._save_hidden()
+        self.printers[pid].pop("carried", None)
+        self._tell_siblings(pid)
+        self.printers.pop(pid)
+        self.save()
+        self._tell_left()
+        log.info("%s: not ours, off the bench", pid)
+        # after answering: a phone's Not mine comes through this Kobra's own door, which is about to close
+        asyncio.get_running_loop().call_later(1.0, lambda: asyncio.ensure_future(self._stop_speaking(pid)))
+        return web.json_response({"hidden": pid}, status=202)
+
+    async def delete_hidden(self, request: web.Request) -> web.Response:
+        pid = request.match_info["id"]
+        if pid in self.hidden:
+            self.hidden.remove(pid)
+            self._save_hidden()
+            self._tell_left()
+            self.changed()
+        return web.json_response({"shown": pid})
+
+    def _save_hidden(self) -> None:
+        (self.state / "hidden.json").write_text(json.dumps(self.hidden))
 
     async def _scan(self) -> list[dict]:
         if self.now() - self.scanned > SCAN_EVERY:
@@ -512,14 +705,19 @@ class Bench:
         log.info("%s: %s", pid, words)
         if not got:
             return
+        if p.get("joined_by") and "carried" not in p:
+            self._carry_phones(pid)
         why = await self.doors.start(pid, p)
         if why:
             log.warning("%s: no door yet: %s", pid, why)
             return
         await self.doors.look(pid)
+        await self._vouch(pid)
         why = await self.doors.homecert(pid)
         if why:
             log.info("%s: no name at home yet: %s", pid, why)
+        self._tell_siblings(pid, self.doors.home_of(pid))
+        await self._announce(pid)
 
     async def _keep_doors(self) -> None:
         """Every minute, a door that should be open and isn't is tried again; the relay is asked how each name stands
@@ -544,8 +742,14 @@ class Bench:
                     elif self.doors.house(pid) is not None:
                         if tick % (LINK_EVERY // 60) == 0:
                             await self.doors.look(pid)
+                            await self._vouch(pid)
                         if tick % (HOME_EVERY // 60) == 0:
                             await self.doors.homecert(pid)
+                        if p.get("carried") is not None and not p.get("announced"):
+                            if self.doors.link(pid) == "on" and not self.doors.home_of(pid):
+                                await self.doors.homecert(pid)
+                            self._tell_siblings(pid, self.doors.home_of(pid))
+                            await self._announce(pid)
                 except Exception:
                     log.exception("%s: its door", pid)
 
@@ -560,7 +764,7 @@ class Bench:
             body = await request.json() if request.can_read_body else {}
         except ValueError:
             body = {}
-        got, words = await self.doors.claim(pid, str(body.get("name") or p["name"]), body.get("invite"))
+        got, words = await self.doors.claim(pid, str(body.get("name") or public_name(pid)), body.get("invite"))
         if not got:
             return web.json_response({"error": f"{p['name']}: {words}."}, status=502)
         p["remote"] = True
@@ -638,8 +842,13 @@ class Bench:
                                   for f in found] +
                                  [{"id": f["id"], "name": self.printers.get(f["id"], {}).get("name", f["name"]), "host": f["host"],
                                    "door": False, "kind": "anycubic", "on": f["id"] in self.printers, "ask": None,
+                                   "hidden": f["id"] in self.hidden, "new": self._is_new(f["id"]),
                                    "why": f["why"], "via": (self.printers.get(f["id"], {}).get("standin") or {}).get("via") or f.get("via"),
                                    "version": f.get("version")} for f in kobras])
+
+    def _is_new(self, pid: str) -> bool:
+        p = self.printers.get(pid) or {}
+        return p.get("joined_by") == "itself" and self.now() - float(p.get("joined") or 0) < NEW_FOR
 
     async def post_ask(self, request: web.Request) -> web.Response:
         pid = request.match_info["id"]
@@ -688,6 +897,9 @@ class Bench:
 
     async def delete_printer(self, request: web.Request) -> web.Response:
         pid = request.match_info["id"]
+        if pid in self.printers:
+            self.printers[pid].pop("carried", None)
+            self._tell_siblings(pid)                     # its siblings' doors stop offering it to phones
         await self._stop_speaking(pid)
         self.printers.pop(pid, None)
         self.asks.pop(pid, None)
@@ -908,6 +1120,7 @@ def main() -> None:
                   doors=Doors(Path(a.state), a.relay_api, Path(a.door_bin), tag=machine_tag(), home_port=a.home_port,
                               ip=(lambda: a.home_address) if a.home_address else lan_ip),
                   remote=a.remote, away_port=a.away_port, bench_app=bench_dir, box_name=a.remote_name)
+    bench.doors.bench_url = f"http://127.0.0.1:{a.port}"
     if a.seed:
         bench.seed(json.loads(Path(a.seed).read_text()))
     app = bench.app()

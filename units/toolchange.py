@@ -12,6 +12,11 @@ Out:  feed assist goes off and, without waiting, the extruder backs the filament
       filament, the unit pulls until it clears (its push arrives first); then it unwinds to its parking spot.
 In:   the unit feeds until the sensor sees filament, stops, and the extruder pulls it to the nozzle with feed
       assist pushing behind.
+
+A second switch after the gears, just above the hotend (design/filament-units/, A): the extruder carries the filament
+until that switch sees it, so a load whose gears didn't grip stops there instead of pushing into nothing, and the push
+to the nozzle starts from a known point. Taking it out, a hotend switch that still sees filament after the back-off
+means it's stuck in the hotend: the unit stops pulling. A printer without one changes nothing.
 """
 import asyncio
 import logging
@@ -43,7 +48,16 @@ DEFAULTS = {
                                 # pushed back into the nozzle
     "before_macro": "",         # the printer's own, given FROM, TO, TEMP, PURGE (e.g. tip shaping, a move to the bin)
     "after_macro": "",          # the same (e.g. the purge and the way back)
+    "hotend_to_nozzle": None,   # mm from the hotend switch to the nozzle; None: sensor_to_nozzle less what the
+                                # extruder carried from one switch to the other
+    "through_max": 60,          # mm the extruder may carry it from the extruder switch for the hotend switch to see it
+    "through_step": 2,          # mm per extruder move while it looks for the hotend switch
 }
+HOTEND = "gcode_button elyir_units_hotend"
+EXTRUDER_BUTTON = "gcode_button elyir_units_sensor"     # on the extruder switch's pin, always in our file
+GEARS_HOLD_S = 0.6       # the gears read as turning this long after the last report that they were (between 2 mm moves)
+NOT_THROUGH = "The extruder didn't take the filament."
+STUCK = "The filament is stuck in the hotend."
 # Nozzle temperatures for a change by material; the hotter of the spool going out and the one coming in wins
 TEMPS = {"PLA": 210, "PETG": 240, "ABS": 250, "ASA": 255, "TPU": 225, "PA": 260, "PC": 270, "HIPS": 240}
 MOVING = ("shifting", "feeding", "unwinding")
@@ -59,6 +73,9 @@ class Changer:
         self.s = dict(DEFAULTS, **(settings or {}))
         self.mr: Any = None
         self.detected: Optional[bool] = None
+        self.hotend: Optional[bool] = None      # the switch above the hotend; None: this printer has none
+        self.gears: Optional[str] = None        # "in" or "out" while the extruder turns, from Klipper's own report
+        self._gears_still: Optional[asyncio.TimerHandle] = None
         self.print_state: Optional[str] = None
         self.paused: Optional[bool] = None
         self.target = 0.0
@@ -73,13 +90,24 @@ class Changer:
     # ---- what the printer says -----------------------------------------------------------
 
     def objects(self) -> Dict[str, Any]:
-        return {self.s["sensor"]: ["filament_detected"], "print_stats": ["state"],
+        return {self.s["sensor"]: ["filament_detected"], EXTRUDER_BUTTON: ["state"], HOTEND: ["state"], "motion_report": ["live_extruder_velocity"],
+                "print_stats": ["state"],
                 "pause_resume": ["is_paused"], "extruder": ["target", "temperature"]}
 
     def on_status(self, st: Dict[str, Any]) -> None:
-        sensor = st.get(self.s["sensor"]) or {}
-        if "filament_detected" in sensor:
-            self._sensor(bool(sensor["filament_detected"]))
+        # Moonraker answers None for an object Klipper doesn't have, which is no reading, never a clear switch: Studio
+        # lost its filament_switch_sensor and read an empty head with filament in it (16 November). The button is ours.
+        button = (st.get(EXTRUDER_BUTTON) or {}).get("state")
+        sensor = (st.get(self.s["sensor"]) or {}).get("filament_detected")
+        if button is not None:
+            self._sensor(str(button).upper() == "PRESSED")
+        elif sensor is not None:
+            self._sensor(bool(sensor))
+        if "live_extruder_velocity" in (st.get("motion_report") or {}):
+            self._turning(float(st["motion_report"]["live_extruder_velocity"] or 0))
+        # None: Moonraker's answer for a printer without the switch, which isn't one reading clear
+        if (st.get(HOTEND) or {}).get("state") is not None:
+            self._hotend(str(st[HOTEND]["state"]).upper() == "PRESSED")
         if "state" in (st.get("print_stats") or {}):
             self.print_state = st["print_stats"]["state"]
             if self.going and self.going["in_print"] and self.print_state in ("cancelled", "standby", "error", "complete"):
@@ -91,13 +119,41 @@ class Changer:
             self.target = float(st["extruder"]["target"] or 0)
 
     def on_sensor_push(self, params: Dict[str, Any]) -> None:
-        """The gcode_button on the sensor's pin: pressed is filament there."""
-        self._sensor(params.get("state") == "pressed")
+        """The gcode_button on a switch's pin: pressed is filament there."""
+        if params.get("switch") == "hotend":
+            self._hotend(params.get("state") == "pressed")
+        else:
+            self._sensor(params.get("state") == "pressed")
+
+    def _turning(self, velocity: float) -> None:
+        """Which way the extruder's gears turn, for the screens' drawing. Still only once it has stayed still a moment:
+        a load's short moves would flicker it otherwise."""
+        way = "in" if velocity > 0.5 else "out" if velocity < -0.5 else None
+        if self._gears_still is not None:
+            self._gears_still.cancel()
+            self._gears_still = None
+        if way is None:
+            if self.gears is not None:
+                self._gears_still = asyncio.get_event_loop().call_later(GEARS_HOLD_S, self._set_gears, None)
+            return
+        self._set_gears(way)
+
+    def _set_gears(self, way: Optional[str]) -> None:
+        if way != self.gears:
+            self.gears = way
+            self.svc.changed()
+
+    def _hotend(self, detected: bool) -> None:
+        if detected != self.hotend:
+            logging.getLogger("units").info("hotend switch %s (step %s)", "filament" if detected else "clear", self.step)
+            self.hotend = detected
+            self.svc.changed()
 
     def _sensor(self, detected: bool) -> None:
         if detected != self.detected:
             logging.getLogger("units").info("sensor %s (step %s)", "filament" if detected else "clear", self.step)
-        self.detected = detected
+            self.detected = detected
+            self.svc.changed()      # the screens draw the switches
 
     async def _until(self, cond, timeout: float, unit: Any = None) -> bool:
         """Wait for cond, at most timeout seconds; with a unit, also until it has stopped moving by itself."""
@@ -202,6 +258,9 @@ class Changer:
             await self.mr.gcode(f"M109 S{temp}")
         if frm is not None:
             await self._out(frm)
+            # the head is empty now: a load that fails next mustn't leave the old slot down as in it
+            self.svc.saved["selected"] = None
+            self.svc._save()
         if to >= 0:
             await self._in(to)
         self.svc.saved["selected"] = to if to >= 0 else None
@@ -229,11 +288,15 @@ class Changer:
         known = [TEMPS[m] for m in (materials.get(frm), materials.get(to)) if m in TEMPS]
         return max(known) if known else int(self.s["temp"])
 
-    async def _out(self, slot: int) -> None:
+    async def _out(self, slot: int, backoff: Optional[float] = None) -> None:
+        """backoff: how far the extruder backs out, when it's known to be less than the whole way from the nozzle (a
+        load that stopped short); the stuck check is for filament that reached the hotend, so it's off then."""
         s = self.s
         u, k = self.svc.where(slot)
         self.step = "out"
-        backoff = float(s["sensor_to_nozzle"]) + 5 if s.get("backoff") is None else float(s["backoff"])
+        short = backoff is not None
+        if not short:
+            backoff = float(s["sensor_to_nozzle"]) + 5 if s.get("backoff") is None else float(s["backoff"])
         await u.until_ready(60)
         if self.detected is not False:
             # The unit pulls first and the extruder backs out slower than it pulls, so the filament between them
@@ -246,6 +309,10 @@ class Changer:
                 await self._until(lambda: u.status.get("action") == "unwinding", 5)
                 # M400: Klipper answers a G-code once the move is queued, not done (Workshop, 18 October)
                 await self.mr.gcode(f"M83\nG1 E-{backoff:g} F{int(speed * 60)}\nM400")
+                # only on the back-off made for no cutter: a cutter leaves its cut piece under the switch
+                if not short and s.get("backoff") is None and not await self._until(lambda: self.hotend is not True, 0.5):
+                    await self._stop(u, k, "stop_unwind_filament")
+                    raise ChangeError(STUCK)
             cleared = await self._until(lambda: self.detected is False, pull / s["clear_speed"] + 3, u)
             await self._stop(u, k, "stop_unwind_filament")
             if not cleared:
@@ -267,9 +334,33 @@ class Changer:
             raise ChangeError("The filament didn't reach the toolhead.")
         await u.until_ready()
         await u.call("start_feed_assist", {"index": k})
+        to_nozzle = float(s["sensor_to_nozzle"])
+        if self.hotend is False:
+            self.step = "through"
+            carried = await self._through(slot, u, k)
+            to_nozzle = float(s["hotend_to_nozzle"]) if s.get("hotend_to_nozzle") is not None else max(to_nozzle - carried, 0)
+        elif self.hotend:
+            logging.getLogger("units").info("hotend switch saw filament before this load: pushing the whole %g", to_nozzle)
         self.step = "nozzle"
         await self.to_purge_spot()
-        await self._push(f"M83\nG1 E{s['sensor_to_nozzle']} F{int(s['extruder_speed'] * 60)}\nM400")
+        await self._push(f"M83\nG1 E{to_nozzle:g} F{int(s['extruder_speed'] * 60)}\nM400")
+
+    async def _through(self, slot: int, u: Any, k: int) -> float:
+        """The extruder carries the filament, a little at a time, until the hotend switch sees it: mm carried."""
+        s = self.s
+        step, carried = float(s["through_step"]), 0.0
+        while not await self._until(lambda: self.hotend is True, 0.05):
+            if carried >= float(s["through_max"]):
+                await u.call("stop_feed_assist", {"index": k})
+                # back to its parking spot, so Try again starts from an empty head
+                try:
+                    await self._out(slot, backoff=carried + 5)
+                except ChangeError:
+                    raise ChangeError(NOT_THROUGH + " It didn't come back out either: check the head.")
+                raise ChangeError(NOT_THROUGH)
+            await self.mr.gcode(f"M83\nG1 E{step:g} F{int(s['extruder_speed'] * 60)}\nM400")
+            carried += step
+        return carried
 
     def purge_points(self) -> list:
         points = []

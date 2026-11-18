@@ -1,6 +1,6 @@
 <template>
   <section class="home" :class="'size-' + size">
-    <BenchTop title="Bench">
+    <BenchTop title="Bench" :line="bench.loaded ? line : ''">
       <router-link v-if="!here.away" to="/setup" class="add" aria-label="Add a printer">+ Add</router-link>
       <button v-else-if="here.may.invite" class="add" @click="inviting = true">+ Invite</button>
     </BenchTop>
@@ -10,8 +10,21 @@
     <h1 v-else class="a-display say">{{ line }}</h1>
     <p v-if="bench.error" class="note">{{ bench.error }}</p>
 
-    <!-- the printers, as many as there are: big tiles up to four, compact up to nine, then rows by state -->
-    <div v-if="size !== 'rows'" class="tiles">
+    <!-- the printers, as many as there are: big tiles up to four, compact up to nine, then rows by state.
+         Compact, and every count on a short screen, are tiles of one size whatever the printer is doing (design/bench-7in/, A). -->
+    <div v-if="dense" class="dtiles">
+      <article v-for="t in on" :key="t.id" class="dtile" :class="'tone-' + t.tone" @click="open(t)">
+        <div class="dhd">
+          <span class="dpic"><img v-if="picOf(t)" :src="picOf(t)!" alt="" @error="broken.push(picOf(t)!)" /><span v-else class="bed"></span></span>
+          <span class="dnm"><b>{{ t.name }}</b><span class="st" :class="'tone-' + t.tone">{{ t.word }}<template v-if="t.rank === 3 && t.frac"> · {{ Math.round(t.frac * 100) }}%</template></span></span>
+        </div>
+        <p class="dln">{{ tileLine(t) }}</p>
+        <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'ghost' : 'amber'" @click.stop="open(t)">{{ act(t).button }}</button>
+        <span v-else-if="act(t).note" class="athome">{{ act(t).note }}</span>
+        <span v-else-if="t.rank === 3" class="dbar"><span :style="{ width: Math.round(t.frac * 100) + '%' }"></span></span>
+      </article>
+    </div>
+    <div v-else-if="size !== 'rows'" class="tiles">
       <article v-for="t in on" :key="t.id" class="tile" :class="'tone-' + t.tone" @click="open(t)">
         <div class="head"><b class="name">{{ t.name }}</b><span class="chip" :class="'tone-' + t.tone"><i></i>{{ t.word }}</span></div>
         <div class="pic"><Ring :tile="t" :printer="byId(t.id)" /></div>
@@ -43,7 +56,8 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { bench } from '../live'
-import { offLine, ordered, sentence, sizeFor, withQueue, type Tile } from '../bench'
+import { offLine, ordered, sentence, sizeFor, tileLine, withQueue, type Tile } from '../bench'
+import { fileOf } from '../live'
 import Ring from './BenchRing.vue'
 import BenchTop from './BenchTop.vue'
 import QueueStart from './QueueStart.vue'
@@ -57,6 +71,13 @@ const router = useRouter()
 const tiles = computed(() => withQueue(ordered(bench.printers), bench.queue).sort((a, b) => a.rank - b.rank))
 const on = computed(() => tiles.value.filter((t) => t.tone !== 'off'))
 const size = computed(() => sizeFor(on.value.length))
+const media = (q: string) => { const m = window.matchMedia(q); const r = ref(m.matches); m.addEventListener('change', (e) => { r.value = e.matches }); return r }
+const short = media('(max-height: 540px) and (min-width: 600px)')
+const wide = media('(min-width: 600px)')
+const dense = computed(() => wide.value && size.value !== 'rows' && (size.value === 'compact' || short.value))
+// a picture that doesn't load (from away only png, jpg and webp pass the door): the bed instead of a broken image
+const broken = ref<string[]>([])
+const picOf = (t: Tile) => { const u = fileOf(byId(t.id), t.thumbnail); return u && !broken.value.includes(u) ? u : null }
 const guest = computed(() => isGuest(here))
 const line = computed(() => (bench.loaded ? sentence(tiles.value, guest.value ? hostOf(here) : undefined) : ''))
 const act = (t: Tile) => tileAct(t, here)
@@ -130,8 +151,34 @@ function open(t: Tile) {
 .pct { font-size: 18px; font-weight: 650; color: var(--a-accent-text); }
 .off { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--a-ink-3); font-size: 18px; }
 
+/* tiles of one size (design/bench-7in/, A): picture, name and state, one line, then the button or how far */
+.dtiles { flex: 1 0 auto; display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(190px, 1fr); }
+.dtile { background: var(--a-surface); border-radius: 20px; box-shadow: var(--a-card-shadow); padding: 18px; display: flex; flex-direction: column; min-width: 0; cursor: pointer; }
+.dtile.tone-amber { box-shadow: 0 0 0 2px var(--a-amber), var(--a-card-shadow); background: color-mix(in srgb, var(--a-amber) 7%, var(--a-surface)); }
+.dtile.tone-red { box-shadow: 0 0 0 2px var(--a-red), var(--a-card-shadow); background: color-mix(in srgb, var(--a-red) 7%, var(--a-surface)); }
+.dhd { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.dtile > :last-child:not(.dln) { margin-top: auto; }
+.dpic { width: 72px; height: 72px; border-radius: 14px; background: var(--a-surface-2); display: grid; place-items: center; overflow: hidden; flex: none; }
+.dpic img { width: 88%; height: 88%; object-fit: contain; }
+.dpic .bed { width: 56%; height: 20%; background: color-mix(in srgb, var(--a-ink) 14%, transparent); transform: skewX(-30deg) rotate(-8deg); border-radius: 3px; }
+.dnm { display: grid; min-width: 0; line-height: 1.2; }
+.dnm b { font-size: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st { font-size: 17px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--a-accent-text); }
+.st.tone-amber { color: var(--a-amber-text); } .st.tone-red { color: var(--a-red-text); } .st.tone-green { color: var(--a-green-text); }
+.dln { margin: 12px 0 12px; font-size: 17px; color: var(--a-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dtile .a-btn { flex: none; margin-top: auto; height: 52px; font-size: 18px; border-radius: 14px; }
+.dbar { display: block; flex: none; margin-top: auto; height: 6px; border-radius: 3px; background: var(--a-surface-2); overflow: hidden; }
+.dbar span { display: block; height: 100%; background: var(--a-accent); border-radius: 3px; }
+
 @media (max-height: 540px) and (min-width: 600px) {
-  .say { font-size: 27px; }
+  .say { display: none; }   /* the sentence is in the top line (BenchTop's line) */
+  .dtiles { gap: 12px; grid-auto-rows: minmax(150px, 1fr); }
+  .dtile { padding: 14px; border-radius: 18px; }
+  .dpic { width: 58px; height: 58px; border-radius: 12px; }
+  .dhd { gap: 12px; }
+  .dnm b { font-size: 20px; } .st { font-size: 15px; }
+  .dln { font-size: 15px; margin: 8px 0 8px; }
+  .dtile .a-btn { height: 44px; font-size: 16px; border-radius: 12px; }
   .add { font-size: 17px; }
   .tiles, .size-compact .tiles { --cols: 2; gap: 10px; }
   .tile { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 14px; padding: 12px 14px; border-radius: 16px; align-content: start; }

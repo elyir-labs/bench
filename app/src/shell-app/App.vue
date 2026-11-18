@@ -11,6 +11,7 @@ import { loadPrinters, watchNetwork } from './printers'
 import { registerServiceWorker } from './push'
 import { pending } from './look'
 import { refreshAccount } from './account'
+import { startFollowing } from './account-follow'
 import { MODEL_EXT } from '@/look/read.ts'
 import RemovedToast from './RemovedToast.vue'
 import AwaySheet from './AwaySheet.vue'
@@ -34,6 +35,7 @@ function dropped(e: DragEvent) {
 onMounted(() => {
   window.addEventListener('dragover', dragover)
   window.addEventListener('drop', dropped)
+  startFollowing()
   loadPrinters()
   refreshAccount()
   watchNetwork()

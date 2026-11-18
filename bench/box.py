@@ -6,8 +6,13 @@ it a printer again.
                              screen (the panel then shows a fresh card's setup); its lines are followed from a file
   POST /bench/box/update     `elyir-bench-os update`, now rather than overnight (a card's OS only: GET says os: null
                              elsewhere); the box restarts into the new OS, and goes back by itself if it doesn't start
+  POST /bench/box/update     {what: app}: `elyir-bench update` now (design/updates/): a box installed with the install
+                             command, whose OS isn't ours; GET says app: {version, latest, newer, state, why, ...}
   POST /bench/box/ssh        {key}: a public key that may sign in as this user (a card's user has no password)
   DELETE /bench/box/ssh/{id}
+  GET  /bench/box/usb        a USB stick in the box (design/usb/): what the installer read off it, and what taking
+                             from it is doing; null with none
+  POST /bench/box/usb        {action: seen|skip|take|report, app, os, keys, wifi}: as the printer component's usb_*
 Home only: the away listener never routes these. Dry (the simulator rig, docker/bench-box): nothing is turned off,
 switched or updated, it only says so, and the keys are a file in the rig's state.
 """
@@ -33,8 +38,18 @@ ROLE_RUN = "role-run.jsonl"
 OS_VERSION = Path("/usr/local/share/elyir-bench/os-version")     # a card's own release (installer/elyir_bench_os.py)
 OS_FEED = "https://releases.elyir.dev/bench/os/latest-{board}.json"
 OS_TOOL = "/usr/local/sbin/elyir-bench-os"
+UPDATE_UNIT = "elyir-bench-update.service"       # the installer's updater (design/updates/)
+USB_UNIT = "elyir-bench-usb.service"             # what a screen ticked from a USB stick (design/usb/)
+USB_GOING = ("copying", "report", "waiting", "checking", "installing", "restarting")
 KEY_KINDS = ("ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
              "sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-nistp256@openssh.com")
+
+
+def boot_id() -> str:
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return "no-boot-id"
 
 
 def parse_key(line: str) -> Optional[Dict[str, str]]:
@@ -108,6 +123,8 @@ class Box:
         app.router.add_post("/bench/box/update", self.update)
         app.router.add_post("/bench/box/ssh", self.add_key)
         app.router.add_delete("/bench/box/ssh/{id}", self.remove_key)
+        app.router.add_get("/bench/box/usb", self.get_usb)
+        app.router.add_post("/bench/box/usb", self.post_usb)
 
     def _alive(self) -> bool:
         if self.pid is None:
@@ -132,14 +149,15 @@ class Box:
         return role_state(lines, alive)
 
     async def get(self, request: web.Request) -> web.Response:
-        return web.json_response({"power": True, "role": self._role(), "os": await self._os(),
+        return web.json_response({"power": True, "role": self._role(), "os": await self._os(), "app": self._app(), "usb": self._usb_view(),
                                   "ssh": {"user": os.environ.get("USER") or Path.home().name,
                                           "keys": [{k: v for k, v in key.items() if k != "line"} for key in self._keys()]}})
 
     # ── its OS, on a card ──
 
     def _read_latest(self, board: str) -> Optional[str]:
-        with urllib.request.urlopen(self.feed.format(board=board), timeout=8) as r:
+        req = urllib.request.Request(self.feed.format(board=board), headers={"User-Agent": "elyir-bench-box"})   # Cloudflare refuses Python's own
+        with urllib.request.urlopen(req, timeout=8) as r:
             return json.loads(r.read()).get("version")
 
     async def _os(self) -> Optional[Dict[str, Any]]:
@@ -168,7 +186,129 @@ class Box:
             lines = []
         return update_state(lines, self.updater.poll())
 
+    # ── its app, installed with the install command (design/updates/, A + A) ──
+
+    def _base(self) -> Path:
+        """~/elyir-bench, from ~/elyir-bench/current/installer/elyir_bench.py or the release it resolves to."""
+        root = self.installer.parent.parent
+        return root.parent.parent if root.parent.name == "releases" else root.parent
+
+    def _app(self) -> Optional[Dict[str, Any]]:
+        """The release it runs and what the updater last said (update.json), as the printer component tells a printer's
+        Care. None where the installer didn't put a release (the rig)."""
+        try:
+            version = (self.installer.parent.parent / "VERSION").read_text().strip()
+        except OSError:
+            return None
+        try:
+            u = json.loads((self._base() / "update.json").read_text())
+        except (OSError, ValueError):
+            u = {}
+        u = u if isinstance(u, dict) else {}
+        latest = (u.get("latest") or {}).get("version")
+        state = u.get("state") or "idle"
+        if state in ("checking", "downloading", "installing") and time.time() - float(u.get("at") or 0) > 3600:
+            state = "idle"
+        return {"version": version, "latest": latest, "newer": bool(u.get("newer")) and latest != version, "state": state,
+                "why": u.get("why"), "done": u.get("done"), "of": u.get("of"), "went_back": bool(u.get("went_back"))}
+
+    def _update_app(self) -> web.Response:
+        log.info("box: updating its app%s", " (dry)" if self.dry else "")
+        if not self.dry:
+            try:
+                (self._base() / "update-now").touch()
+                # its own service: installing restarts this one
+                subprocess.run(["sudo", "-n", "systemctl", "start", "--no-block", UPDATE_UNIT], timeout=10, check=True,
+                               capture_output=True)
+            except (OSError, subprocess.SubprocessError) as e:
+                log.info("box: %s didn't start (%s)", UPDATE_UNIT, e)
+                raise web.HTTPInternalServerError(text="The updater didn't start. Try `elyir-bench update` on the box.")
+        return web.json_response({"ok": True, "dry": self.dry, "app": self._app()})
+
+    # ── a USB stick (design/usb/, 3 A: the box takes it for itself, and the Kobras' screens with it) ──
+
+    def _usb_dir(self) -> Path:
+        return self.state if self.dry else self._base()
+
+    def _usb_read(self) -> Dict[str, Any]:
+        try:
+            u = json.loads((self._usb_dir() / "usb.json").read_text())
+        except (OSError, ValueError):
+            return {}
+        return u if isinstance(u, dict) and u.get("boot") == boot_id() else {}
+
+    def _usb_view(self) -> Optional[Dict[str, Any]]:
+        u = self._usb_read()
+        if not u.get("present") and not u.get("take"):
+            return None
+        view = {k: u.get(k) for k in ("id", "label", "present", "readable", "why", "folder", "app", "os", "keys", "wifi",
+                                      "seen", "skipped")}
+        view["take"] = u.get("take") or None
+        return view
+
+    def _usb_edit(self, change) -> None:
+        import fcntl
+        d = self._usb_dir()
+        with open(d / ".usb.lock", "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            u = self._usb_read()
+            if not u:
+                return
+            change(u)
+            u["at"] = int(time.time())
+            (d / "usb.tmp").write_text(json.dumps(u))
+            os.replace(d / "usb.tmp", d / "usb.json")
+
+    async def get_usb(self, request: web.Request) -> web.Response:
+        return web.json_response(self._usb_view())
+
+    async def post_usb(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        action, u = body.get("action"), self._usb_read()
+        if action == "seen":
+            self._usb_edit(lambda x: x.update(seen=True))
+        elif action == "skip":
+            def skip(x):
+                t = x.get("take") or {}
+                if t and t.get("state") not in USB_GOING:
+                    x["take"] = None
+                x["skipped"] = x["seen"] = True
+                key = f"{x.get('id')}/{(x.get('app') or {}).get('version')}/{(x.get('os') or {}).get('version')}"
+                x["skips"] = [*(x.get("skips") or [])[-19:], key]
+            self._usb_edit(skip)
+        elif action in ("take", "report"):
+            if not u.get("present"):
+                raise web.HTTPBadRequest(text="Put the stick back in first.")
+            if (u.get("take") or {}).get("state") in USB_GOING:
+                raise web.HTTPConflict(text="It's still taking what's on the stick.")
+            ask = ({"id": u.get("id"), "report": True} if action == "report" else
+                   {"id": u.get("id"), "app": bool(body.get("app")), "os": bool(body.get("os")),
+                    "keys": [str(k) for k in body.get("keys") or []][:8], "wifi": bool(body.get("wifi"))})
+            (self._usb_dir() / "usb-take.json").write_text(json.dumps(ask))
+            self._usb_edit(lambda x: x.update(seen=True, skipped=False))
+            log.info("box: taking from the USB stick %s%s", ask, " (dry)" if self.dry else "")
+            if not self.dry:
+                try:
+                    subprocess.run(["sudo", "-n", "systemctl", "start", "--no-block", USB_UNIT], timeout=10, check=True,
+                                   capture_output=True)
+                except (OSError, subprocess.SubprocessError) as e:
+                    log.info("box: %s didn't start (%s)", USB_UNIT, e)
+                    raise web.HTTPInternalServerError(text="Taking from the stick didn't start. Try `elyir-bench usb run` on the box.")
+        else:
+            raise web.HTTPBadRequest(text="seen, skip, take or report")
+        return web.json_response({"ok": True, "usb": self._usb_view()})
+
     async def update(self, request: web.Request) -> web.Response:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = {}
+        if isinstance(body, dict) and body.get("what") == "app":
+            return self._update_app()
         u = self._update()
         if u and u["state"] == "updating":
             raise web.HTTPConflict(text="It's updating now.")

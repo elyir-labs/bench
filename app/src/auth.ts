@@ -42,22 +42,25 @@ export async function learnParents(): Promise<void> {
   }
 }
 
-/** Ask the shell for this printer's token. Resolves null if no shell answers in time. */
-export function receiveToken(timeoutMs = 8000): Promise<string | null> {
+/** Ask the shell for this printer's token. Resolves null if no shell answers in time; an answer after that still sets
+ *  the token (the websocket reads it on its next connect) and goes to `onLate`. */
+export function receiveToken(timeoutMs = 8000, onLate?: (token: string) => void): Promise<string | null> {
   if (!embedded) return Promise.resolve(null)
   return new Promise((resolve) => {
-    const done = (t: string | null) => {
+    let waiting = true
+    const stop = () => {
       window.removeEventListener('message', onMessage)
       window.clearTimeout(timer)
       window.clearInterval(asking)
-      resolve(t)
     }
     const onMessage = (ev: MessageEvent) => {
       if (ev.source !== window.parent || !parents.has(ev.origin)) return
       if (ev.data?.type === 'elyir-bench:token' && typeof ev.data.token === 'string') {
         auth.token = ev.data.token
         shell.looksHome = ev.data.looksHome === true
-        done(ev.data.token)
+        stop()
+        if (waiting) resolve(ev.data.token)
+        else onLate?.(ev.data.token)
       }
     }
     window.addEventListener('message', onMessage)
@@ -65,7 +68,11 @@ export function receiveToken(timeoutMs = 8000): Promise<string | null> {
     const ask = () => window.parent.postMessage({ type: 'elyir-bench:ready' }, '*')   // carries nothing secret
     ask()
     const asking = window.setInterval(ask, 500)
-    const timer = window.setTimeout(() => done(null), timeoutMs)
+    const timer = window.setTimeout(() => {
+      waiting = false
+      if (!onLate) stop()
+      resolve(null)
+    }, timeoutMs)
   })
 }
 

@@ -63,6 +63,8 @@ class FakeDatabase:
         return space.get(key, default)
 
     async def insert_item(self, ns, key, value):
+        if value is None:
+            return   # Moonraker logs "Error inserting key" and keeps what was there
         self.data.setdefault(ns, {})[key] = value
 
     async def delete_item(self, ns, key):
@@ -123,7 +125,7 @@ class FakeConfig:
         return {"printer_name": "Studio"}.get(key, default)
 
 
-def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "elyir_bench_care.py", "orca_profile.py")):
+def load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "spots.py", "spool_tags.py", "tag_formats.py", "filament_library.py", "elyir_bench_care.py", "orca_profile.py")):
     """Load printer_intent.py as moonraker.components.printer_intent, as Moonraker does."""
     pkg = tmp_path / "moonraker"
     (pkg / "components").mkdir(parents=True)
@@ -252,7 +254,7 @@ def test_care_seeds_once_comes_due_and_done_or_later_clear_it(component):
 
 
 def test_without_the_care_module_everything_else_still_works(tmp_path, monkeypatch):
-    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py"))
+    server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py", "unit_setup.py", "spots.py", "spool_tags.py", "tag_formats.py", "filament_library.py"))
     run(server.handlers["server:klippy_ready"]())
     server.kc.state = KlippyState.READY
     run(comp._refresh_care())
@@ -485,7 +487,7 @@ def test_a_unit_setup_runs_the_installer_apart_and_hands_each_line_to_the_tracke
 
 def test_layers_are_read_once_per_version_of_the_file_and_only_inside_gcodes(tmp_path, monkeypatch):
     server, comp = load(tmp_path, monkeypatch, files=("printer_intent.py", "elyir_bench_intent.py", "filament_units.py", "unit_check.py",
-                                                      "unit_setup.py", "elyir_bench_care.py", "orca_profile.py", "gcode_layers.py"))
+                                                      "unit_setup.py", "spots.py", "spool_tags.py", "tag_formats.py", "filament_library.py", "elyir_bench_care.py", "orca_profile.py", "gcode_layers.py"))
     gcodes = tmp_path / "gcodes"
     gcodes.mkdir()
     (tmp_path / "secret.gcode").write_text(";LAYER_CHANGE\n")
@@ -503,3 +505,16 @@ def test_layers_are_read_once_per_version_of_the_file_and_only_inside_gcodes(tmp
     for bad in ("../secret.gcode", "missing.gcode"):
         with pytest.raises(Exception, match="No such file"):
             run(comp._handle_layers(FakeWebRequest(filename=bad)))
+
+
+def test_a_print_that_ended_leaves_no_checkpoint_to_come_back_as_a_power_cut(component):
+    server, comp = component
+    db = server.components["database"]
+    comp.tracker.checkpoint = {"file": "x.gcode", "progress": 0.99, "at": 1.0}
+    run(comp._save_checkpoint())
+    assert db.data["elyir-bench"]["checkpoint"]["file"] == "x.gcode"
+    comp.tracker.checkpoint = None
+    run(comp._save_checkpoint())
+    assert "checkpoint" not in db.data["elyir-bench"]
+    run(comp._save_checkpoint())   # already gone
+    assert not comp.tracker.checkpoint_dirty

@@ -141,3 +141,35 @@ async def test_a_subscriber_hears_changes_and_an_unplugged_unit_keeps_its_slots(
     st = m["params"]
     assert [u["offset"] for u in st["units"]] == [0, 4] and st["slots"][0]["status"] == "unknown"
     assert st["slots"][4]["status"] == "ready"
+
+
+async def test_feed_assist_on_one_unit_carries_on_while_the_other_unit_feeds_and_retracts(rig):
+    await rig.call("feed_assist", slot=1, on=True)
+    await rig.call("move", slot=6, mm=30, wait=True)
+    await rig.call("move", slot=6, mm=-30, wait=True)
+    first, second = (await rig.call("raw", now=True))["result"]
+    assert rig.aces[0].assist == 1 and first["status"]["feed_assist_count"] == 1
+    assert second["status"]["feed_assist_count"] == 0
+    assert not any(m["method"] in ("feed_filament", "unwind_filament") for m in rig.aces[0].requests)
+
+
+async def test_a_feed_on_the_same_unit_ends_its_feed_assist(rig):
+    await rig.call("feed_assist", slot=1, on=True)
+    await rig.call("move", slot=2, mm=30, wait=True)
+    assert rig.aces[0].assist is None
+    assert (await rig.call("raw", now=True))["result"][0]["status"]["feed_assist_count"] == 0
+
+
+async def test_the_two_units_move_at_the_same_time(rig, tmp_path):
+    other = Rig.__new__(Rig)
+    other.reader, other.writer = await asyncio.open_unix_connection(rig.sock)
+    other.rid = 100
+    loop = asyncio.get_running_loop()
+    t0 = loop.time()
+    await rig.call("move", slot=2, mm=60)
+    await other.call("move", slot=6, mm=60)
+    await asyncio.sleep(0.15)
+    a, b = (await rig.call("raw", now=True))["result"]
+    assert a["status"]["status"] == "busy" and b["status"]["status"] == "busy"
+    assert loop.time() - t0 < 0.5
+    other.writer.close()

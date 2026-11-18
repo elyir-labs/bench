@@ -306,7 +306,7 @@ async def test_no_kinds_means_every_kind_including_new_ones(rig):
     _, payload, headers, ttl, key = rig.sent[-1]
     assert payload == {"title": "Workshop finished", "body": "b", "tag": "workshop-finished", "url": "/", "urgency": "normal", "printer": "workshop"}
     assert key is None, "without a key of the phone's own, the printer signs with its own"
-    assert headers == {"Urgency": "normal", "Topic": "workshop-finished"} and ttl == D.TTL["finished"]
+    assert headers == {"Urgency": "normal", "Topic": D.push_topic("workshop-finished")} and ttl == D.TTL["finished"]
 
 
 async def test_low_waits_for_morning_and_high_never_waits(rig):
@@ -784,6 +784,56 @@ async def test_a_phone_at_home_puts_the_printer_in_its_bench_cloud_house(rig, ai
     assert (await (await rig.away.get("/door/cloud", headers=phone)).json())["joined"] is True
 
 
+async def test_a_phone_signed_in_to_the_printers_account_is_let_in_from_anywhere(rig, aiohttp_server, tmp_path):
+    seen, live = [], {"sessions": ["s-mac"], "status": 200}
+
+    async def check(request):
+        assert request.headers["Authorization"] == "Bearer d_workshop"
+        given = (await request.json())["pass"]
+        if given != "a_good":
+            return web.json_response({"error": "no"}, status=403)
+        return web.json_response({"session": "s-mac", "email": "alex@example.net"})
+
+    async def door(request):
+        seen.append(await request.json())
+        return web.json_response({"sessions": live["sessions"]}, status=live["status"])
+
+    app = web.Application()
+    app.router.add_post("/v1/passes/check", check)
+    app.router.add_post("/v1/door", door)
+    cloud = await aiohttp_server(app)
+    shell = {"Origin": SHELL}
+    none = await rig.away.post("/door/account", json={"pass": "a_good", "name": "MacBook"}, headers=shell)
+    assert none.status == 409 and (await none.json())["message"] == "This printer isn't in an Elyir account."
+    (tmp_path / "cloud.json").write_text(json.dumps({"api": str(cloud.make_url("")).rstrip("/"), "token": "d_workshop"}))
+
+    assert (await rig.away.post("/door/account", json={"pass": "a_bad", "name": "MacBook"}, headers=shell)).status == 401
+    assert (await rig.away.post("/door/account", json={"pass": "nonsense"}, headers=shell)).status == 401
+    r = await rig.away.post("/door/account", json={"pass": "a_good", "name": "MacBook"}, headers=shell)
+    body = await r.json()
+    assert r.status == 200 and body["printer"] == {"id": "workshop", "name": "Workshop"} and body["addresses"]["away"]
+    mac = {"Authorization": f"Bearer {body['token']}", **shell}
+    assert (await (await rig.away.get("/door/me", headers=mac)).json())["paired"] is True
+    again = await (await rig.local.post("/door/account", json={"pass": "a_good", "name": "MacBook"}, headers=shell)).json()
+    assert again["phone"]["id"] == body["phone"]["id"], "one record for one sign-in"
+    assert (await (await rig.away.get("/door/me", headers=mac)).json())["paired"] is False, "the old token went with it"
+    mac = {"Authorization": f"Bearer {again['token']}", **shell}
+    by_hand, _ = await bearer(rig, name="Paired at the printer")
+
+    await rig.door._account_sync()
+    assert seen[-1] == {"printer": "workshop", "name": "Workshop", "addresses": rig.door.addresses()}
+    assert (await (await rig.away.get("/door/me", headers=mac)).json())["paired"] is True
+    live["sessions"] = None                      # Bench Cloud can't say: nobody is taken off
+    await rig.door._account_sync()
+    live["status"] = 500
+    await rig.door._account_sync()
+    assert (await (await rig.away.get("/door/me", headers=mac)).json())["paired"] is True
+    live.update(sessions=[], status=200)         # signed out, or taken off under You
+    await rig.door._account_sync()
+    assert (await (await rig.away.get("/door/me", headers=mac)).json())["paired"] is False
+    assert (await (await rig.away.get("/door/me", headers=by_hand)).json())["paired"] is True
+
+
 async def test_a_staging_printer_opens_and_allows_stagings_printers_app(tmp_path):
     door = D.Door(tmp_path / "door", "http://127.0.0.1:7125", "http://127.0.0.1:8088", "http://127.0.0.1/webcam", "studio.elyir.app",
                   printers_app="https://printers-staging.elyir.app/")
@@ -845,3 +895,75 @@ async def test_the_report_command_is_read_whole_or_by_its_last_line(rig, monkeyp
     monkeypatch.setattr(D.asyncio, "create_subprocess_exec", spawn)
     assert (await rig.door._report("--show")) == (0, {"kind": "wrong", "files": ["logs/klippy.log"]})
     assert (await rig.door._report("--kind", "wrong")) == (0, {"code": "R-7K2Q"})
+
+
+# ── a printer the Bench Box added beside this one (design/new-kobra/, B) ─────
+
+def carried_here(rig, *tokens, name="Phone A", push=None):
+    """What the box writes into a new Kobra's door: a sibling's phone, with the tokens it holds for its siblings."""
+    rec = {"id": "c0ffee000001", "name": name, "token": D._hash(tokens[0]), "also": [D._hash(t) for t in tokens[1:]],
+           "joined": rig.clock(), "last_seen": None, "push": push, "carried_from": ["anycubic-aaaaaa"]}
+    rig.door.phones.items.append(rec)
+    rig.door.phones.save()
+    return rec
+
+
+async def test_a_carried_phone_comes_in_with_any_token_it_holds_for_a_sibling(rig):
+    carried_here(rig, "token-from-one", "token-from-two")
+    for t in ("token-from-one", "token-from-two"):
+        me = await (await rig.away.get("/door/me", headers={"Authorization": f"Bearer {t}"})).json()
+        assert me["paired"] and me["phone"]["name"] == "Phone A"
+    assert not (await (await rig.away.get("/door/me", headers={"Authorization": "Bearer someone-else"})).json())["paired"]
+
+
+async def test_door_me_lists_printers_the_box_carried_this_phone_to_for_a_week(rig):
+    h, body = await bearer(rig, name="Phone A")
+    other, _ = await bearer(rig, name="Phone B")
+    joined = [{"id": "p-newone12", "name": "Kobra 3 #3", "addresses": {"away": "https://p-newone12.elyir.app", "home": None},
+               "phones": [body["phone"]["id"]], "at": rig.clock()}]
+    (rig.door.state / "joined.json").write_text(json.dumps(joined))
+    me = await (await rig.away.get("/door/me", headers=h)).json()
+    assert me["joined"] == [{k: joined[0][k] for k in ("id", "name", "addresses", "at")}]
+    assert (await (await rig.away.get("/door/me", headers=other)).json())["joined"] == []
+    assert me["left"] == []
+    (rig.door.state / "left.json").write_text(json.dumps(["p-gone1234"]))
+    assert (await (await rig.away.get("/door/me", headers=other)).json())["left"] == ["p-gone1234"]
+    assert (await (await rig.away.get("/door/me")).json()).get("left") in ([], None)
+    rig.clock.t += D.JOINED_KEEP + 1
+    assert (await (await rig.away.get("/door/me", headers=h)).json())["joined"] == []
+
+
+async def test_joined_is_told_once_to_every_phone_even_one_that_chose_kinds(rig):
+    await subscribed(rig, kinds=["finished"], name="Fin")
+    await subscribed(rig, kinds=None, name="All")
+    r = await rig.home.post("/door/announce", json={"title": "Kobra 3 #3 is on your bench", "body": "Found on the Wi-Fi."})
+    assert r.status == 200 and (await r.json())["sent"] == 2
+    _, payload, _, ttl, _ = rig.sent[-1]
+    assert payload["title"] == "Kobra 3 #3 is on your bench" and payload["tag"] == "joined-workshop" and ttl == D.TTL["joined"]
+    assert (await rig.home.post("/door/announce", json={"title": "again"})).status == 409
+    assert len(rig.sent) == 2
+
+
+async def test_not_mine_is_for_a_carried_phone_in_its_first_week_and_goes_to_the_box(rig, aiohttp_server):
+    got = []
+    box = web.Application()
+    async def hide(r):
+        got.append(await r.json())
+        return web.json_response({"hidden": True})
+    box.router.add_post("/bench/printers/anycubic-e9e9e9/not-mine", hide)
+    bs = await aiohttp_server(box)
+    paired_h, _ = await bearer(rig, name="Paired here")
+    assert (await rig.away.post("/door/not-mine", headers=paired_h)).status == 403
+    carried_here(rig, "carried-token")
+    h = {"Authorization": "Bearer carried-token", "Origin": SHELL}
+    assert (await rig.away.post("/door/not-mine", headers=h)).status == 409          # no box to tell
+    rig.door.not_mine_url = str(bs.make_url("/bench/printers/anycubic-e9e9e9/not-mine"))
+    assert (await rig.away.post("/door/not-mine", headers=h)).status == 202
+    assert got == [{"phone": "Phone A"}]
+    rig.clock.t += D.NOT_MINE_DAYS + 1
+    assert (await rig.away.post("/door/not-mine", headers=h)).status == 403
+
+
+def test_the_topic_is_32_characters_apple_takes_and_the_same_for_the_same_tag():
+    t = D.push_topic("joined-p-c4q6c7hn")
+    assert len(t) == 32 and t.isalnum() and t == D.push_topic("joined-p-c4q6c7hn") != D.push_topic("workshop-finished")

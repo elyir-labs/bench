@@ -26,4 +26,5 @@ Klipper knows the extruder's filament sensor; a printer on KlipperACE is asked o
 `elyir` switches it on in KlipperACE's place (its includes commented out with a mark, its slot in the head and
 untagged spools carried over), `klipperace` puts everything back, and `elyir-bench remove` takes it off.
 `units_sensor_pin` names the sensor's pin when Klipper's config doesn't. Not tried on hardware yet: two units on
-one printer. See `docs/filament-units.md`.
+one printer; `tools/two-unit-session.sh` checks that feed assist on one unit carries on while the other unit moves.
+See `docs/filament-units.md`.

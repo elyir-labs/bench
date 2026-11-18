@@ -19,11 +19,13 @@
       <div class="left">
         <!-- a job from Move and heat holding the printer (design/hands-on/, C): what's hot, or how high -->
         <span v-if="handsChip" class="warmchip" :class="{ cool: intent.hands?.held?.kind === 'clear' }"><i></i>{{ handsChip }}</span>
-        <div v-else-if="!warmOn && !firstLayerCard" class="bigclock a-display a-num">{{ bigClock }}</div>
+        <!-- in a Bench Box the box's top line has the time (design/bench-7in/, A) -->
+        <div v-else-if="!warmOn && !firstLayerCard && !benchChrome" class="bigclock a-display a-num">{{ bigClock }}</div>
         <span v-else-if="warmOn" class="warmchip" :class="{ done: intent.warm?.warm }"><i></i>{{ intent.warm?.warm ? 'Warm' : 'Warming up' }}</span>
         <h1 class="headline a-display">{{ intent.headline }}</h1>
         <!-- one question at a time: the first-layer card takes the clock's and the spools' room -->
         <p v-if="!firstLayerCard || intent.phase === 'cancelled'" class="detail">{{ intent.detail }}</p>
+        <Vitals v-if="benchChrome && !warmOn && lay === 'panel'" :intent="intent" class="bench-vitals" />
         <FirstLayerCard v-if="firstLayerCard" :card="firstLayerCard" />
         <WarmMeters v-if="warmOn" :warm="intent.warm!" class="warm-meters" />
         <!-- Ready stays calm: its rare action sits with the words, not as a full-width bar -->
@@ -72,7 +74,9 @@
           </li>
         </ol>
       </div>
-      <NowCamera v-if="showCam" :camera="camera!" :progress="prepProgress" :thumb="intent.job && !change ? thumbUrl : undefined" :alt="intent.job?.name" :pill="change ? changePill : prepPill" class="hero" @failed="camFailed = true" />
+      <!-- a load or unload: the head's switches, the hotend one only where configured (design/filament-units/, A) -->
+      <HeadSwitches v-if="intent.head_switches" :switches="intent.head_switches" class="switches-side" />
+      <NowCamera v-else-if="showCam" :camera="camera!" :progress="prepProgress" :thumb="intent.job && !change ? thumbUrl : undefined" :alt="intent.job?.name" :pill="change ? changePill : prepPill" class="hero" @failed="camFailed = true" />
       <!-- turning off or restarting (design/power/): the ring empties as the nozzle cools to its fan's 50° -->
       <Ring v-else-if="powerWait" :value="1 - (intent.power?.progress ?? 0)" label="" :color="'var(--a-accent)'" class="ring">
         <template #face><svg class="nozzle-glyph" viewBox="-14 -12 52 52" aria-hidden="true"><path d="M6 2h12v8l-3 4h-6l-3-4z" /><path d="M9 14v4l3 6 3-6v-4" /></svg></template>
@@ -105,6 +109,8 @@
           <br />
           <span class="muted a-num"><template v-if="intent.job?.layer">Layer {{ intent.job.layer }}<template v-if="intent.job.layers"> of {{ intent.job.layers }}</template> · </template>{{ remainingLabel }}</span>
         </p>
+        <!-- in a Bench Box the temperatures live here, under the job: the box's top line has no room (design/bench-7in/, A) -->
+        <Vitals v-if="benchChrome && lay === 'panel'" :intent="intent" class="bench-vitals" />
         <!-- It carried on with a matching spool by itself (design/slots/, B) -->
         <div v-if="intent.carried" class="carried">
           <span class="dot" :style="{ '--c': carriedColor }"></span>
@@ -196,7 +202,8 @@
         <!-- design/report/, B: quiet, so it never competes with what to try; on the panel it sits under the sign -->
         <button v-if="lay !== 'panel' || showCam" class="tell-link" @click="openTell">Tell Elyir about this ›</button>
       </div>
-      <NowCamera v-if="showCam" :camera="camera!" tone="red" class="hero" @failed="camFailed = true" />
+      <HeadSwitches v-if="intent.head_switches" :switches="intent.head_switches" class="switches-side" />
+      <NowCamera v-else-if="showCam" :camera="camera!" tone="red" class="hero" @failed="camFailed = true" />
       <div v-else class="glyph-side">
         <StateGlyph kind="problem" class="glyph" />
         <button v-if="lay === 'panel'" class="tell-link" @click="openTell">Tell Elyir about this ›</button>
@@ -209,6 +216,7 @@
         <h1 class="headline big a-display">{{ intent.headline }}</h1>
         <p class="detail">{{ intent.detail }}</p>
         <p v-if="intent.job" class="summary a-num">{{ intent.job.name }}<template v-if="intent.job.elapsed_s"> · {{ human(intent.job.elapsed_s) }}</template><template v-if="intent.job.grams"> · {{ intent.job.grams }} g</template></p>
+        <Vitals v-if="benchChrome && lay === 'panel'" :intent="intent" class="bench-vitals" />
         <FirstLayerCard v-if="firstLayer?.keep" :card="firstLayer.keep" />
         <PartsRow v-else-if="intent.parts" :parts="intent.parts" finished @open="partsOpen = true" />
         <!-- a part skipped mid-print, printed again the way the plate was (design/skip-objects/, A) -->
@@ -293,6 +301,7 @@ import { careOf } from '@/intent/care'
 import { goneView, nextMemo, printerOff, type Gone, type PowerMemo } from '@/intent/power'
 import HoldButton from '@/components/now/HoldButton.vue'
 import HeadArt from '@/components/now/HeadArt.vue'
+import HeadSwitches from '@/components/now/HeadSwitches.vue'
 import UnitArt from '@/components/now/UnitArt.vue'
 import StepArt from '@/components/now/StepArt.vue'
 import BuildArt from '@/components/now/BuildArt.vue'
@@ -321,7 +330,7 @@ import { nowCamera } from '@/camera/cameras'
 import LightButton from '@/components/light/LightButton.vue'
 import LookHome from '@/components/door/LookHome.vue'
 import { lightPlace, nowCameraShown } from '@/intent/light'
-import { embedded } from '@/auth'
+import { benchChrome, embedded } from '@/auth'
 
 // The shell passes the arrangement for the Now pane; as a route (panel, phone) it follows the window.
 const props = defineProps<{ layout?: Layout }>()
@@ -665,6 +674,7 @@ async function onAction(a: IntentAction) {
 .body.attention .headline { font-size: calc(33 * var(--u) + 10px); }
 .body.attention .spools { margin-top: calc(2 * var(--u) + 1px); }
 .left { min-width: 0; }
+.bench-vitals { margin-top: calc(8 * var(--u) + 4px); }
 
 .headline {
   margin: 0;
@@ -765,6 +775,7 @@ async function onAction(a: IntentAction) {
 .steps li.step-now .chk { border-color: var(--a-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--a-accent) 25%, transparent); }
 .step-detail { font-size: .92em; font-weight: 500; color: var(--a-accent-text); }
 .camchip { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 15px; color: var(--a-ink-2); }
+.switches-side { justify-self: end; align-self: center; width: min(calc(150 * var(--u) + 90px), 40cqw); aspect-ratio: 236 / 330; max-height: calc(100cqh - 14px); }
 .glyph-side { display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--u)); }
 .glyph-side .tell-link { text-align: center; }
 .tell-link { appearance: none; border: 0; background: none; padding: calc(6 * var(--u) + 2px) 0 0; font: inherit;

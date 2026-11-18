@@ -18,6 +18,7 @@ export interface CloudDevice {
   name: string
   kind: 'printer' | 'box'
   backup: { id: string; at: number; size: number } | null
+  door?: { printer: string; name: string; addresses: { home: string | null; away: string | null } } | null
 }
 export interface Phone { id: string; agent: string; seen: number | null; you: boolean }
 export interface PendingInvite { id: string; email: string; created: number; expires: number }

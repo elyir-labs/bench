@@ -109,6 +109,7 @@ SUPPORTS: Dict[str, List[Tuple[str, str, str]]] = {
 # Where they go (design/supports-where/, A): Orca decides, corrected by the parts' marks, or only where marked
 # (Orca's manual kinds, which support the faces marked "here" and nothing else).
 SUPPORTS_WHERE = ("needed", "only")
+PART_WHERE = (*SUPPORTS_WHERE, "none")   # a part's own (round 2, 2A + C): none = no supports on this part
 MARKS = (0, 1, 2)                        # Orca's paint_supports states: none, enforcer, blocker
 
 
@@ -756,6 +757,7 @@ class Part:
                                          # triangles in the file's order; color 0 = its own, k = the plate's color k-1
     support_marks: Optional[List[int]] = None   # where supports go (design/supports-where/, A): [mark, count, ...] runs
                                          # over its triangles as paint; MARKS: 0 Orca decides, 1 here, 2 not here
+    supports_where: Optional[str] = None  # PART_WHERE, this part's own; None: the plate's (Request.supports_where)
 
     @property
     def project(self) -> bool:
@@ -805,7 +807,13 @@ class Part:
                 out.append("support_marks must be [mark, count, ...]: marks 0, 1 (here) or 2 (not here), counts 1 or more")
             elif Path(self.model).suffix.lower() != ".stl":
                 out.append("only STL models can have supports marked")
+        if self.supports_where is not None and self.supports_where not in PART_WHERE:
+            out.append(f"a part's supports_where must be one of {', '.join(PART_WHERE)}")
         return out
+
+    def where(self, req: "Request") -> str:
+        """Where this part's supports go: its own choice, or the plate's."""
+        return "none" if req.supports == "off" else self.supports_where or req.supports_where
 
     def marked(self) -> Dict[str, int]:
         """How many triangles its support marks say "here" and "not here"."""
@@ -998,15 +1006,26 @@ def filament_files(workdir: str, n: int = 1) -> str:
     return ";".join(f"{workdir}/filament.json" if k == 1 else f"{workdir}/filament_{k}.json" for k in range(1, n + 1))
 
 
+ARRANGE_PROCESS = "arrange.json"
+
+
+def write_arrange_process(p: "Plan", workdir: str) -> str:
+    """The process to arrange a supportless() plate with: supports off, so Orca packs it close."""
+    with open(os.path.join(workdir, ARRANGE_PROCESS), "w") as f:
+        json.dump({**p.process, "enable_support": "0"}, f, indent=1)
+    return ARRANGE_PROCESS
+
+
 def orca_command(orca: List[str], workdir: str, models, outdir: str, orient: bool,
-                 slice_it: bool = True, filaments: int = 1, ids: Optional[List[int]] = None) -> List[str]:
+                 slice_it: bool = True, filaments: int = 1, ids: Optional[List[int]] = None,
+                 process: str = "process.json") -> List[str]:
     """One run for the whole plate: every model, a copy repeated as many times as it's wanted (Orca
     arranges them and puts what doesn't fit on plate 2, 3...). The 3MF says which plate each landed on
     and where (read_plates). slice_it=False only arranges: how many fit, without slicing (fit). ids: each model's
     color, 1-based, when the plate has several."""
     models = [models] if isinstance(models, str) else list(models)
     return [*orca, *(["--slice", "0"] if slice_it else []), "--arrange", "1", "--orient", "1" if orient else "0",
-            "--load-settings", f"{workdir}/machine.json;{workdir}/process.json",
+            "--load-settings", f"{workdir}/machine.json;{workdir}/{process}",
             "--load-filaments", filament_files(workdir, filaments),
             *(["--load-filament-ids", ",".join(str(i) for i in ids)] if ids else []),
             "--outputdir", outdir, "--export-3mf", PLATES_3MF, *models]
@@ -1256,14 +1275,32 @@ def paint_object(xml: bytes, tris: List[Tuple[Tuple[float, ...], ...]], states: 
     return _TRIANGLE.sub(one, xml), painted
 
 
+def part_supports(req: "Request", parts: List["Part"], process: Dict[str, Any]) -> Dict[int, Dict[str, str]]:
+    """Each part whose supports differ from the plate's, by part index: Orca's per-object settings for it. Orca keeps
+    enable_support and support_type per object, so one part can go without, or only where marked, on a plate
+    that has them."""
+    if req.supports == "off":
+        return {}
+    kind, out = support_kind(process), {}
+    for i, part in enumerate(parts):
+        where = part.where(req)
+        if part.project or where == req.supports_where:
+            continue
+        out[i] = {"enable_support": "0"} if where == "none" else \
+            {"support_type": f"{kind}({'manual' if where == 'only' else 'auto'})"}
+    return out
+
+
 def edit_plates(src: str, dst: str, brims: Optional[List[str]] = None, heights: Optional[bytes] = None,
                 paint: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None,
-                marks: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None
+                marks: Optional[Dict[int, Tuple[List[Tuple[Tuple[float, ...], ...]], List[int]]]] = None,
+                settings: Optional[Dict[int, Dict[str, str]]] = None
                 ) -> Tuple[Dict[int, int], Dict[int, int]]:
     """The arranged 3MF again, to slice as it is: each object with its part's brim_type (brims: Orca's value, by
     part index, read from the object's name, p{i}c{k}__...), the changes at a height (heights_xml), each part's
     paint (paint: part index -> its triangles as prepared, and each one's color) and its support marks (marks: the
-    same, each one's MARKS state). Returns triangles painted, and triangles marked, by part."""
+    same, each one's MARKS state) and its own settings (settings: part index -> Orca keys, part_supports).
+    Returns triangles painted, and triangles marked, by part."""
     painted: Dict[int, int] = {}
     marked: Dict[int, int] = {}
     with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
@@ -1271,15 +1308,19 @@ def edit_plates(src: str, dst: str, brims: Optional[List[str]] = None, heights: 
             if item.filename.endswith((".gcode", ".md5")) or heights and item.filename == "Metadata/custom_gcode_per_layer.xml":
                 continue
             data = zi.read(item.filename)
-            if brims and item.filename == "Metadata/model_settings.config":
+            if (brims or settings) and item.filename == "Metadata/model_settings.config":
                 root = ET.fromstring(data)
                 for obj in root.iter("object"):
                     name = next((m.get("value") for m in obj.findall("metadata") if m.get("key") == "name"), "")
                     found = _PART_FILE.search(name)
-                    if found and int(found.group(1)) < len(brims):
-                        for old in [m for m in obj.findall("metadata") if m.get("key") == "brim_type"]:
-                            obj.remove(old)
-                        ET.SubElement(obj, "metadata", key="brim_type", value=brims[int(found.group(1))])
+                    if not found:
+                        continue
+                    i = int(found.group(1))
+                    own = {**({"brim_type": brims[i]} if brims and i < len(brims) else {}), **(settings or {}).get(i, {})}
+                    for old in [m for m in obj.findall("metadata") if m.get("key") in own]:
+                        obj.remove(old)
+                    for key, value in own.items():
+                        ET.SubElement(obj, "metadata", key=key, value=value)
                 data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
             found = _PART_FILE.search(item.filename) if (paint or marks) and item.filename.startswith("3D/Objects/") else None
             if found and int(found.group(1)) in (paint or {}):
@@ -1802,6 +1843,46 @@ def support_angle(process: Dict[str, Any]) -> float:
     except (TypeError, ValueError, IndexError):
         return 30.0
     return a if 0 < a < 90 else 30.0
+
+
+SUPPORTED_AREA = 1.0                      # mm² of faces Orca would support before a part counts as needing supports
+
+
+def needs_supports(path: str, threshold: float = 30.0) -> Optional[bool]:
+    """Whether Orca finds anything to support on the part as it lies: a face off the plate leaning less than threshold
+    from flat (support_angle), the line places() draws in the app. None when the file can't be read here (STEP, 3MF)."""
+    tris = _triangles(path)
+    if not tris:
+        return None
+    lo = min(v[2] for t in tris for v in t)
+    flat = math.cos(math.radians(threshold + 0.5))
+    area = 0.0
+    for t in tris:
+        if max(v[2] for v in t) - lo < 0.05:
+            continue
+        n, a = _normal_area(t)
+        if n and -n[2] >= flat:
+            area += a
+            if area >= SUPPORTED_AREA:
+                return True
+    return False
+
+
+def supportless(req: "Request", parts: List["Part"], files: List[str], threshold: float) -> bool:
+    """Supports are on, but no part on the plate will get any. Orca arranges with room for supports around every
+    part whenever they're on (about 24 mm apart, against 2 mm), so such a plate is arranged as if they were off and
+    sliced with them on: six trays that fit a Kobra 3's bed by hand fit it here too."""
+    if req.supports == "off" or req.orient:
+        return False
+    for part, f in zip(parts, files):
+        where = part.where(req)
+        if where == "none":
+            continue
+        if part.project or (part.support_marks and 1 in unrun(part.support_marks)):
+            return False
+        if where != "only" and needs_supports(f, threshold) is not False:
+            return False
+    return True
 
 
 def options(printers: Dict[str, Printer], beds: Optional[Dict[str, Optional[List[float]]]] = None,

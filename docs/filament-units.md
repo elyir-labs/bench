@@ -8,6 +8,8 @@ and to Klipper through Moonraker, so a Klipper update can't break it.
 
 - **Load and unload from the screen.** Tap a slot: the unit feeds until the extruder's sensor sees the
   filament, then the extruder takes it to the nozzle. Unloading pulls back until the sensor clears, then parks it.
+  A second switch after the gears, just above the hotend, makes both surer: a load stops and says so when the
+  gears don't take the filament, and the unit stops pulling when it's stuck in the hotend.
 - **Multi-color prints switch spools by themselves.** A tool change in the file pauses the print quietly, the
   service unloads, loads and purges through your printer's own macros, then resumes where it stopped. A failed
   change leaves the print paused with what went wrong and Try again.
@@ -43,6 +45,22 @@ and the spools it knows. `filament_units: klipperace` puts every line back, and 
 driver off with the rest.
 
 If the sensor's pin needs a pull-up Klipper doesn't show, name it: `units_sensor_pin: ^PB8`.
+
+**Two switches in the head.** Some heads have a second switch after the extruder's gears, just above the hotend.
+Name its pin and the install command adds a button for it:
+
+```ini
+units_sensor_pin: ^PB8           # the extruder switch, before the gears
+units_hotend_sensor_pin: ^PB9    # the hotend switch, after them
+```
+
+A load then goes in three steps: the unit feeds to the extruder switch, the extruder carries the filament until the
+hotend switch sees it (or stops and says the extruder didn't take it, before anything reaches the nozzle), then
+pushes the rest of the way. Taking it out, a hotend switch that still sees filament after the extruder backed off
+means it's stuck in the hotend, and the unit stops pulling. The install command finds a sensor named for the hotend
+(`[filament_switch_sensor hotend_sensor]`) by itself; it never guesses from "toolhead", which some printers call
+their only switch. With a cutter (`units_backoff` set), the stuck check is off, since the cut piece stays under
+the switch.
 
 ## Happy Hare and AFC
 
@@ -167,6 +185,8 @@ In the same file, all optional:
 | --- | --- |
 | `units_before_macro`, `units_after_macro` | Your printer's own macros around a change (tip cutting, the purge, the way back). They get `FROM`, `TO`, `TEMP` and `PURGE`. |
 | `units_sensor_to_nozzle` | mm from the extruder's sensor to the nozzle (120). |
+| `units_hotend_sensor_pin` | The hotend switch's pin, after the gears (see above). |
+| `units_hotend_sensor_to_nozzle` | mm from the hotend switch to the nozzle. Unset: `units_sensor_to_nozzle` less what the extruder carried between the switches on that load. |
 | `units_backoff` | mm the extruder backs out while the unit pulls. With a cutter between the gears and the sensor, `0`. |
 | `units_park` | mm the unit pulls back after the sensor clears (170). |
 | `units_temp` | Nozzle temperature for a change when the printer isn't hot already (230). |

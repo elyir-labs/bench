@@ -10,6 +10,7 @@
           <Toggle v-model="alsoOff" :label="words.offer" :disabled="busy" />
         </div>
         <p v-if="words.note" class="note">{{ words.note }}</p>
+        <p v-if="failed" class="note">{{ failed }}</p>
         <button class="a-btn red big" :disabled="busy" @click="go">{{ busy ? 'Removing…' : 'Remove' }}</button>
         <button class="a-btn ghost big" :disabled="busy" @click="emit('close')">Cancel</button>
       </div>
@@ -22,13 +23,15 @@ import { computed, ref } from 'vue'
 import Toggle from '@/components/materials/Toggle.vue'
 import type { LivePrinter } from './printers'
 import { caseOf, sheetWords } from './remove'
-import { removePrinter } from './removing'
+import { inAccount, removePrinter } from './removing'
 
 const props = defineProps<{ p: LivePrinter }>()
 const emit = defineEmits<{ close: []; done: [] }>()
 // the case is fixed when the sheet opens, so the words don't change under a finger
 const kind = caseOf(props.p)
-const words = computed(() => sheetWords(props.p.name, kind))
+const mine = inAccount(props.p)
+const words = computed(() => sheetWords(props.p.name, kind, mine))
+const failed = ref('')
 const alsoOff = ref(true)
 const busy = ref(false)
 
@@ -37,6 +40,8 @@ async function go() {
   try {
     await removePrinter(props.p, kind === 'reachable' && alsoOff.value)
     emit('done')
+  } catch (e) {
+    failed.value = (e as Error).message || "That didn't work. Try again."
   } finally {
     busy.value = false
   }

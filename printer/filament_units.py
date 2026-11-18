@@ -98,6 +98,8 @@ def _elyir(st: Dict[str, Any]) -> Dict[str, Any]:
         "lists": {"color": [], "material": [], "temp": []},
         "dryer_max": st.get("dryer_max"),
         "change": st.get("change") if isinstance(st.get("change"), dict) else None,
+        "hotend_switch": bool(st.get("hotend_switch")),
+        "switches": st.get("switches") if isinstance(st.get("switches"), dict) else None,
     }
 
 

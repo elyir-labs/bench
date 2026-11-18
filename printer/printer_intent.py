@@ -110,6 +110,16 @@ def _load_engine(name: str = "elyir_bench_intent"):
 
 
 engine = _load_engine()
+_tag_reader_mod = None
+
+
+def _tag_reader():
+    """tag_reader.py, loaded the first time a reader is started (only printers that use one need it)."""
+    global _tag_reader_mod
+    if _tag_reader_mod is None:
+        _tag_reader_mod = _load_engine("tag_reader")
+    return _tag_reader_mod
+
 try:
     care = _load_engine("elyir_bench_care")
 except Exception:   # an install that predates it: everything but maintenance still works
@@ -216,6 +226,12 @@ BRING_QUIET = 30                # seconds a run may take to say who it is before
 # Printer or Bench Box (design/role/, B): `elyir-bench --json role controller`, followed like a bring run. It turns
 # Moonraker off last, which ends this component too: the screens then say where the box is (docs/bring-it-over.md).
 ROLE_ACTIONS = ("role_box", "role_back")
+UPDATE_UNIT = "elyir-bench-update.service"   # the installer's updater (design/updates/): nightly, or Update now
+# A USB stick (design/usb/): the installer reads it into usb.json; what a screen ticks goes to usb-take.json and its
+# own service, not a child of Moonraker (installing restarts Moonraker)
+USB_UNIT = "elyir-bench-usb.service"
+USB_ACTIONS = ("usb_seen", "usb_skip", "usb_take", "usb_report")
+USB_GOING = ("copying", "report", "waiting", "checking", "installing", "restarting")
 ROLE_RUN = "role-run.jsonl"
 BOX_PORT = 8088                 # the Bench app's port on a box (installer: the controller's serve port)
 # Setting a filament unit up (design/unit-setup/, B): `elyir-bench --json unit scan|install|putback`, followed like a
@@ -367,6 +383,10 @@ class PrinterIntent:
         # found, or the one picked when Bench asked (elyir-bench/light)
         self.light_setting: str = config.get("light", "").strip()
         self._ups_reading = False
+        # Spool tags (design/spool-tags/): `tag_reader: off` leaves the USB reader alone
+        self.tag_reader_on = str(config.get("tag_reader", "on")).strip().lower() not in ("off", "false", "no", "0")
+        self._tag_thread: Optional[Any] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
         self.server.register_notification("printer_intent:update", "intent_update")
         self.server.register_notification("printer_intent:event", "elyir_bench_event")
@@ -404,6 +424,10 @@ class PrinterIntent:
             transports=TransportType.HTTP | TransportType.WEBSOCKET,
         )
         self.server.register_endpoint(
+            "/printer/intent/filaments", RequestType.GET, self._handle_filaments,
+            transports=TransportType.HTTP | TransportType.WEBSOCKET,
+        )
+        self.server.register_endpoint(
             "/printer/intent/bring/export", RequestType.GET, self._handle_bring_export,
             transports=TransportType.HTTP,
         )
@@ -424,11 +448,70 @@ class PrinterIntent:
         await self._restore_colour_plan()
         await self._restore_checkpoint()
         await self._restore_setup()
+        await self._restore_tags()
         await self._restore_profile()
         self._restore_bring()
         self._read_setup_files()
         self.eventloop.delay_callback(PROFILE_SCAN_DELAY, self._scan_profiles)   # not ahead of Klipper's own start
         self._start_timer()
+        self._start_tag_reader()
+
+    # ---- spool tags (design/spool-tags/) ----------------------------------------------------------
+
+    def _start_tag_reader(self, fake: Optional[Any] = None) -> None:
+        if not (self.tag_reader_on or fake) or self._tag_thread is not None:
+            return
+        try:
+            self._loop = asyncio.get_running_loop()
+            self._tag_thread = _tag_reader().ReaderThread(self._tag_event_from_thread, fake)
+            self._tag_thread.start()
+        except Exception:   # an install without tag_reader.py, or a broken one: everything else carries on
+            logging.exception("intent: the spool tag reader didn't start")
+            self._tag_thread = None
+
+    def _tag_event_from_thread(self, kind: str, *args: Any) -> None:
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._on_tag_event, kind, args)
+
+    def _on_tag_event(self, kind: str, args: tuple) -> None:
+        tags = self.tracker.tags
+        if kind == "reader":
+            tags.on_reader(*args)
+        elif kind == "tag":
+            tags.on_tag(args[0])
+        elif kind == "written":
+            tags.on_written(*args)
+        self._tag_work()
+        self._publish()
+
+    def _tag_work(self) -> None:
+        job = self.tracker.tags.work()
+        if job and self._tag_thread is not None:
+            logging.info("intent: writing a %s tag (%d writes)", job["format"], len(job["ops"]))
+            self._tag_thread.write(job["uid"], job["ops"])
+        if self.tracker.tags.dirty:
+            self.tracker.tags.dirty = False
+            self.eventloop.create_task(self._save_tags())
+
+    async def _restore_tags(self) -> None:
+        try:
+            db = self.server.lookup_component("database")
+            self.tracker.tags.restore(await db.get_item("elyir-bench", "tags", None))
+        except Exception:
+            logging.exception("intent: reading the spool tags kept failed")
+
+    async def _save_tags(self) -> None:
+        try:
+            db = self.server.lookup_component("database")
+            await db.insert_item("elyir-bench", "tags", self.tracker.tags.saved())
+        except Exception:
+            logging.exception("intent: saving the spool tags failed")
+
+    async def _handle_filaments(self, web_request: WebRequest) -> Dict[str, Any]:
+        """The filament library (pick 6 A): SpoolmanDB on the printer, searched here."""
+        lib = engine.spool_tags.library
+        return lib.search(web_request.get_str("q", ""), web_request.get_str("brand", ""),
+                          float(web_request.get_str("diameter", "1.75") or 1.75))
 
     # ---- Klipper lifecycle ------------------------------------------------
 
@@ -471,10 +554,15 @@ class PrinterIntent:
                 subs[chamber] = ["temperature"]
             if "exclude_object" in (objects or []):
                 subs["exclude_object"] = None     # parts that can be skipped (design/skip-objects/)
+            if "save_variables" in (objects or []):
+                subs["save_variables"] = ["variables"]     # spots (design/spots/) are kept there
+            for kind in engine.spots.KINDS.values():
+                if kind["macro"] in (objects or []):
+                    subs[kind["macro"]] = None
             head = self.tracker.head_sensor_name(list(objects or []))
             self.tracker.head_sensor = head
             if head:
-                subs[head] = ["filament_detected"]
+                subs[head] = ["state"] if head.startswith("gcode_button ") else ["filament_detected"]
             lights = engine.light_candidates(list(objects or []))
             self.tracker.light_objects = lights
             for o in lights:
@@ -622,7 +710,16 @@ class PrinterIntent:
         self.tracker.checkpoint_dirty = False
         try:
             db = self.server.lookup_component("database")
-            await db.insert_item("elyir-bench", "checkpoint", self.tracker.checkpoint_record())
+            record = self.tracker.checkpoint_record()
+            if record is None:
+                # Moonraker refuses to store None and only logs it, so the last print's checkpoint stayed and
+                # came back as a power cut after the next restart (Workshop, 9 November)
+                try:
+                    await db.delete_item("elyir-bench", "checkpoint")
+                except Exception:
+                    pass   # nothing kept
+            else:
+                await db.insert_item("elyir-bench", "checkpoint", record)
         except Exception:
             self.tracker.checkpoint_dirty = True
             logging.exception("intent: saving the checkpoint failed")
@@ -935,7 +1032,131 @@ class PrinterIntent:
         intent["printer"]["screen_switch_failed"] = self._screen_switch_failed
         intent["printer"]["screen_trial"] = self._screen_trial()
         intent["setup"] = {"open": self._setup_open()}
+        intent["update"] = self._update_view()
+        intent["usb"] = self._usb_view()
         return intent
+
+    # ---- updates (design/updates/, A + A) ----------------------------------------
+
+    def _update_view(self) -> Optional[Dict[str, Any]]:
+        """This printer's release and the updater's last word (update.json, written by `elyir-bench update`). None for a
+        printer the installer didn't set up (no release)."""
+        base = os.path.dirname(self.installer_state)
+        try:
+            with open(os.path.join(base, "current", "VERSION")) as f:
+                version = f.read().strip()
+        except OSError:
+            return None
+        try:
+            with open(os.path.join(base, "update.json")) as f:
+                u = json.load(f)
+        except (OSError, ValueError):
+            u = {}
+        if not isinstance(u, dict):
+            u = {}
+        latest = (u.get("latest") or {}).get("version")
+        state = u.get("state") or "idle"
+        # a run that stopped without its last word (the machine restarted under it) isn't still going
+        if state in ("checking", "downloading", "installing") and time.time() - float(u.get("at") or 0) > 3600:
+            state = "idle"
+        return {"version": version, "latest": latest, "newer": bool(u.get("newer")) and latest != version,
+                "state": state, "why": u.get("why"), "done": u.get("done"), "of": u.get("of"),
+                "went_back": bool(u.get("went_back")), "checked": u.get("checked")}
+
+    def _update_now(self) -> None:
+        if (self.tracker.status.get("print_stats") or {}).get("state") in ("printing", "paused"):
+            raise self.server.error("Not while it's printing. It updates after this print.", 400)
+        base = os.path.dirname(self.installer_state)
+        try:
+            with open(os.path.join(base, "update-now"), "w"):
+                pass
+            # its own service, not a child of Moonraker: installing restarts Moonraker
+            subprocess.run(["sudo", "-n", "systemctl", "start", "--no-block", UPDATE_UNIT], timeout=10, check=True,
+                           capture_output=True)
+        except Exception as e:
+            logging.info("intent: %s didn't start: %s", UPDATE_UNIT, e)
+            raise self.server.error("The updater didn't start. Try `elyir-bench update` on the printer.", 500)
+
+    # ---- a USB stick (design/usb/: 1 A, all of 2, 3 A) ------------------------------
+
+    def _usb_path(self, name: str) -> str:
+        return os.path.join(os.path.dirname(self.installer_state), name)
+
+    def _usb_read(self) -> Dict[str, Any]:
+        try:
+            with open(self._usb_path("usb.json")) as f:
+                u = json.load(f)
+        except (OSError, ValueError):
+            return {}
+        try:
+            with open("/proc/sys/kernel/random/boot_id") as f:
+                boot = f.read().strip()
+        except OSError:
+            boot = "no-boot-id"
+        return u if isinstance(u, dict) and u.get("boot") == boot else {}
+
+    def _usb_view(self) -> Optional[Dict[str, Any]]:
+        """The stick that's in and what's on it, or what taking from it is doing (installer `usb in` / `usb run`).
+        None with no stick and nothing going on."""
+        u = self._usb_read()
+        take = u.get("take") or None
+        if not u.get("present") and not take:
+            return None
+        view = {k: u.get(k) for k in ("id", "label", "present", "readable", "why", "folder", "app", "os", "keys", "wifi",
+                                      "seen", "skipped")}
+        view["take"] = take
+        return view
+
+    def _usb_edit(self, change) -> Dict[str, Any]:
+        """usb.json changed under the installer's own lock (it writes the same file)."""
+        import fcntl
+        with open(self._usb_path(".usb.lock"), "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            u = self._usb_read()
+            if not u:
+                return {}
+            change(u)
+            u["at"] = int(time.time())
+            tmp = self._usb_path("usb.tmp")
+            with open(tmp, "w") as f:
+                json.dump(u, f)
+            os.replace(tmp, self._usb_path("usb.json"))
+            return u
+
+    def _usb_action(self, action: str, args: Dict[str, Any]) -> None:
+        u = self._usb_read()
+        going = (u.get("take") or {}).get("state") in USB_GOING
+        if action == "usb_seen":
+            self._usb_edit(lambda x: x.update(seen=True))
+            return
+        if action == "usb_skip":
+            def skip(x):
+                t = x.get("take") or {}
+                if t and t.get("state") not in USB_GOING:
+                    x["take"] = None            # a finished take: its sheet closes
+                x["skipped"] = x["seen"] = True
+                key = f"{x.get('id')}/{(x.get('app') or {}).get('version')}/{(x.get('os') or {}).get('version')}"
+                x["skips"] = [*(x.get("skips") or [])[-19:], key]
+            self._usb_edit(skip)
+            return
+        if not u.get("present"):
+            raise self.server.error("Put the stick back in first.", 400)
+        if going:
+            raise self.server.error("It's still taking what's on the stick.", 400)
+        if action == "usb_take":
+            ask = {"id": u.get("id"), "app": bool(args.get("app")), "os": bool(args.get("os")),
+                   "keys": [str(k) for k in args.get("keys") or []][:8], "wifi": bool(args.get("wifi"))}
+        else:
+            ask = {"id": u.get("id"), "report": True}
+        try:
+            with open(self._usb_path("usb-take.json"), "w") as f:
+                json.dump(ask, f)
+            self._usb_edit(lambda x: x.update(seen=True, skipped=False))
+            subprocess.run(["sudo", "-n", "systemctl", "start", "--no-block", USB_UNIT], timeout=10, check=True,
+                           capture_output=True)
+        except Exception as e:
+            logging.info("intent: %s didn't start: %s", USB_UNIT, e)
+            raise self.server.error("Taking from the stick didn't start. Try `elyir-bench usb run` on the printer.", 500)
 
     def _can_switch_screen(self) -> bool:
         return os.access(self.cli, os.X_OK) and os.path.exists(self.klipperscreen_unit)
@@ -1917,6 +2138,13 @@ class PrinterIntent:
             await self._setup_action(action, args if isinstance(args, dict) else {})
             self._publish(force=True)
             return {"ok": True, "action": action, "ran": [action], "intent": self._current(), "setup": await self._setup()}
+        if action == "update_now":
+            self._update_now()
+            return {"ok": True, "action": action, "ran": [action], "intent": self._current()}
+        if action in USB_ACTIONS:
+            self._usb_action(action, args if isinstance(args, dict) else {})
+            self._publish(force=True)
+            return {"ok": True, "action": action, "ran": [action], "intent": self._current()}
         if action in ROLE_ACTIONS:
             self._role_action(action)
             return {"ok": True, "action": action, "ran": [action], "intent": self._current(), "bring": self._bring_view()}
@@ -2089,6 +2317,12 @@ class PrinterIntent:
         elif kind == P.HANDS:
             self.tracker.hands_input(payload)
             self._drive()
+        elif kind == P.SPOT:
+            self.tracker.spots.input(payload)
+            self._drive()
+        elif kind == P.TAG:
+            self.tracker.tags.input(payload)
+            self._tag_work()
         elif kind == P.LIGHT:
             self.tracker.light_input(payload)
             if self.tracker.light_choice_dirty:

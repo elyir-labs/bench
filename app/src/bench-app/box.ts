@@ -2,12 +2,17 @@
 // Make it a printer). The service side is bench/box.py. Pure words and rules here, so tests/bench-box-care.test.ts
 // can pin them; pages/CarePage.vue draws them.
 
+import type { UpdateView } from '../intent/update'
+import type { UsbView } from '../intent/usb'
+
 export interface BoxRole { state: 'switching' | 'failed'; progress: { step: string; done: number; of: number } | null; why: string | null }
 export type BoxUpdate = { state: 'updating'; line: string } | { state: 'failed'; why: string }
 /** A card's OS (bench/box.py): what it runs, the newest out (null offline), an update started from here. */
 export interface BoxOs { version: string; latest: string | null; update: BoxUpdate | null }
 export interface BoxKey { id: string; kind: string; name: string }
-export interface BoxInfo { power: boolean; role: BoxRole | null; os?: BoxOs | null; ssh?: { user: string; keys: BoxKey[] } }
+/** app: the release a box installed with the install command runs, and the updater's last word (design/updates/). */
+/** usb: a USB stick in the box (design/usb/, 3 A). */
+export interface BoxInfo { power: boolean; role: BoxRole | null; os?: BoxOs | null; app?: UpdateView | null; usb?: UsbView | null; ssh?: { user: string; keys: BoxKey[] } }
 export type BoxPower = 'off' | 'restart'
 
 export const BOX_HEAD = 'This box'
@@ -79,7 +84,7 @@ export async function boxInfo(): Promise<BoxInfo | null> {
   }
 }
 
-export async function boxPost(path: 'power' | 'role' | 'update' | 'ssh', body: Record<string, unknown> = {}): Promise<string | null> {
+export async function boxPost(path: 'power' | 'role' | 'update' | 'ssh' | 'usb', body: Record<string, unknown> = {}): Promise<string | null> {
   try {
     const r = await fetch(`/bench/box/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     return r.ok ? null : (await r.text()) || "The box didn't take it."
@@ -94,5 +99,15 @@ export async function removeKey(id: string): Promise<string | null> {
     return r.ok ? null : (await r.text()) || "The box didn't take it."
   } catch {
     return "The box didn't answer."
+  }
+}
+
+/** The box's USB stick (bench/box.py GET /bench/box/usb), looked at often: a stick going in is asked about at once. */
+export async function boxUsb(): Promise<UsbView | null | undefined> {
+  try {
+    const r = await fetch('/bench/box/usb', { cache: 'no-store' })
+    return r.ok ? ((await r.json()) as UsbView | null) : undefined
+  } catch {
+    return undefined
   }
 }

@@ -328,6 +328,21 @@ Rinkhals adds nothing the box can use, and holds its firmware back).
   on the box (the Kobra opened there, Care, Phones, Add a phone) or from a phone at home: its own screen's Finish setting
   up offers notifications from its secure link (the stand-in reports `secure_link` off | waiting | on from the relay,
   asked every 5 minutes), and Change renames it on the bench and in its door's notifications (`setup_name`).
+- **Joins by itself** (`design/new-kobra/`, B, picked 7 November 2026; tests `bench/tests/test_new_kobra.py`): every minute
+  (`_join_new`) a Kobra the box can speak for, not on the bench and not said to be someone else's, is added with no tap
+  (`joined_by: itself`; Add on `/setup` gives `setup`). Its door follows its siblings': on when any other Kobra's is, whatever
+  the box's own `remote`. Before its door first opens, the phones that have its siblings (not guests, not a box) are copied
+  into it (`_carry_phones`): one record per phone (same push endpoint, else same name) holding every token it has for a
+  sibling (`also`), so the Printers app reaches it with a token it already holds. Each sibling's door then lists it in
+  `/door/me` `joined` for those phones (`joined.json`, a week), and the Printers app adds it once. A carried sibling vouches
+  for its public name (`POST /houses/{name}/vouch` on the relay), so no grant by hand; a relay
+  without the route leaves it waiting as before. Once the relay carries it, its door tells each carried phone once
+  (`POST /door/announce`). **Not mine** (`POST /bench/printers/{id}/not-mine`, from the box's `/setup` or a carried phone
+  through the Kobra's door for its first week) takes it off the bench, out of its siblings' `/door/me`, and into
+  `hidden.json` by its MAC id: never added again until Bring back (`POST /bench/add/{id}`, or `DELETE /bench/hidden/{id}`).
+  The other Kobras' doors then list its name in `/door/me` `left` (`left.json`, rewritten at start and on every change to
+  `hidden.json`), so each phone that picked it up drops it without a tap.
+  `POST /bench/p/{id}/remote` with no name now asks for the same `p-` name as the automatic path, never the Kobra's own.
 - **Its name at home** spells the box's address (`192-0-2-40.kobra-3-max.home.elyir.app`): lego gets its certificate
   over DNS-01 through the relay with that Kobra's secret, every 15 minutes, and the Kobras' Caddy serves it on
   `--home-port` (443 on a box; the service gets `CAP_NET_BIND_SERVICE` for it) in front of its door's home listener.

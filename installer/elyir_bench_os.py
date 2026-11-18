@@ -123,8 +123,13 @@ def now() -> str:
     return _dt.datetime.now().isoformat(timespec="seconds")
 
 
+def fetch(url: str, timeout: float):
+    # releases.elyir.dev is behind Cloudflare, which refuses Python's own User-Agent (403)
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "elyir-bench-os"}), timeout=timeout)
+
+
 def http_json(url: str, timeout: float = 3.0):
-    with urllib.request.urlopen(url, timeout=timeout) as r:
+    with fetch(url, timeout) as r:
         return json.load(r)
 
 
@@ -641,7 +646,7 @@ def download(url: str, dest: Path, size: int | None = None, sha256: str | None =
     import hashlib
     part = dest.with_name(dest.name + ".part")
     h, n = hashlib.sha256(), 0
-    with urllib.request.urlopen(url, timeout=60) as r, open(part, "wb") as f:
+    with fetch(url, 60) as r, open(part, "wb") as f:
         for chunk in iter(lambda: r.read(1 << 20), b""):
             f.write(chunk)
             h.update(chunk)

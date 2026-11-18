@@ -74,7 +74,9 @@ connected (direct, raw capture after Klipper started).
 ### What `get_status` shows while working (moves)
 
 - Feed 50 mm at 80: `status` busy, `action` "shifting" and the slot "shifting" (about 0.5 s), then
-  "feeding", then ready about 2.5 s after the command. `feed_assist_count` reset to 0.
+  "feeding", then ready about 2.5 s after the command. `feed_assist_count` reset to 0: feed assist was on for
+  slot 1 and the feed on slot 3 ended it without a word (the `stop_feed_assist` that followed moved nothing). The
+  unit drives one slot at a time; it can't assist one slot while it moves another.
 - Unwind 50 mm at 50: busy/"unwinding" straight away (the slot was already selected), `action`
   "ready" after 1.5 s, slot ready after 2.5 s.
 - Start feed assist: "shifting" to that slot for about 0.5 s, then ready; `feed_assist_count` 1,

@@ -98,3 +98,36 @@ def test_on_a_card_it_says_its_os_and_updates_once_at_a_time(tmp_path):
             box.updater.wait()
             assert (await (await c.get("/bench/box")).json())["os"]["update"] is None      # `true`: done, nothing said
     run(go())
+
+
+def test_a_usb_stick_in_the_box_is_shown_and_what_is_ticked_is_handed_on(tmp_path):
+    """design/usb/, 3 A: the box takes a stick for itself, as a printer's component does."""
+    async def go():
+        app = web.Application()
+        Box(tmp_path, tmp_path / "elyir_bench.py", dry=True).add_routes(app)
+        async with TestClient(TestServer(app)) as c:
+            assert await (await c.get("/bench/box/usb")).json() is None
+            (tmp_path / "usb.json").write_text(json.dumps({
+                "boot": "no-boot-id", "id": "AB12", "present": True, "readable": True, "folder": True,
+                "app": {"version": "2026.11.09-bbb", "why": None}, "os": None, "keys": [], "wifi": None,
+                "seen": False, "skipped": False, "take": None}))
+            got = await (await c.get("/bench/box")).json()
+            assert got["usb"]["app"]["version"] == "2026.11.09-bbb" and "boot" not in got["usb"]
+            await c.post("/bench/box/usb", json={"action": "seen"})
+            assert json.loads((tmp_path / "usb.json").read_text())["seen"] is True
+            r = await (await c.post("/bench/box/usb", json={"action": "take", "app": True})).json()
+            assert r["ok"] and json.loads((tmp_path / "usb-take.json").read_text()) == \
+                {"id": "AB12", "app": True, "os": False, "keys": [], "wifi": False}
+            u = json.loads((tmp_path / "usb.json").read_text())
+            (tmp_path / "usb.json").write_text(json.dumps({**u, "take": {"state": "copying"}}))
+            assert (await c.post("/bench/box/usb", json={"action": "report"})).status == 409
+            (tmp_path / "usb.json").write_text(json.dumps({**u, "take": {"state": "done"}}))
+            r = await (await c.post("/bench/box/usb", json={"action": "skip"})).json()
+            assert r["usb"]["take"] is None and r["usb"]["skipped"] is True
+    import box as box_module
+    real = box_module.boot_id
+    box_module.boot_id = lambda: "no-boot-id"
+    try:
+        run(go())
+    finally:
+        box_module.boot_id = real

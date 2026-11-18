@@ -200,12 +200,63 @@ it left off. Packages it installed (Chromium, cage) stay; the Plymouth theme fil
 2. **Browser setup**: the bootstrap installs only the non-disruptive parts, then shows a
    setup page on the panel and a QR code: confirm the screen ("tap the screen that lit up"),
    name the printer, switch the panel. Backed by Moonraker endpoints in the component.
-3. **Updates**: release tarballs on GitHub, Moonraker `update_manager` entry, "Update
-   available" on the Care tab, automatic rollback on a failed health check. Needs a public
-   repo or a deploy token.
+3. **Updates** (built 8 November 2026, see "Updates" below).
 4. **Bare printer**: install Klipper, Moonraker and Mainsail when they are missing, detect MCUs,
    start from known printer profiles.
 5. **Image**: a flashable Pi image with first-boot setup.
+
+## Updates
+
+`elyir-bench update` (design/updates/, A + A) is how a printer or box set up with the install command gets new releases.
+`elyir-bench-update.timer` runs it at 03:00 with up to an hour's spread (`--nightly`), and Care's Update now starts the same
+`elyir-bench-update.service` (the file `update-now` says it was asked for). It reads `releases.elyir.dev/bench/latest.json`
+(`ELYIR_BENCH_RELEASES` elsewhere), and stops there unless the release is newer: by `built` (the commit's time, in
+latest.json and the tarball's `BUILT`) when both sides have one, else by a later date; the same day without build times
+stays put. It waits while the printer prints or has a print paused, at night also while a print waits in Moonraker's
+queue; a box waits while a Kobra it speaks for prints. Then it downloads into `incoming/`, checks the sha256 and the
+signature against the key install.sh carries, and runs that release's own installer `--json apply <tarball>`: apply's
+health check switches back to the old release by itself if the new one doesn't start. Each step is written to
+`~/elyir-bench/update.json` (`state`: idle, checking, waiting, downloading, installing, failed, done), which the printer
+component turns into `intent.update` and the box into `/bench/box`'s `app`. A flashed card keeps its OS updates
+(os-slots.md) and its own row.
+
+## A USB stick
+
+A stick brings a release, a flashed card's whole OS, an SSH key or a Wi-Fi network to a printer or a Bench Box that has
+no internet or no SSH, and takes a report away (design/usb/ in elyir-design: 1 A, all of 2, 3 A). Only its
+`elyir-bench/` folder is looked at; FAT32 and exFAT are read.
+
+```
+elyir-bench/
+  elyir-bench-<version>.tar.gz  (+ .sig)        the app, as releases.elyir.dev serves it
+  os/elyir-bench-os-<version>-<board>.tar (+ .sig)   a flashed card's whole OS
+  *.pub                                         SSH public keys
+  wifi.txt                                      name: … / password: … (or the name, then the password, on two lines)
+  reports/                                      written here by Copy a report
+```
+
+- **Going in**: the udev rule `90-elyir-bench-usb.rules` starts `elyir-bench-usb@<partition>.service` (bound to the device,
+  so it stops when the stick comes out). It runs `elyir-bench usb in sda1` as the printer's user: the partition is
+  mounted read-only under `/run/elyir-bench-bring/` (bring it over's place and sudo rule), read, and unmounted. What's on
+  it goes in `~/elyir-bench/usb.json`, with why each thing can't be taken (unsigned, older, same, another board, a card's
+  OS on an install-command printer, another kind of build). A USB disk the machine runs from is never read.
+- **Asking**: the printer component's `intent.usb` and the box's `GET /bench/box/usb` carry it; the screen asks over
+  any page and says it saw the stick (`usb_seen`). With nobody answering for two minutes, an update on the stick
+  goes by itself (keys and Wi-Fi never do): the screens are probably the broken part. Inserted during a print, its
+  update is copied at once and waits for the print. Not now (`usb_skip`) is remembered for that stick across a
+  restart.
+- **Taking**: what was ticked goes to `usb-take.json`, and `elyir-bench-usb.service` runs `elyir-bench usb run`: it copies
+  the release (or the OS) into `incoming/` first, so the stick can come out, then adds the keys (and turns SSH on),
+  joins the Wi-Fi through a NetworkManager keyfile (the password never on a command line), waits while printing,
+  checks the signature and installs with the same code as `elyir-bench update` (the new release's own `apply`, which
+  goes back by itself), or `elyir-bench-os stage` + `try` for a card's OS. Progress is `usb.json`'s `take`.
+- **A report** is `elyir-bench report`'s bundle (secrets taken out), written to `elyir-bench/reports/` through a
+  writable mount under `/run/elyir-bench-usb/` (nosuid, nodev, noexec). A disk with an ext4 partition (an old printer's
+  card in a reader) is never written to.
+- **Developer builds**: a release built by `scripts/build-release.sh` on a Mac with `~/.config/elyir/bench-dev-key.pub.pem`
+  carries it, and a developer build also trusts it; `scripts/usb/stick.sh <stick> --build` signs this checkout with the
+  matching key. The public copy drops both (`scripts/public/rules.txt`). `scripts/usb/stick.sh` also fills a stick
+  with the newest public release, `--os pi4|pi5`, `--ssh <key.pub>` and `--wifi <name>`.
 
 ## Field notes: install and remove on desk.local (2026-10-05)
 

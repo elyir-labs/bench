@@ -138,3 +138,65 @@ def test_each_printer_says_how_far_a_face_may_lean():
     pr = sl.Printer(id="k", name="K", machine="K", process="P", materials={"PLA": "PLA"})
     assert sl.options({"k": pr}, angles={"k": 40.0})["printers"][0]["support_angle"] == 40
     assert sl.options({"k": pr})["printers"][0]["support_angle"] == 30
+
+
+# ── supports per part (round 2, 2A + C) ──────────────────────────────────────
+
+def test_a_part_may_have_its_own_where():
+    assert sl.Part(model="a.stl", supports_where="none").problems() == []
+    assert sl.Part(model="a.obj", supports_where="only").problems() == []
+    assert "supports_where must be one of" in sl.Part(model="a.stl", supports_where="nowhere").problems()[0]
+    req = sl.Request(supports="normal")
+    assert sl.Part(model="a.stl").where(req) == "needed"
+    assert sl.Part(model="a.stl", supports_where="none").where(req) == "none"
+    assert sl.Part(model="a.stl", supports_where="needed").where(sl.Request(supports="off")) == "none"
+
+
+def test_only_the_parts_that_differ_get_their_own_orca_settings():
+    parts = [sl.Part(model="a.stl"), sl.Part(model="b.stl", supports_where="none"), sl.Part(model="c.stl", supports_where="only")]
+    tree = {"support_type": "tree(auto)"}
+    assert sl.part_supports(sl.Request(supports="tree"), parts, tree) == {
+        1: {"enable_support": "0"}, 2: {"support_type": "tree(manual)"}}
+    assert sl.part_supports(sl.Request(supports="normal", supports_where="only"), parts, {"support_type": "normal(manual)"}) == {
+        1: {"enable_support": "0"}}
+    parts[0].supports_where = "needed"
+    assert sl.part_supports(sl.Request(supports="normal", supports_where="only"), parts, {"support_type": "normal(manual)"})[0] == {
+        "support_type": "normal(auto)"}
+    assert sl.part_supports(sl.Request(supports="off"), parts, tree) == {}
+
+
+def test_a_part_without_supports_doesnt_keep_the_plate_spread_out(tmp_path):
+    _boxes_stl(tmp_path / "bracket.stl", BRACKET)
+    f = str(tmp_path / "bracket.stl")
+    req = sl.Request(supports="normal")
+    assert sl.supportless(req, [sl.Part(model=f)], [f], 30) is False
+    assert sl.supportless(req, [sl.Part(model=f, supports_where="none")], [f], 30) is True
+
+
+def test_each_parts_settings_go_on_its_object(tmp_path):
+    _boxes_stl(tmp_path / "sign.stl", SIGN)
+    src = _arranged(tmp_path, sl._triangles(str(tmp_path / "sign.stl")))
+    sl.edit_plates(str(src), str(tmp_path / "own.3mf"), brims=["no_brim"], settings={0: {"enable_support": "0"}})
+    cfg = zipfile.ZipFile(tmp_path / "own.3mf").read("Metadata/model_settings.config").decode()
+    assert 'key="enable_support" value="0"' in cfg and 'key="brim_type" value="no_brim"' in cfg
+
+
+@pytest.mark.skipif(not os.path.exists(REAL_ORCA), reason="OrcaSlicer isn't installed here")
+async def test_real_one_part_without_supports(real, tmp_path):
+    _boxes_stl(tmp_path / "bracket.stl", BRACKET)
+    m = await _upload(real, "bracket.stl", (tmp_path / "bracket.stl").read_bytes())
+
+    async def plate(*wheres):
+        parts = [{"model": m["model"], **({"supports_where": w} if w else {})} for w in wheres]
+        r = await real.post("/slice", json={"printer": "v", "purpose": "draft", "material": "ASA", "supports": "normal", "parts": parts})
+        assert r.status == 202, await r.text()
+        d = await _done(real, (await r.json())["id"])
+        assert d["state"] == "done", d.get("error_detail") or d.get("error")
+        return d
+
+    both, one, none = await plate(None, None), await plate(None, "none"), await plate("none", "none")
+    assert both["estimate"]["grams"] > one["estimate"]["grams"] > none["estimate"]["grams"]
+    assert one["supports_added"] is True and none["supports_added"] is False
+    assert one["parts"][1]["supports_where"] == "none"
+    only = await plate("only", None)                     # nothing marked on the first: only the second is held up
+    assert only["supports_added"] is True and abs(only["estimate"]["grams"] - one["estimate"]["grams"]) < 0.5

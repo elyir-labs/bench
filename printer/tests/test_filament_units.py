@@ -211,3 +211,124 @@ def test_push_more_through_on_the_service_goes_to_it_and_on_klipperace_stays_gco
     k._load_temp = lambda: 240
     kind, script = k._purge_step(30)
     assert kind == "macro" and "G1 E30 F150" in script
+
+
+def test_the_moment_between_a_change_ending_and_klipper_resuming_is_not_needs_you():
+    t = service_tracker()
+    t.update_status({"print_stats": {"state": "printing", "filename": "two.gcode", "info": {"current_layer": 3}}}, now=100)
+    t.update_status({"print_stats": {"state": "paused"}, "pause_resume": {"is_paused": True},
+                     "elyir_units": dict(SERVICE, change={"from": 1, "to": 0, "in_print": True, "error": None})}, now=101)
+    # RESUME_BASE returned and the service cleared its change; Klipper's batch saying so comes after
+    t.update_status({"elyir_units": dict(SERVICE, change=None)}, now=130)
+    assert t.intent(now=130.2)["phase"] == "tool_change"
+    t.update_status({"print_stats": {"state": "printing"}, "pause_resume": {"is_paused": False}}, now=130.3)
+    assert t.intent(now=130.3)["state"] == "printing"
+
+
+def test_a_print_still_paused_after_a_change_ended_needs_you_once_the_grace_is_over():
+    t = service_tracker()
+    t.update_status({"print_stats": {"state": "printing", "filename": "two.gcode", "info": {"current_layer": 3}}}, now=100)
+    t.update_status({"print_stats": {"state": "paused"}, "pause_resume": {"is_paused": True},
+                     "elyir_units": dict(SERVICE, change={"from": 1, "to": 0, "in_print": True, "error": None})}, now=101)
+    t.update_status({"elyir_units": dict(SERVICE, change=None)}, now=130)
+    assert t.intent(now=140)["state"] == "needs_you"
+
+
+# ---- a hotend switch after the gears (design/filament-units/, A) ----------------------------------------------------
+
+HOTEND = "gcode_button elyir_units_hotend"
+
+
+def test_the_screens_read_the_service_s_hotend_switch_over_any_sensor_named_for_the_head():
+    names = ["filament_switch_sensor extruder_sensor", "filament_switch_sensor toolhead_sensor", HOTEND]
+    assert a.IntentTracker.head_sensor_name(names) == HOTEND
+    assert a.IntentTracker.head_sensor_name(names[:2] + ["filament_switch_sensor hotend_sensor"]) == \
+        "filament_switch_sensor hotend_sensor"
+    t = service_tracker()
+    t.head_sensor = HOTEND
+    t.update_status({HOTEND: {"state": "PRESSED"}})
+    assert t.head_loaded() is True
+    t.update_status({HOTEND: {"state": "RELEASED"}})
+    assert t.head_loaded() is False
+
+
+def test_a_load_with_a_hotend_switch_shows_through_the_extruder_and_follows_the_service():
+    t = service_tracker()
+    t.update_status({"elyir_units": dict(SERVICE, selected=None, hotend_switch=True)}, now=1)
+    t.begin_swap(2, None, False, now=10)
+    i = t.intent(now=11)
+    assert [s["id"] for s in i["steps"]] == ["feed", "through", "nozzle"]
+    assert [s["label"] for s in i["steps"]][1] == "Through the extruder"
+    step = {"from": None, "to": 2, "in_print": False, "error": None}
+    t.update_status({"elyir_units": dict(SERVICE, selected=None, hotend_switch=True, change=dict(step, step="through"))}, now=20)
+    i = t.intent(now=21)
+    assert [s["status"] for s in i["steps"]] == ["done", "now", "todo"]
+    t.update_status({"elyir_units": dict(SERVICE, selected=None, hotend_switch=True, change=dict(step, step="nozzle"))}, now=30)
+    assert [s["status"] for s in t.intent(now=31)["steps"]] == ["done", "done", "now"]
+
+
+def test_without_a_hotend_switch_there_is_no_through_step():
+    t = service_tracker()
+    t.update_status({"elyir_units": dict(SERVICE, selected=None)}, now=1)
+    t.begin_swap(2, None, False, now=10)
+    assert [s["id"] for s in t.intent(now=11)["steps"]] == ["feed", "nozzle"]
+
+
+def test_the_two_new_failures_say_what_to_check():
+    t = service_tracker()
+    t.begin_swap(2, None, False, now=10)
+    t.end_swap("The extruder didn't take the filament.", now=20)
+    i = t.intent(now=21)
+    assert i["phase"] == "swap_failed" and "lever is closed" in i["detail"] and "Nothing was pushed" in i["detail"]
+    t.ack_swap()
+    t.begin_swap(2, 1, False, now=30)
+    t.end_swap("The filament is stuck in the hotend.", now=40)
+    i = t.intent(now=41)
+    assert "still in the hotend" in i["detail"] and "stopped pulling" in i["detail"]
+
+
+def test_the_switches_are_drawn_beside_a_load_and_its_failure():
+    t = service_tracker()
+    base = dict(SERVICE, selected=None, hotend_switch=True)
+    t.update_status({"elyir_units": dict(base, switches={"extruder": False, "hotend": False})}, now=1)
+    assert t.intent(now=2)["head_switches"] is None                 # nothing moving: nothing drawn
+    t.begin_swap(5, None, False, now=10)
+    t.update_status({"elyir_units": dict(base, switches={"extruder": True, "hotend": False},
+                                         change={"from": None, "to": 5, "in_print": False, "error": None, "step": "through"})}, now=11)
+    hs = t.intent(now=12)["head_switches"]
+    assert hs == {"extruder": True, "hotend": False, "hotend_switch": True, "gears": None, "failed": None, "color": "#75787B"}
+    t.update_status({"elyir_units": dict(base, switches={"extruder": True, "hotend": False, "gears": "in"},
+                                         change={"from": None, "to": 5, "in_print": False, "error": None, "step": "through"})}, now=13)
+    assert t.intent(now=14)["head_switches"]["gears"] == "in"
+    t.end_swap("The extruder didn't take the filament.", now=20)
+    t.update_status({"elyir_units": dict(base, switches={"extruder": False, "hotend": False}, change=None)}, now=21)
+    assert t.intent(now=22)["head_switches"]["failed"] == "hotend"
+
+
+def test_a_service_that_reports_no_switches_draws_nothing():
+    t = service_tracker()
+    t.begin_swap(5, None, False, now=10)
+    assert t.intent(now=11)["head_switches"] is None
+
+
+def test_without_a_hotend_switch_only_the_extruder_switch_is_drawn():
+    t = service_tracker()
+    base = dict(SERVICE, selected=None, hotend_switch=False)
+    t.begin_swap(5, None, False, now=10)
+    t.update_status({"elyir_units": dict(base, switches={"extruder": True, "hotend": None, "gears": "in"},
+                                         change={"from": None, "to": 5, "in_print": False, "error": None, "step": "nozzle"})}, now=11)
+    hs = t.intent(now=12)["head_switches"]
+    assert hs == {"extruder": True, "hotend": None, "hotend_switch": False, "gears": "in", "failed": None, "color": "#75787B"}
+    t.end_swap("The filament didn't reach the toolhead.", now=20)
+    t.update_status({"elyir_units": dict(base, switches={"extruder": False, "hotend": None}, change=None)}, now=21)
+    assert t.intent(now=22)["head_switches"]["failed"] == "extruder"
+
+
+def test_the_drawing_shows_the_old_color_until_the_new_filament_starts_feeding():
+    t = service_tracker()
+    base = dict(SERVICE, selected=0, hotend_switch=True, switches={"extruder": True, "hotend": True})
+    t.begin_swap(5, 0, True, now=10)
+    for step, color in (("assist_off", "#00FF00"), ("before", "#00FF00"), ("out", "#00FF00"), ("park", "#00FF00"),
+                        ("in", "#75787B"), ("through", "#75787B"), ("nozzle", "#75787B"), ("after", "#75787B")):
+        t.update_status({"elyir_units": dict(base, change={"from": 0, "to": 5, "in_print": False, "error": None, "step": step})}, now=11)
+        assert t.intent(now=12)["head_switches"]["color"] == color, step

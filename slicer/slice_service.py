@@ -7,12 +7,12 @@ See docs/slicer.md.
   POST /slice/models             multipart: model. Kept for a day; answers its id, size in mm, and how it
                                  lies: whether its biggest flat side is down, and its size laid flat. A 3MF
                                  answers {models: [...]}: each part in it, with how many times it's placed
-  POST /slice                    JSON {parts: [{model, copies, scale, lay, brim, paint, support_marks}], printer, purpose,
+  POST /slice                    JSON {parts: [{model, copies, scale, lay, brim, paint, support_marks, supports_where (needed | only | none)}], printer, purpose,
                                  supports, supports_where (needed | only), material,
                                  color, slot, thumbnail (PNG, base64)}; {model, scale, lay} for one part; or
                                  multipart with the model itself
-  POST /slice/fit                JSON {printer, parts, part}: how many of that part fit on one plate with the rest;
-                                 part null: how many of each part plate 1 holds, as they are
+  POST /slice/fit                JSON {printer, parts, part, supports?, supports_where?}: how many of that part fit on
+                                 one plate with the rest; part null: how many of each part plate 1 holds, as they are
   POST /slice/test               JSON {printer, test: "pressure_advance", material, color, slot}: a calibration print
   GET  /slice/models/{id}/file   the model as uploaded (to slice a skipped part again: design/skip-objects/)
   POST /slice/models/{id}/cut    JSON {z, lay, down, scale}: what's above z of it as printed, as a new model
@@ -113,6 +113,7 @@ class Job:
                        **({"down": p.down} if p.lay == "side" else {}),
                        **({"painted": sorted(p.painted())} if p.paint else {}),
                        **({"marked": p.marked()} if p.support_marks else {}),
+                       **({"supports_where": p.supports_where} if p.supports_where else {}),
                        **({"brim_pick": self.brims[i]} if i < len(self.brims) else {})} for i, p in enumerate(self.parts)],
             "changes": [c.as_dict() for c in self.changes],
         }
@@ -833,6 +834,9 @@ class Service:
             if i is not None and not 0 <= i < len(parts):
                 return _bad("part must be one of the parts")
             printer = self._printer(request, fields)
+            supports, where = str(fields.get("supports") or "auto"), str(fields.get("supports_where") or "needed")
+            if supports not in sl.SUPPORTS or where not in sl.SUPPORTS_WHERE:
+                return _bad(f"supports must be one of {', '.join(sl.SUPPORTS)}; supports_where one of {', '.join(sl.SUPPORTS_WHERE)}")
             problems = [q for p in parts for q in p.problems()]
             if problems:
                 return _bad("; ".join(problems))
@@ -840,7 +844,7 @@ class Service:
             return _bad(str(e))
         workdir = self.work / ("fit-" + secrets.token_hex(6))
         try:
-            req = sl.Request(material=sorted(printer.materials)[0])
+            req = sl.Request(material=sorted(printer.materials)[0], supports=supports, supports_where=where)
             p = await asyncio.to_thread(sl.plan, printer, req, self.presets[printer.id])
             out = workdir / "out"
             out.mkdir(parents=True)
@@ -848,7 +852,9 @@ class Service:
             files = await asyncio.to_thread(_prepare, parts, str(workdir / "parts"))
             if i is not None:
                 parts[i].copies = sl.fit_guess(await asyncio.to_thread(sl.model_size, files[i]), self.beds.get(printer.id))
-            cmd = sl.orca_command(self.orca, str(workdir), _repeat(files, parts), str(out), False, slice_it=False)
+            tight = await asyncio.to_thread(sl.supportless, req, parts, files, sl.support_angle(p.process))
+            cmd = sl.orca_command(self.orca, str(workdir), _repeat(files, parts), str(out), False, slice_it=False,
+                                  process=sl.write_arrange_process(p, str(workdir)) if tight else "process.json")
             if self.nice:
                 cmd = ["nice", "-n", str(self.nice), *cmd]
             async with self.engine:
@@ -1072,20 +1078,24 @@ class Service:
         # each model's color (a 3MF that brings its own keeps them)
         ids = [p.spool + 1 for p in job.parts for _ in range(p.copies)] if n > 1 and not job.parts[0].project else None
         painted = {i: part.paint for i, part in enumerate(job.parts) if part.paint}
-        marked = {i: part.support_marks for i, part in enumerate(job.parts) if part.support_marks and job.req.supports != "off"}
-        if mixed or job.req.heights or painted or marked:
+        marked = {i: part.support_marks for i, part in enumerate(job.parts) if part.support_marks and part.where(job.req) != "none"}
+        own = sl.part_supports(job.req, job.parts, p.process)
+        tight = await asyncio.to_thread(sl.supportless, job.req, job.parts, files, sl.support_angle(p.process))
+        if mixed or job.req.heights or painted or marked or own or tight:
             # arranged first, then the 3MF edited (each part's brim, the changes at a height, the paint, where supports
             # go) and sliced as it is
+            process = sl.write_arrange_process(p, job.workdir) if tight else "process.json"
             code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient, slice_it=False,
-                                                         filaments=n, ids=ids))
+                                                         filaments=n, ids=ids, process=process))
             if code == 0 and os.path.exists(three_mf) and job.state != "cancelled":
-                own = os.path.join(job.workdir, "own.3mf")
+                own_3mf = os.path.join(job.workdir, "own.3mf")
                 try:
-                    await asyncio.to_thread(_own_plates, job, p, three_mf, own, orca_brims if mixed else None, files, painted, marked)
+                    await asyncio.to_thread(_own_plates, job, p, three_mf, own_3mf, orca_brims if mixed else None, files, painted, marked,
+                                            own)
                 except ValueError as e:
                     job.state, job.error = "failed", str(e)
                     return
-                code = await self._orca(job, sl.orca_slice_3mf(self.orca, job.workdir, own, out, filaments=n))
+                code = await self._orca(job, sl.orca_slice_3mf(self.orca, job.workdir, own_3mf, out, filaments=n))
         else:
             code = await self._orca(job, sl.orca_command(self.orca, job.workdir, models, out, job.req.orient,
                                                          filaments=n, ids=ids))
@@ -1237,7 +1247,8 @@ def _part(path: str, g: Dict[str, Any], lying: Optional[Dict[str, Any]] = None) 
                    lay=str(g.get("lay") or "file"), lying=lying, down=down if isinstance(down, list) else None,
                    brim=str(g.get("brim") or "auto"), spool=int(g.get("spool") or 0),
                    paint=g.get("paint") if g.get("paint") not in (None, []) else None,
-                   support_marks=g.get("support_marks") if g.get("support_marks") not in (None, []) else None)
+                   support_marks=g.get("support_marks") if g.get("support_marks") not in (None, []) else None,
+                   supports_where=str(g["supports_where"]) if g.get("supports_where") else None)
 
 
 def _heights(given: Any) -> List[sl.Height]:
@@ -1278,7 +1289,8 @@ def _spools(given: Any) -> List[sl.Spool]:
 
 
 def _own_plates(job: "Job", p: sl.Plan, src: str, dst: str, brims: Optional[List[str]], files: List[str],
-                painted: Dict[int, List[int]], marked: Optional[Dict[int, List[int]]] = None) -> None:
+                painted: Dict[int, List[int]], marked: Optional[Dict[int, List[int]]] = None,
+                settings: Optional[Dict[int, Dict[str, str]]] = None) -> None:
     heights = None
     if job.req.heights:
         first = float(_one(p.process.get("initial_layer_print_height"), 0.2))
@@ -1297,7 +1309,7 @@ def _own_plates(job: "Job", p: sl.Plan, src: str, dst: str, brims: Optional[List
             raise ValueError(f"{job.parts[i].name} has {len(tris)} triangles, but where its supports go is marked for "
                              f"{len(states)}: mark it again")
         marks[i] = (tris, states)
-    done, done_marks = sl.edit_plates(src, dst, brims=brims, heights=heights, paint=paint, marks=marks)
+    done, done_marks = sl.edit_plates(src, dst, brims=brims, heights=heights, paint=paint, marks=marks, settings=settings)
     for i in painted:
         if not done.get(i):
             job.warnings.append(f"{job.parts[i].name}'s paint couldn't be matched to the model as sliced, so it prints in one color.")

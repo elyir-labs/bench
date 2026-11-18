@@ -17,7 +17,16 @@
       <div class="screen-text"><span class="name">{{ r.name }}</span><span class="when">{{ r.line }}</span></div>
       <button v-if="!door.away" class="a-btn ghost back" :disabled="!!r.why || store.busyAction !== null" @click="store.act(r.action)">{{ r.action.label }}</button>
     </div>
-    <h2 class="group" v-if="intent?.hands || unitRows.length || setupRows.length">Maintenance</h2>
+    <!-- Spots the printer goes to (design/spots/): walked through it (B), numbers under Advanced (C) -->
+    <div v-for="r in spotRows" :key="r.kind" class="screen wrap spot-row" :class="{ off: !!spotsWhyNot }">
+      <div class="screen-text">
+        <span class="name">{{ r.name }}</span>
+        <span class="when">{{ spotsWhyNot || r.line }}</span>
+        <button v-if="!door.away && !spotsWhyNot" class="adv" @click="openNumbers(r.kind)">Advanced: type the numbers</button>
+      </div>
+      <button v-if="!door.away" class="a-btn ghost back" :disabled="!!spotsWhyNot || store.busyAction !== null" @click="startSpot(r.kind)">{{ intent?.spots?.guide?.kind === r.kind ? 'Continue' : r.set ? 'Set again' : 'Set' }}</button>
+    </div>
+    <h2 class="group" v-if="intent?.hands || unitRows.length || setupRows.length || spotRows.length">Maintenance</h2>
     <p class="sub">Small things, now and then, that keep prints looking good. The printer counts its own hours and asks when one is due.</p>
     <ul class="list" v-if="care && care.items.length">
       <li v-for="c in care.items" :key="c.id" :class="{ due: c.due }">
@@ -136,6 +145,35 @@
       </div>
     </div>
     <p class="sub tiny err" v-if="switchError || (!door.away && !embedded && intent?.printer.screen_switch_failed)">{{ switchError || intent?.printer.screen_switch_failed }}</p>
+    <!-- Updates (design/updates/, A + A): the release it runs, a newer one, and Update now -->
+    <div class="screen wrap update" v-if="upRow" :class="upRow.tone">
+      <div class="screen-text">
+        <span class="name">{{ upRow.title }}</span>
+        <span class="when">{{ upRow.line }}</span>
+        <span v-if="upRow.progress !== null" class="up-bar" aria-hidden="true"><i :style="{ width: upRow.progress * 100 + '%' }"></i></span>
+        <span v-if="upRow.small" class="up-small a-num">{{ upRow.small }}</span>
+      </div>
+      <button v-if="upRow.button" class="a-btn back" :class="upRow.button.disabled ? 'ghost' : upRow.tone === 'bad' ? 'ghost' : 'accent'"
+              :disabled="upRow.button.disabled || !connected" @click="updateAsking = true">{{ upRow.button.label }}</button>
+    </div>
+    <SliceSheet :open="updateAsking" :title="upAsk.title" :sub="upAsk.line" @close="updateAsking = false">
+      <p v-if="store.actionError && updateTried" class="sub tiny err" role="alert">{{ store.actionError }}</p>
+      <div class="up-acts">
+        <button class="a-btn ghost" @click="updateAsking = false">{{ upAsk.keep }}</button>
+        <button class="a-btn accent" :disabled="store.busyAction === 'update_now'" @click="updateNow">{{ upAsk.go }}</button>
+      </div>
+    </SliceSheet>
+    <!-- A USB stick (design/usb/): while one is in, Look asks again and Copy a report writes onto it -->
+    <div class="screen wrap update new" v-if="usbCare && allowedHere('usb_take')">
+      <div class="screen-text">
+        <span class="name">{{ usbCare.title }}</span>
+        <span class="when">{{ usbCare.line }}</span>
+      </div>
+      <div class="usb-btns" v-if="usbCare.buttons.length">
+        <button v-for="b in usbCare.buttons" :key="b.key" class="a-btn back" :class="b.key === 'look' ? 'accent' : 'ghost'"
+                :disabled="!connected || store.busyAction === 'usb_report'" @click="usbButton(b.key)">{{ b.label }}</button>
+      </div>
+    </div>
     <!-- Turn off (design/power/, A): the last of the printer's rows. The printer cools the nozzle first; Now shows the wait. -->
     <div class="screen wrap power" v-if="intent?.power">
       <div class="screen-text">
@@ -149,6 +187,7 @@
     </div>
     <PowerSheet :kind="powerAsk" @close="powerAsk = null" />
     <HandsSheet :open="handsOpen" @close="handsOpen = false" />
+    <SpotSheet :open="spotOpen" :numbers="spotNumbers" @close="spotOpen = false; spotNumbers = null" />
     <!-- Tell Elyir something (design/report/, B): a problem with its report, an idea, a request, anything -->
     <template v-if="!embedded">
       <h2 class="group">Help</h2>
@@ -182,6 +221,11 @@ import type { PowerKind } from '@/intent/power'
 import { keptLine, sheetLine, WHERE_KEPT } from '@/intent/firstLayer'
 import { rowLine } from '@/intent/hands'
 import HandsSheet from '@/components/hands/HandsSheet.vue'
+import SpotSheet from '@/components/spots/SpotSheet.vue'
+import SliceSheet from '@/components/slice/SliceSheet.vue'
+import { updateAsk, updateRow } from '@/intent/update'
+import { usbRow } from '@/intent/usb'
+import { usbUi } from '@/components/usb/usbUi'
 import { careRows } from '@/intent/unitCheck'
 import { careSetupRows } from '@/intent/unitSetup'
 import type { IntentAction } from '@/intent/types'
@@ -190,6 +234,19 @@ import { careLine, hostLine, type SlicerState } from '@/slice/elsewhere'
 const store = useIntentStore()
 const intent = computed(() => store.intent)
 const handsOpen = ref(false)
+const spotOpen = ref(false)
+const spotNumbers = ref<string | null>(null)
+const spotRows = computed(() => intent.value?.spots?.rows ?? [])
+const spotsWhyNot = computed(() => intent.value?.spots?.why_not ?? null)
+function startSpot(kind: string) {
+  spotNumbers.value = null
+  if (intent.value?.spots?.guide?.kind !== kind) void store.act('spot_start', { kind })
+  spotOpen.value = true
+}
+function openNumbers(kind: string) {
+  spotNumbers.value = kind
+  spotOpen.value = true
+}
 const handsOk = computed(() => !!intent.value?.hands && !intent.value.hands.why_not)
 const unitRows = computed(() => careRows(intent.value?.units?.list))
 const unitName = (r: { name: string; gear: boolean }) => {
@@ -250,6 +307,28 @@ async function choose(t: Theme) {
 // menu gets an Elyir Bench entry (the installer adds it) to come back.
 const confirmSwitch = ref(false)
 const telling = ref(false)
+// Updates (design/updates/, A + A)
+const updateAsking = ref(false)
+const updateTried = ref(false)
+const upRow = computed(() => {
+  const u = intent.value?.update
+  if (!u) return null
+  const i = intent.value!
+  const printing = !!i.job && ['preparing', 'printing', 'needs_you'].includes(i.state)
+  return updateRow(u, me.value, { printing, canAsk: allowedHere('update_now') })
+})
+const upAsk = computed(() => updateAsk(me.value))
+async function updateNow() {
+  updateTried.value = true
+  await store.act('update_now')
+  if (!store.actionError) updateAsking.value = false
+}
+// A USB stick (design/usb/)
+const usbCare = computed(() => usbRow(intent.value?.usb, me.value))
+async function usbButton(key: 'look' | 'report') {
+  if (key === 'look') usbUi.force = true
+  else await store.act('usb_report')
+}
 // Turn off / Restart (design/power/, A)
 const powerAsk = ref<PowerKind | null>(null)
 const canPower = computed(() => connected.value && !!intent.value?.power?.allowed && !intent.value?.power?.kind && allowedHere('power_off'))
@@ -362,7 +441,9 @@ async function act(action: 'care_done' | 'care_later', id: string) {
 .group { font-size: calc(13 * var(--u) + 4px); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--a-ink-3); margin: calc(18 * var(--u) + 6px) 0 0; }
 .hands.off .name { color: var(--a-ink-3); }
 .unit-row.off .name { color: var(--a-ink-3); }
-.first-layer .back, .hands .back, .lends .back, .tell .back, .unit-row .back { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
+.spot-row.off .name { color: var(--a-ink-3); }
+.adv { appearance: none; border: 0; background: none; padding: 6px 0 0; font: inherit; font-size: calc(11 * var(--u) + 4px); font-weight: 600; color: var(--a-accent-text); text-align: left; cursor: pointer; align-self: flex-start; }
+.first-layer .back, .hands .back, .lends .back, .tell .back, .unit-row .back, .spot-row .back { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
 .first-layer + .tiny { margin-top: 8px; }
 .actions.switch { flex: none; margin-top: 0; }
 
@@ -393,5 +474,13 @@ async function act(action: 'care_done' | 'care_later', id: string) {
 .seg-opt.on { background: var(--a-surface); color: var(--a-ink); box-shadow: var(--a-card-shadow); }
 .seg-opt[disabled] { opacity: 0.5; cursor: default; }
 .seg-opt:focus-visible { outline: 2px solid var(--a-accent); outline-offset: 2px; }
+.update.new { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a-accent) 55%, transparent); }
+.update.bad { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a-red) 50%, transparent); }
+.update .back { flex: none; min-height: 44px; padding: 0 calc(16 * var(--u) + 6px); font-size: calc(15 * var(--u) + 5px); }
+.up-small { font-size: calc(10 * var(--u) + 3px); color: var(--a-ink-3); margin-top: 2px; }
+.up-bar { display: block; height: 6px; border-radius: 3px; background: var(--a-surface-2); overflow: hidden; margin-top: 8px; }
+.up-bar i { display: block; height: 100%; background: var(--a-accent); }
+.usb-btns { display: flex; gap: 10px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.up-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .on-now { font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--a-accent); background: color-mix(in srgb, var(--a-accent) 14%, transparent); padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: 2px; }
 </style>

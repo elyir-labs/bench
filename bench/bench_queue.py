@@ -266,7 +266,7 @@ class Queue:
 
     async def _look(self) -> None:
         printers = self.printers()
-        for pid, p in printers.items():
+        for pid, p in list(printers.items()):
             await self._intent(pid, p)
         # a printer holding a queued print that started something else: that print waits again
         for it in self.items:

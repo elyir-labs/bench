@@ -137,7 +137,8 @@ phones only.
 The door follows Moonraker's `notify_elyir_bench_event` and catches up through
 `printer.intent.events` after a reconnect, using `boot` as the only resync signal. Each event is
 sent to every subscribed phone whose kinds include it (no `kinds` means all, including kinds added
-later), with `Urgency` from the event, `Topic` from its tag, and a TTL by kind. Low and very-low
+later), with `Urgency` from the event, `Topic` from its tag (hashed to 32 hex characters: Apple's push service refuses a
+hyphen with 400 BadWebPushTopic, found 7 November 2026), and a TTL by kind. Low and very-low
 events are held overnight in each phone's own time zone and sent in the morning while still
 within their TTL; high is never held. Subscriptions the push service says are gone (404 or 410)
 are dropped.
@@ -249,6 +250,24 @@ own secret (`state/bench/box/relay.json`), as one more site on the same Caddy, i
 
 Tried 6 October 2026 against a simulated Kobra with a stand-in relay: paired from the Kobra's screen on the box, watched
 through its away listener (G-code refused from away), and a problem on the printer reached the door as a push to send.
+
+**The account lets a phone in** (`design/account-list/`, A). A printer in an Elyir account (`cloud.json`) takes
+`POST /door/account {pass, name}`, at home or away, with no phone paired: the pass comes from Bench Cloud
+(`POST /v1/passes`, good once for two minutes), the door asks Bench Cloud whether it's real (`POST /v1/passes/check`
+with its device token) and answers as `/door/pair` does, with a token. The phone's record carries `account`, the
+sign-in's id: one record per sign-in, a new token each time. Every five minutes, and when it joins, the door tells
+Bench Cloud where it answers (`POST /v1/door {printer, name, addresses}`) and is told the sign-ins still live; a phone
+the account let in whose sign-in ended is taken off. Only on a clear answer: Bench Cloud out of reach, or unable to say
+(`sessions: null`), changes nothing, and a 401 (taken out of the account) takes them all off. Phones paired at the
+printer are never touched by this. Wrong passes count as wrong codes.
+
+A phone the box carried to a new Kobra (`design/new-kobra/`, B; docs/bench.md "Joins by itself") comes in with any token it
+holds for a sibling (`also` in its record). `GET /door/me` lists, in `joined`, the printers the box added beside this one
+and carried that phone to (`joined.json` next to `phones.json`, written by the box, kept a week). The house listener's
+`POST /door/announce` sends a `joined` push once in the door's life, to every phone whatever kinds it chose.
+`POST /door/not-mine` lets a carried phone, in its first week, hand Not mine to the box (`--not-mine-url`).
+`/door/me` also lists, in `left`, the names of printers the box took off the bench as not ours (`left.json`, written by
+the box): the Printers app drops a record it picked up from `joined` with this door's token, never one paired by hand.
 
 ## Living with a hub
 

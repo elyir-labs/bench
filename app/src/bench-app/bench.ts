@@ -117,3 +117,18 @@ export function offLine(tiles: Tile[]): string | null {
   const off = tiles.filter((t) => t.tone === 'off').map((t) => t.name)
   return off.length ? [`${off.length} off`, ...off].join(' · ') : null
 }
+
+/** Inside one printer (design/bench-7in/, A): the other printer that most needs a person, as a chip in the top line. */
+export function needChip(tiles: Tile[], openId: string): { id: string; label: string; tone: Tone } | null {
+  const t = tiles.find((x) => x.id !== openId && x.rank <= 2)
+  if (!t) return null
+  const what = t.tone === 'red' ? 'stopped' : t.queued ? 'is next' : 'needs you'   // the home's sentence says the same
+  return { id: t.id, label: `${t.name} ${what}`, tone: t.tone }
+}
+
+/** A tile's one line under its name and state (design/bench-7in/, A): when it's done, what's on the bed, or what's loaded. */
+export function tileLine(t: Tile): string {
+  if (t.rank === 3) return t.says
+  if (t.rank === 4) return t.what || t.says
+  return t.what ? `${t.says} ${t.what}`.trim() : t.says
+}

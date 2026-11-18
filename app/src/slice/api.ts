@@ -87,6 +87,7 @@ export interface PartRequest {
   spool?: number                   // which of the plate's colors, when it has several
   paint?: number[]                 // painted (design/paint-and-height/, A): [color, count, ...] over its triangles
   support_marks?: number[]         // where supports go (design/supports-where/, A): [mark, count, ...]; 1 here, 2 not here
+  supports_where?: 'only' | 'none'  // this part's own: only where marked, or none on it (round 2)
 }
 export interface SliceRequest {
   parts: PartRequest[]
@@ -191,5 +192,5 @@ export const getSupportLines = (id: string) =>
   fetch(`${BASE}/${id}/supports`, opts()).then(r => json<{ count: number; width: number; segs: string }>(r)).then(decodeLines)
 
 /** How many of one part fit on a plate with the others ("Fill the plate"). Orca arranges; nothing is sliced. */
-export const fitPart = (req: { printer: string; parts: PartRequest[]; part: number }) =>
+export const fitPart = (req: { printer: string; parts: PartRequest[]; part: number; supports?: string; supports_where?: 'needed' | 'only' }) =>
   fetch(`${BASE}/fit`, opts({ method: 'POST', body: JSON.stringify(req), headers: { 'content-type': 'application/json' } })).then(r => json<FitAnswer>(r))

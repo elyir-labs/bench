@@ -37,3 +37,12 @@ test('the toast says when the printer may still know this phone', () => {
   assert.equal(toastWords('Workshop', false), 'Workshop is off this phone.')
   assert.match(toastWords('Workshop', true), /Care › Phones/)
 })
+
+test("a printer in the signed-in account is removed from the account, for every phone", () => {
+  const w = sheetWords('Workshop', 'reachable', true)
+  assert.equal(w.title, 'Remove Workshop from your account?')
+  assert.match(w.body, /every phone and computer signed in/)
+  assert.equal(w.offer, null)
+  assert.match(sheetWords('Workshop', 'gone', true).note!, /leaves your account all the same/)
+  assert.equal(toastWords('Workshop', false, true), 'Workshop is out of your account.')
+})

@@ -142,12 +142,35 @@ class Phones:
         self.save()
         return phone, token
 
+    def let_in(self, session: str, name: str) -> tuple[dict, str]:
+        """A phone or computer signed in to the printer's Elyir account (design/account-list/, A): one record per
+        sign-in, with a new token each time it comes back with a pass."""
+        old = next((p for p in self.items if p.get("account") == session), None)
+        if old is None:
+            phone, token = self.pair(name)
+            phone["account"] = session
+        else:
+            phone, token = old, secrets.token_urlsafe(32)
+            phone.update(token=_hash(token), last_seen=self.now())
+        self.save()
+        return phone, token
+
+    def keep_signed_in(self, sessions: list[str]) -> list[dict]:
+        """Take off the phones the account let in whose sign-in has ended. Phones paired at the printer stay."""
+        gone = [p for p in self.items if p.get("account") and p["account"] not in sessions]
+        if gone:
+            self.items = [p for p in self.items if p not in gone]
+            self.save()
+        return gone
+
     def identify(self, token: str | None) -> dict | None:
         if not token:
             return None
         h = _hash(token)
         for p in self.items:
-            if hmac.compare_digest(p["token"], h):
+            # A phone the Bench Box carried here from the printer's siblings (design/new-kobra/, B) keeps the tokens
+            # it already holds for them: one per sibling it was paired with.
+            if any(hmac.compare_digest(t, h) for t in [p["token"], *p.get("also", [])]):
                 return None if self.ended(p) else p
         return None
 
@@ -296,7 +319,10 @@ class Asks:
 # ── push ─────────────────────────────────────────────────────────────────────
 
 TTL = {"problem": 2 * 86400, "needs_you": 2 * 86400, "finished": 6 * 3600,
-       "ready_to_lift": 12 * 3600, "care_due": 86400}
+       "ready_to_lift": 12 * 3600, "care_due": 86400, "joined": 86400}
+EVERY_PHONE = {"joined"}                 # once in a printer's life: not a kind anyone turned off
+JOINED_KEEP = 7 * 86400                  # how long a printer the box added stays in its siblings' /door/me
+NOT_MINE_DAYS = 7 * 86400                # how long a carried phone may still say a printer isn't theirs
 QUIET = (22, 8)                          # held overnight, phone's own clock: 22:00 to 08:00
 HOLDABLE = {"low", "very-low"}
 
@@ -317,6 +343,13 @@ def vapid_subject(address: str | None) -> str:
     if "." in host and not host.replace(".", "").isdigit():
         return f"https://{host}"
     return "mailto:door@example.net"
+
+
+def push_topic(tag: str) -> str:
+    """The Topic header for a notification's tag. Apple's push service answers 400 BadWebPushTopic to a hyphen (seen
+    7 November 2026, though RFC 8030 allows the base64url alphabet), so the tag is hashed to 32 hex characters: the same
+    tag still replaces its last notification, on every push service."""
+    return hashlib.sha256(tag.encode()).hexdigest()[:32]
 
 
 class Push:
@@ -365,7 +398,7 @@ class Push:
         out = []
         for p in self.phones.items:
             sub = p.get("push")
-            if sub and (sub.get("kinds") is None or kind in sub["kinds"]):
+            if sub and (kind in EVERY_PHONE or sub.get("kinds") is None or kind in sub["kinds"]):
                 out.append(p)
         return out
 
@@ -417,7 +450,7 @@ class Push:
     async def _deliver(self, p: dict, item: dict) -> int:
         headers = {"Urgency": item["urgency"]}
         if item.get("topic"):
-            headers["Topic"] = item["topic"]
+            headers["Topic"] = push_topic(item["topic"])
         ttl = max(0, int(item["expires"] - self.now()))
         key = (p["push"].get("vapid") or {}).get("privateKey")
         status = await asyncio.get_running_loop().run_in_executor(
@@ -547,6 +580,7 @@ HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization", 
 
 SHELL = "https://printers.elyir.app"
 SHELL_ORIGINS = (SHELL, "http://localhost:5173")
+ACCOUNT_EVERY = 300                      # how often a door in an account tells Bench Cloud where it answers
 CLOUD_API = "https://cloud.elyir.dev"   # Bench Cloud; a phone may name another (docs/cloud.md)
 TOKEN_PROTOCOL = "elyir-bench-token."
 WS_PROTOCOL = "elyir-bench"
@@ -579,7 +613,8 @@ class Door:
 
     def __init__(self, state: Path, moonraker: str, app_url: str, camera_url: str, address: str | None,
                  now=time.time, sender=None, home_address: str | None = None, printer_id: str | None = None,
-                 printer_name: str | None = None, shell_origins=SHELL_ORIGINS, printers_app: str | None = None):
+                 printer_name: str | None = None, shell_origins=SHELL_ORIGINS, printers_app: str | None = None,
+                 not_mine_url: str | None = None):
         state.mkdir(parents=True, exist_ok=True)
         self.state, self.moonraker, self.app_url, self.camera_url = state, moonraker.rstrip("/"), app_url.rstrip("/"), camera_url.rstrip("/")
         self.address, self._home_address, self.now = address, home_address, now
@@ -597,6 +632,7 @@ class Door:
         self.asks = Asks(self.phones, now)
         self.push = Push(state, self.phones, vapid_subject(address), now, sender, printer=self.printer_id)
         self.follower = Follower(moonraker, state, self.push)
+        self.not_mine_url = not_mine_url      # a Kobra's Bench Box, which takes it off the bench
         self.session: ClientSession | None = None
 
     # ---- shared helpers ----
@@ -671,6 +707,7 @@ class Door:
         app.on_response_prepare.append(self._headers)
         app.router.add_get("/door/me", self.me)
         app.router.add_delete("/door/me", self.forget_me)
+        app.router.add_post("/door/not-mine", self.not_mine)
         app.router.add_put("/door/me/origins", self.my_origins)
         app.router.add_get("/door/frames", self.frames)
         app.router.add_post("/door/pair", self.pair)
@@ -690,6 +727,7 @@ class Door:
         # Bench Cloud (docs/cloud.md): how it is, from anywhere; joining a house, at home
         app.router.add_get("/door/cloud", self.cloud_status)
         app.router.add_post("/door/cloud/join", self.cloud_join if role == "home" else self.at_home)
+        app.router.add_post("/door/account", self.account)      # its account lets a signed-in phone in, home or away
         app.router.add_get("/door/report", self.report_preview)
         app.router.add_post("/door/report", self.report_send)
         if role == "home":                     # a paired phone at home may add and remove phones, like the panel
@@ -740,7 +778,7 @@ class Door:
                 return web.json_response({"detail": "origin"}, status=403)
         if phone:
             self.phones.seen(phone, request.headers.get("X-Forwarded-Host", request.host).split(":")[0])
-        elif path not in ("/door/me", "/door/pair", "/door/ask", "/door/frames") and not path.startswith("/door/ask/") and path.startswith(API_PREFIXES):
+        elif path not in ("/door/me", "/door/pair", "/door/ask", "/door/frames", "/door/account") and not path.startswith("/door/ask/") and path.startswith(API_PREFIXES):
             return web.json_response({"detail": "phone", "message": "This printer isn't open from here."}, status=401)
         return await handler(request)
 
@@ -750,8 +788,57 @@ class Door:
                                   "printer": {"id": self.printer_id, "name": self.printer_name},
                                   "addresses": self.addresses(), "phone": Phones.public(p) if p else None,
                                   "actions": sorted(AWAY_ACTIONS) if role == "away" else None,
+                                  "joined": self.joined_for(p) if p else [],
+                                  "left": self.left() if p else [],
                                   # not secret: which pages the printer's screens may hand their token to
                                   "frames": sorted(self.origins())})
+
+    def joined_for(self, phone: dict) -> list[dict]:
+        """Printers the Bench Box added beside this one and carried this phone to (design/new-kobra/, B): the
+        Printers app adds them with the token it already holds here. The box writes joined.json."""
+        try:
+            items = json.loads((self.state / "joined.json").read_text())
+        except (OSError, ValueError):
+            return []
+        return [{k: j.get(k) for k in ("id", "name", "addresses", "at")} for j in items
+                if phone["id"] in (j.get("phones") or []) and self.now() - float(j.get("at") or 0) < JOINED_KEEP]
+
+    def left(self) -> list[str]:
+        """Printers the Bench Box took off the bench as not ours: the Printers app drops the record it picked up from
+        `joined` for one. The box writes left.json."""
+        try:
+            return [str(n) for n in json.loads((self.state / "left.json").read_text())]
+        except (OSError, ValueError, TypeError):
+            return []
+
+    async def not_mine(self, request: web.Request) -> web.Response:
+        """Not mine (design/new-kobra/, B): a phone the box carried here says this printer isn't theirs, and the box
+        takes it off the bench and remembers it. Only a carried phone, in its first days here."""
+        p = request["phone"]
+        if not p.get("carried_from") or self.now() - float(p.get("joined") or 0) > NOT_MINE_DAYS:
+            return web.json_response({"detail": "not_mine", "message": "Remove it from your list instead."}, status=403)
+        if not self.not_mine_url:
+            return web.json_response({"detail": "not_mine", "message": "Take it off on the Bench Box."}, status=409)
+        try:
+            async with self.session.post(self.not_mine_url, json={"phone": p["name"]}, timeout=ClientTimeout(total=10)) as r:
+                if r.status >= 400:
+                    raise ValueError(r.status)
+        except (ClientError, asyncio.TimeoutError, ValueError):
+            return web.json_response({"detail": "box", "message": "The Bench Box didn't answer. Try again."}, status=502)
+        return web.Response(status=202)
+
+    async def announce(self, request: web.Request) -> web.Response:
+        """The box says this printer just joined the bench: told once to every phone it was carried to. Once in the
+        door's life, since the house listener is open to the Wi-Fi as the panel is."""
+        told = self.state / "announced.json"
+        if told.exists():
+            return web.json_response({"detail": "announced", "message": "Already told."}, status=409)
+        body = await request.json()
+        told.write_text(json.dumps({"at": self.now()}))
+        sent = await self.push.send_event({"kind": "joined", "title": str(body.get("title") or "")[:80],
+                                           "body": str(body.get("body") or "")[:200], "tag": f"joined-{self.printer_id}",
+                                           "url": body.get("url"), "urgency": "normal"})
+        return web.json_response({"sent": sent})
 
     async def forget_me(self, request: web.Request) -> web.Response:
         """The Printers app's Remove (design/printers-remove/, A): this phone takes itself off, home or away.
@@ -915,6 +1002,7 @@ class Door:
         app.router.add_get("/door/cloud", self.cloud_status)       # the panel says whether it's backed up
         app.router.add_get("/door/report", self.report_preview)    # Tell Elyir something (design/report/, B)
         app.router.add_post("/door/report", self.report_send)
+        app.router.add_post("/door/announce", self.announce)
         return app
 
     home_app = house_app
@@ -1088,12 +1176,74 @@ class Door:
         tmp.write_text(json.dumps(me, indent=1))
         os.chmod(tmp, 0o600)
         os.replace(tmp, path)
+        asyncio.create_task(self._account_sync())      # the account learns where this door answers at once
         return web.json_response({"joined": True, "name": me["name"], "house": me["house"]})
+
+    async def _cloud_call(self, path: str, body: dict) -> tuple[int, dict]:
+        me = self._cloud_file("cloud.json")
+        if not me.get("token"):
+            return 0, {}
+        try:
+            async with self.session.post(f"{me['api']}{path}", json=body, headers={"Authorization": f"Bearer {me['token']}"},
+                                         timeout=ClientTimeout(total=15)) as r:
+                got = await r.json(content_type=None)
+                return r.status, got if isinstance(got, dict) else {}
+        except (ClientError, asyncio.TimeoutError, ValueError):
+            return 0, {}
+
+    async def account(self, request: web.Request) -> web.Response:
+        """design/account-list/, A: a phone signed in to the Elyir account this printer is in comes with a pass from
+        Bench Cloud, and is let in like a paired phone, at home or away. The printer asks Bench Cloud whether the
+        pass is real; a printer in no account says so."""
+        who = self.who(request)
+        wait = self.codes.wait(who)
+        if wait > 0:
+            return web.json_response({"detail": "wait", "message": f"Too many tries. Wait {int(wait) + 1} seconds."}, status=429)
+        body = await request.json()
+        given = str(body.get("pass") or "")
+        if not self._cloud_file("cloud.json").get("token"):
+            return web.json_response({"detail": "account", "message": "This printer isn't in an Elyir account."}, status=409)
+        status, got = (await self._cloud_call("/v1/passes/check", {"pass": given})) if given.startswith("a_") else (403, {})
+        if status == 0:
+            return web.json_response({"detail": "cloud", "message": "Bench Cloud can't be reached right now."}, status=502)
+        if status != 200 or not got.get("session"):
+            self.codes.take("", who)                    # a wrong pass counts as a wrong code
+            return web.json_response({"detail": "pass", "message": "That sign-in didn't open this printer."}, status=401)
+        phone, token = self.phones.let_in(str(got["session"]), str(body.get("name") or ""))
+        log.info("let in %s by its account from %s (%s)", phone["name"], who, request.app["role"])
+        self._changed()
+        return web.json_response({"paired": True, "phone": Phones.public(phone), "token": token,
+                                  "printer": {"id": self.printer_id, "name": self.printer_name}, "addresses": self.addresses()})
+
+    async def _account_sync(self) -> None:
+        """Tell Bench Cloud where this door answers, so a newly signed-in phone finds it, and take off the phones
+        whose sign-in ended. Only on a clear answer: Bench Cloud out of reach changes nothing here."""
+        status, got = await self._cloud_call("/v1/door", {"printer": self.printer_id, "name": self.printer_name,
+                                                          "addresses": self.addresses()})
+        gone = []
+        if status == 200 and isinstance(got.get("sessions"), list):
+            gone = self.phones.keep_signed_in([str(x) for x in got["sessions"]])
+        elif status == 401:                              # taken out of the account
+            gone = self.phones.keep_signed_in([])
+        for p in gone:
+            log.info("%s: its sign-in ended, taken off", p["name"])
+        if gone:
+            self._changed()
+
+    async def _account(self) -> None:
+        await asyncio.sleep(20)
+        while True:
+            try:
+                await self._account_sync()
+            except Exception:
+                log.exception("keeping up with the account")
+            await asyncio.sleep(ACCOUNT_EVERY)
 
     # ---- running ----
     async def background(self, app: web.Application):
         self.session = ClientSession(timeout=ClientTimeout(total=None, sock_connect=10))
-        tasks = [asyncio.create_task(self.follower.run()), asyncio.create_task(self._mornings())]
+        tasks = [asyncio.create_task(self.follower.run()), asyncio.create_task(self._mornings()),
+                 asyncio.create_task(self._account())]
         yield
         for t in tasks:
             t.cancel()
@@ -1112,7 +1262,7 @@ async def serve(args) -> None:
     door = Door(Path(args.state), args.moonraker, args.app, args.camera, args.address or None,
                 home_address=args.home_address or None, printer_id=args.printer_id or None,
                 printer_name=args.printer_name or None, shell_origins=tuple(args.shell_origin or SHELL_ORIGINS),
-                printers_app=args.printers_app or None)
+                printers_app=args.printers_app or None, not_mine_url=args.not_mine_url or None)
     away, local, house = door.away_app(), door.local_app(), door.house_app()
     away.cleanup_ctx.append(door.background)
     runners = []
@@ -1142,6 +1292,7 @@ def main() -> None:
     ap.add_argument("--printer-name", default="", help="what people call it, e.g. Workshop")
     ap.add_argument("--shell-origin", action="append", help="an origin allowed to call and frame this printer (repeatable)")
     ap.add_argument("--printers-app", default="", help="the Printers app this printer's pairing code opens (staging's), allowed too")
+    ap.add_argument("--not-mine-url", default="", help="a Kobra's Bench Box: where a carried phone's Not mine goes")
     ap.add_argument("--away-port", type=int, default=8089)
     ap.add_argument("--local-port", type=int, default=8091)
     ap.add_argument("--home-port", type=int, default=8090)

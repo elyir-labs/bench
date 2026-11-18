@@ -9,7 +9,8 @@
 import { reactive, ref } from 'vue'
 import { IntentClient } from '@/intent/client'
 import type { Intent } from '@/intent/types'
-import { del, getAll, put } from './db'
+import { del, get, getAll, put } from './db'
+import { toAdd, toDrop, type Joined } from './joined'
 import { lookHomeNow, nextStep } from './reach'
 
 export interface Addresses {
@@ -24,6 +25,10 @@ export interface PrinterRecord {
   token: string
   added: number
   kind?: 'bench'        // a Bench Box (design/bench-look/, C): reached by its public name, its printers asked through it
+  joined?: number       // ms: the Bench Box added it and carried this phone to it (design/new-kobra/, B)
+  account?: string      // its device in the Elyir account's house (design/account-list/, A), with that house
+  house?: string
+  letIn?: boolean       // opened by the account's pass, never paired by hand: goes when this phone signs out
 }
 
 /** A Bench Box this phone is paired with: kept apart from the printers (no live connection, notifications or screens
@@ -59,6 +64,8 @@ export interface DoorMe {
   printer: { id: string; name: string }
   addresses: Addresses
   actions: string[] | null
+  joined?: Joined[]
+  left?: string[]
 }
 
 export async function doorMe(base: string, token: string, ms: number): Promise<DoorMe | null> {
@@ -77,7 +84,9 @@ function byId(id: string): LivePrinter | undefined {
 }
 
 export function recordOf(p: LivePrinter): PrinterRecord {
-  return { id: p.id, name: p.name, addresses: { ...p.addresses }, token: p.token, added: p.added, ...(p.kind ? { kind: p.kind } : {}) }
+  return { id: p.id, name: p.name, addresses: { ...p.addresses }, token: p.token, added: p.added, ...(p.kind ? { kind: p.kind } : {}),
+    ...(p.joined ? { joined: p.joined } : {}), ...(p.account ? { account: p.account, house: p.house } : {}),
+    ...(p.letIn ? { letIn: true } : {}) }
 }
 
 const inFlight = new Map<string, Promise<void>>()
@@ -144,6 +153,44 @@ async function probe(id: string): Promise<void> {
     p.base = base
     connect(p)
   }
+  if (me.joined?.length) void pickUpJoined(me.joined, p.token)
+  const gone = toDrop(me.left, p.token, printers)
+  if (gone.length) void dropLeft(gone)
+}
+
+const OFFERED = 'joined-offered'
+
+/** Printers the Bench Box carried this phone to, as a sibling's door lists them: each one added once. */
+async function pickUpJoined(joined: Joined[], token: string): Promise<void> {
+  const offered = new Set((await get<string[]>('kv', OFFERED)) ?? [])
+  const fresh = toAdd(joined, token, new Set(printers.map((p) => p.id)), offered, Date.now())
+  if (!fresh.length) return
+  for (const r of fresh) offered.add(r.id)
+  await put('kv', [...offered], OFFERED)
+  for (const r of fresh) await savePrinter(r)
+}
+
+/** Taken off the bench on the box: gone from this phone too, and offered again if the box brings it back. */
+async function dropLeft(ids: string[]): Promise<void> {
+  const offered = ((await get<string[]>('kv', OFFERED)) ?? []).filter((id) => !ids.includes(id))
+  await put('kv', offered, OFFERED)
+  for (const id of ids) await forgetPrinter(id)
+}
+
+/** Not mine: the printer's door tells its Bench Box, which takes it off the bench; then it goes from this phone. */
+export async function notMine(id: string): Promise<'done' | 'unreachable' | 'refused' | 'failed'> {
+  const p = byId(id)
+  if (!p?.base) return 'unreachable'
+  try {
+    const r = await fetch(`${p.base}/door/not-mine`, { method: 'POST', headers: { Authorization: `Bearer ${p.token}` },
+      signal: AbortSignal.timeout(15_000) })
+    if (r.status === 403) return 'refused'
+    if (!r.ok) return 'failed'
+  } catch {
+    return 'failed'
+  }
+  await forgetPrinter(id)
+  return 'done'
 }
 
 function connect(p: LivePrinter) {
@@ -263,6 +310,14 @@ export async function forgetPrinter(id: string): Promise<void> {
   if (i >= 0) printers.splice(i, 1)
   const j = benches.findIndex((b) => b.id === id)
   if (j >= 0) benches.splice(j, 1)
+}
+
+/** Remembered as the account's (or, with null, no longer). */
+export async function markAccount(id: string, device: string | null, house?: string): Promise<void> {
+  const p = byId(id)
+  if (!p) return
+  if (device) { p.account = device; p.house = house } else { delete p.account; delete p.house; delete p.letIn }
+  await put('printers', recordOf(p))
 }
 
 export function printerById(id: string): LivePrinter | undefined {

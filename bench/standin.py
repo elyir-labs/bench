@@ -51,6 +51,10 @@ except ImportError:   # pragma: no cover
     care = None
 
 log = logging.getLogger("standin")
+try:
+    BOX_VERSION: Optional[str] = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+except OSError:
+    BOX_VERSION = None
 
 SLICER_HEADER = "X-Elyir-Bench-Printer"
 PROFILE_DIR = "elyir-bench-slicer"
@@ -519,6 +523,7 @@ class Standin:
         i["printer"]["screen_switch_failed"] = None
         i["printer"]["screen_trial"] = None
         i["printer"]["standin"] = "bench"     # spoken for by the Bench Box
+        i["update"] = {"with_box": True, "version": BOX_VERSION}   # its screens are the box's (design/updates/)
         i["setup"] = {"open": self.setup_open()}
         if self.down_since is None:
             self.last_up_intent = i

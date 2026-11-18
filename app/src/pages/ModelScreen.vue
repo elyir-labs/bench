@@ -343,7 +343,7 @@
                  :start-spool="heightAt >= 0 ? session.heights[heightAt]?.spool : undefined"
                  @close="heightOpen = false" @add="addHeight" @remove="dropHeight" />
     <WhereScreen :open="whereAt >= 0" :name="whereOn ? partName(whereOn) : ''" :tris="whereOn?.tris ?? null" :scale="whereOn?.scale ?? 1"
-                 :color="whereOn ? partColor(whereOn) : colour" :marks="whereOn?.marks ?? null" :where="session.where" :angle="supportAngle()"
+                 :color="whereOn ? partColor(whereOn) : colour" :marks="whereOn?.marks ?? null" :where="whereOn?.noSupports ? 'none' : whereOn?.where ?? 'needed'" :angle="supportAngle()"
                  @close="whereAt = -1" @done="whereDone" />
     <PaintScreen :open="paintAt >= 0" :name="painting ? partName(painting) : ''" :tris="painting?.tris ?? null" :paint="painting?.paint ?? null"
                  :own="painting?.spool ?? 0" :choices="trayChoices" @close="paintAt = -1" @done="paintDone" />
@@ -464,15 +464,31 @@
           <span class="tm a-num"><b>{{ kindTime(k) }}</b><span>{{ kindGrams(k) }}</span></span>
         </button>
       </div>
-      <template v-if="session.supports !== 'off' && markParts.length">
+      <!-- design/supports-where/ round 2, 2A: on a plate of several, each part's own switch, and its places -->
+      <template v-if="eachParts.length > 1">
+        <p class="where-lbl">Each part</p>
+        <div class="each">
+          <div v-for="{ p, i } in eachParts" :key="p.key" class="each-row">
+            <ModelPicture :tris="p.tris" :color="partColor(p)" alt="" class="thumb" />
+            <button class="t" :disabled="!canPlace(p)" @click="openWhere(i)">
+              <b>{{ partName(p) }}</b><span :class="{ you: p.noSupports && session.supports !== 'off' }">{{ eachLine(p) }}</span>
+              <em v-if="canPlace(p)">Places ›</em>
+            </button>
+            <button v-if="needsAny(p)" type="button" role="switch" class="tg" :class="{ on: partSupported(p) }" :aria-checked="partSupported(p)"
+                    :aria-label="`Supports on ${partName(p)}`" @click="setPartSupports(i, !partSupported(p))"></button>
+          </div>
+        </div>
+      </template>
+      <template v-else-if="session.supports !== 'off' && markParts.length">
         <p class="where-lbl">Where they go</p>
         <div class="opts">
           <button v-for="{ p, i } in markParts" :key="p.key" class="opt where-row" @click="openWhere(i)">
-            <span class="t"><b>{{ markParts.length > 1 ? partName(p) : session.where === 'only' ? 'Only where I say' : 'Wherever it\'s needed' }}</b><span>{{ whereLine(p) }}</span></span>
+            <span class="t"><b>{{ p.noSupports ? 'None' : p.where === 'only' ? 'Only where I say' : 'Wherever it\'s needed' }}</b><span>{{ eachLine(p) }}</span></span>
             <span class="go">Choose</span>
           </button>
         </div>
       </template>
+      <button class="a-btn accent edit-done" @click="open = null">Done</button>
     </SliceSheet>
 
     <!-- One setting (design/edit-settings/, C): its control, its real price, and whether it's kept -->
@@ -542,7 +558,7 @@ import HeightSheet from '@/components/slice/HeightSheet.vue'
 import PaintScreen from '@/components/slice/PaintScreen.vue'
 import WhereScreen from '@/components/slice/WhereScreen.vue'
 import { mm, paintUses } from '@/slice/paint'
-import { isOn as isOnPlace } from '@/slice/places'
+import { isOn as isOnPlace, type PartWhere } from '@/slice/places'
 import { needsSheet } from '@/intent/colour'
 import {
   session, current, only, plate, tooBig, addFiles, askFill, downOf, followSpools, onlyWhatFits, removePart, reset, send,
@@ -550,7 +566,7 @@ import {
   setSetting, setScope, resetPurpose, wanted, isKept, undoRemove, openPicker, pick, closePicker, setBrim, retry,
   multi, plateSpools, runs, partRuns, unsortedColors, setPartSpool, setPlateSpool, setPurge, setOneAfterOther, oneColor,
   paintable, canHeight, spotted, setHeight, removeHeight, restoreHeights, setPaint, dismissOffer, leftOutPlate,
-  markable, marksSummary, placesOf, setMarks, supportAngle,
+  markable, marksSummary, partSupported, placesOf, setMarks, setPartSupports, supportAngle,
 } from '@/slice/session'
 import { colorWord, costLine, footColors, PURGE_WORDS, spoolLine, tooMany, tooManyWords, type PlateSpool, type Purge } from '@/slice/colors'
 import { offTitle, readyNote, waitWords } from '@/slice/elsewhere'
@@ -620,20 +636,41 @@ const total = (j: { estimate?: { seconds: number | null; changes_seconds?: numbe
   j?.estimate?.seconds == null ? null : j.estimate.seconds + (j.estimate.changes_seconds ?? 0)
 const time = computed(() => humanDuration(total(job.value)))
 const grams = computed(() => (job.value?.estimate?.grams != null ? `${Math.round(job.value.estimate.grams)} g` : ''))
-const sup = computed(() => supportsWords(session.supports, job.value?.state === 'done' ? job.value.supports_added : null, session.usual,
-  session.supports === 'off' ? null : whereWords(session.where, marksSummary(), marksSummary().on)))
+// round 2: each part may go without; Ready says which, and how many of those that could have them do
+const sup = computed(() => {
+  const w = supportsWords(session.supports, job.value?.state === 'done' ? job.value.supports_added : null, session.usual,
+    session.supports === 'off' ? null : plateWhere.value)
+  const could = eachParts.value.filter(({ p }) => needsAny(p)), on = could.filter(({ p }) => partSupported(p)).length
+  return on && on < could.length ? { ...w, value: `${w.value} · ${on} of ${could.length} parts` } : w
+})
+const plateWhere = computed(() => {
+  const held = session.parts.filter(p => partSupported(p))
+  const marked = held.filter(p => markable(p) && placesOf(p).length), s = marksSummary(held)
+  const said = whereWords(marked.length && marked.every(p => p.where === 'only') ? 'only' : 'needed', s, s.on)
+  const off = eachParts.value.filter(({ p }) => p.noSupports && needsAny(p))
+  const none = !off.length ? null : off.length === 1 ? `None on the ${partName(off[0].p).toLowerCase()}` : `None on ${off.length} parts`
+  const out = [said, none].filter(Boolean).join(' · ')
+  return out ? out[0].toUpperCase() + out.slice(1) : null
+})
 // where they go (design/supports-where/, A): a row per part on the Supports sheet, opening the part seen from below
-const markParts = computed(() => session.parts.map((p, i) => ({ p, i })).filter(({ p }) => markable(p)).slice(0, 6))
-function whereLine(p: Part) {
+const markParts = computed(() => session.parts.map((p, i) => ({ p, i })).filter(({ p }) => markable(p)))
+const eachParts = computed(() => session.parts.map((p, i) => ({ p, i })).filter(({ p }) => !p.project))
+/** It may want supports: not an STL known to have nothing pointing down. */
+const needsAny = (p: Part) => !markable(p) || !!placesOf(p).length
+const canPlace = (p: Part) => markable(p) && !!placesOf(p).length && partSupported(p)
+function eachLine(p: Part) {
+  if (!needsAny(p)) return 'Nothing points down far enough to need any'
+  if (session.supports === 'off') return 'No supports'
+  if (p.noSupports) return 'No supports · you turned it off'
+  if (!markable(p)) return "Where it's needed"
   const at = placesOf(p), on = at.filter(q => isOnPlace(q, p.marks)).length
-  if (!at.length) return 'Nothing points down far enough to need supports'
-  const s = marksSummary([p]), said = whereWords(session.where, s, s.on)
-  return said ?? `${at.length} ${at.length === 1 ? 'place points' : 'places point'} down · Orca supports ${on}`
+  const s = marksSummary([p]), said = whereWords(p.where, s, s.on)
+  return said ?? `Where it's needed · Orca supports ${on} of ${at.length} ${at.length === 1 ? 'place' : 'places'}`
 }
 const whereAt = ref(-1)
 const whereOn = computed(() => session.parts[whereAt.value] ?? null)
 function openWhere(i: number) { open.value = null; whereAt.value = i }
-function whereDone(marks: Uint8Array, w: 'needed' | 'only') { setMarks(whereAt.value, marks, w); whereAt.value = -1 }
+function whereDone(marks: Uint8Array, w: PartWhere) { setMarks(whereAt.value, marks, w); whereAt.value = -1 }
 // the Supports sheet: each kind's plate as its slice placed it, its supports, time and weight
 const kindPlates = computed(() => Object.fromEntries(SUPPORT_KINDS.map(k => [k, plateOf(kindJob(k))])) as Record<SupportKind, Float32Array>)
 function kindLines(k: SupportKind) { const j = kindJob(k); return j?.id ? session.lines[j.id] ?? null : null }
@@ -887,7 +924,8 @@ function subOf(p: Part, i: number): { text: string; amber?: boolean } {
   const first = plates.value.length > 1 ? plates.value[0].counts[i] : undefined
   if (first != null && first < p.copies) return { text: first ? `${first} now, ${p.copies - first} after` : 'On the second plate', amber: true }
   const brim = brimOf(i)
-  const and = (t: string, short: string) => ({ text: brim ? `${short} · ${BRIM_WORDS[brim.kind].short}` : t })
+  const off = p.noSupports && session.supports !== 'off' && needsAny(p)
+  const and = (t: string, short: string) => ({ text: [brim || off ? short : t, off && 'No supports', brim && BRIM_WORDS[brim.kind].short].filter(Boolean).join(' · ') })
   if (p.lay === 'flat' && p.layAuto) return and('Laid flat for you', 'Laid flat')
   if (p.lay === 'side') return and('On the side you picked', 'On the side you picked')
   if (p.scale < 1) return and(`At ${pct(p.scale)} to fit`, `At ${pct(p.scale)}`)
@@ -962,7 +1000,7 @@ const sideOptions = computed(() => {
   const p = editing.value
   return p?.trisFile ? sideOptions_(p.lying, downOf(p)) : []
 })
-function pickSupports(k: SupportKind) { if (k !== session.supports) setSupports(k); open.value = null }
+function pickSupports(k: SupportKind) { if (k !== session.supports) setSupports(k) }
 function pickScale(k: number) { setScale(editAt.value, k); open.value = null }
 function pickSpool(s: IntentSpool) {
   setSpool({ slot: s.direct ? null : s.slot, material: (s.material ?? 'PLA').toUpperCase(), color: s.color, name: s.name || s.material || '' })
@@ -1096,6 +1134,21 @@ const ICONS: Record<string, string> = {
 .opts { display: grid; gap: 9px; }
 .where-lbl { margin: 18px 2px 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--a-ink-3); }
 .opt.where-row .go { color: var(--a-accent-text); font-weight: 600; font-size: 15px; flex: none; }
+.each { background: var(--a-surface); border-radius: 18px; box-shadow: var(--a-card-shadow); overflow: hidden; }
+.each-row { display: flex; align-items: center; gap: 11px; padding: 9px 12px 9px 9px; border-top: 1px solid var(--a-line); }
+.each-row:first-child { border-top: 0; }
+.each-row .t { appearance: none; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; padding: 0;
+  flex: 1; min-width: 0; display: grid; gap: 1px; }
+.each-row .t:disabled { cursor: default; }
+.each-row .t b { font-size: 16px; }
+.each-row .t span { font-size: 13px; color: var(--a-ink-3); line-height: 1.3; }
+.each-row .t span.you { color: var(--a-accent-text); font-weight: 600; }
+.each-row .t em { font-style: normal; font-size: 13.5px; font-weight: 600; color: var(--a-accent-text); }
+.tg { appearance: none; border: 0; cursor: pointer; width: 50px; height: 30px; border-radius: 99px; background: var(--a-surface-2); position: relative; flex: none; }
+.tg::after { content: ''; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.25); transition: left 0.15s; }
+.tg.on { background: var(--a-accent); }
+.tg.on::after { left: 23px; }
 .opt { appearance: none; font: inherit; color: inherit; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 14px; background: var(--a-surface); border-radius: 18px; padding: 13px 14px; border: 2px solid transparent; box-shadow: var(--a-card-shadow); }
 .opt.on { border-color: var(--a-accent); }
 .opt .ic { width: 42px; height: 42px; border-radius: 13px; background: var(--a-surface-2); display: grid; place-items: center; flex: none; color: var(--a-ink-2); }

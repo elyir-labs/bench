@@ -1,8 +1,8 @@
 <template>
   <!-- The box's top row on the bench's own pages: who it is, and the time. At home, who is watching from away
        (design/bench-remote/, C: guests only); away, the Away or Watching chip in place of the time. -->
-  <header class="btop">
-    <span class="who"><i></i><b>{{ title }}</b></span>
+  <header class="btop" :class="{ 'has-line': line }">
+    <span class="who"><i></i><b>{{ title }}</b><span v-if="line" class="line">{{ line }}</span></span>
     <span class="right">
       <span v-if="seen" class="seen"><svg viewBox="0 0 24 24" aria-hidden="true" v-html="EYE"></svg>{{ seen }}</span>
       <AwayChip />
@@ -18,7 +18,8 @@ import { here, watching } from '../here'
 import { watchingLine } from '../away'
 import AwayChip, { EYE } from './AwayChip.vue'
 
-defineProps<{ title: string }>()
+// line: the home's sentence, which takes the title's place on a short screen (design/bench-7in/, A)
+defineProps<{ title: string; line?: string }>()
 const seen = computed(() => (here.away ? null : watchingLine(watching.names)))
 const clock = ref('')
 const tick = () => { clock.value = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).toLowerCase() }
@@ -29,7 +30,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
 
 <style scoped>
 .btop { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--a-ink-3); font-size: 22px; }
-.who { display: inline-flex; align-items: center; gap: 10px; }
+.who { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.line { display: none; }
 .who i { width: 11px; height: 11px; border-radius: 50%; background: var(--a-green); box-shadow: 0 0 0 4px var(--a-tint-green); }
 .who b { color: var(--a-ink); font-size: 17px; letter-spacing: .06em; text-transform: uppercase; }
 .right { display: inline-flex; align-items: center; gap: 24px; min-width: 0; }
@@ -44,6 +46,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
 @media (max-height: 540px) and (min-width: 600px) {
   .btop { font-size: 17px; }
   .who b { font-size: 15px; }
+  .has-line .who b { display: none; }
+  .has-line .line { display: block; color: var(--a-ink); font-size: 20px; font-weight: 700; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .right { gap: 16px; }
 }
 </style>

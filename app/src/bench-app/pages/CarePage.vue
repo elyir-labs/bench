@@ -56,6 +56,18 @@
             <span class="t"><b>{{ osInfo.title }}</b><span>{{ osInfo.line }}</span></span>
             <span v-if="osInfo.newer || !box.os.latest" class="acts"><button class="a-btn ghost" @click="ask = 'update'">Update now</button></span>
           </div>
+          <div v-if="!box.os && appRow" class="card" :class="['up', appRow.tone]">
+            <span class="t"><b>{{ appRow.title }}</b><span>{{ appRow.line }}</span>
+              <i v-if="appRow.progress !== null" class="up-bar" aria-hidden="true"><i :style="{ width: appRow.progress * 100 + '%' }"></i></i>
+              <small v-if="appRow.small">{{ appRow.small }}</small></span>
+            <span v-if="appRow.button" class="acts"><button class="a-btn" :class="appRow.tone === 'new' ? 'accent' : 'ghost'"
+              :disabled="appRow.button.disabled" @click="ask = 'app'">{{ appRow.button.label }}</button></span>
+          </div>
+          <div v-if="usbCare" class="card up new">
+            <span class="t"><b>{{ usbCare.title }}</b><span>{{ usbCare.line }}</span></span>
+            <span v-if="usbCare.buttons.length" class="acts"><button v-for="b in usbCare.buttons" :key="b.key" class="a-btn"
+              :class="b.key === 'look' ? 'accent' : 'ghost'" :disabled="busy" @click="usbButton(b.key)">{{ b.label }}</button></span>
+          </div>
           <div v-if="box.ssh && sshInfo" class="card">
             <span class="t"><b>{{ sshInfo.title }}</b><span>{{ sshInfo.line }}</span></span>
             <span class="acts"><button class="a-btn ghost" @click="openAddKey">Add a key</button></span>
@@ -70,6 +82,9 @@
     </template>
     <SliceSheet :open="ask === 'off' || ask === 'restart'" :title="sheet.title" :sub="sheet.line" @close="ask = null">
       <div class="ask-btns"><button class="a-btn ghost" @click="ask = null">Keep it on</button><button class="a-btn accent" :disabled="busy" @click="power">{{ sheet.go }}</button></div>
+    </SliceSheet>
+    <SliceSheet :open="ask === 'app'" :title="APP_ASK.title" :sub="APP_ASK.line" @close="ask = null">
+      <div class="ask-btns"><button class="a-btn ghost" @click="ask = null">{{ APP_ASK.keep }}</button><button class="a-btn accent" :disabled="busy" @click="updateApp">{{ APP_ASK.go }}</button></div>
     </SliceSheet>
     <SliceSheet :open="ask === 'update'" :title="UPDATE_ASK.title" :sub="UPDATE_ASK.line" @close="ask = null">
       <div class="ask-btns"><button class="a-btn ghost" @click="ask = null">{{ UPDATE_ASK.keep }}</button><button class="a-btn accent" :disabled="busy" @click="updateNow">{{ UPDATE_ASK.go }}</button></div>
@@ -92,6 +107,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SliceSheet from '@/components/slice/SliceSheet.vue'
+import { updateAsk, updateRow } from '@/intent/update'
+import { usbRow } from '@/intent/usb'
+import { usbUi } from '@/components/usb/usbUi'
 import { BOX_HEAD, POWER_ROW, ROLE_ASK, ROLE_ROW, SSH_ADD, UPDATE_ASK, boxInfo, boxPost, osRow, powerAsk, powerGoing, removeKey, roleSteps, sshRow,
   type BoxInfo, type BoxKey, type BoxPower } from '../box'
 import { useRouter } from 'vue-router'
@@ -123,7 +141,7 @@ function choose(t: ScreenTheme) {
 // the box itself (bench/box.py): null on a service too old to say
 const NAME = 'the Bench Box'
 const box = ref<BoxInfo | null>(null)
-const ask = ref<BoxPower | 'role' | 'update' | 'key' | null>(null)
+const ask = ref<BoxPower | 'role' | 'update' | 'app' | 'key' | null>(null)
 const busy = ref(false)
 const err = ref<string | null>(null)
 const going = ref<string | null>(null)
@@ -145,6 +163,26 @@ const sshInfo = computed(() => (box.value?.ssh ? sshRow(box.value.ssh.user, box.
 const keyText = ref('')
 const keyErr = ref<string | null>(null)
 const dropKey = ref<BoxKey | null>(null)
+// a USB stick in the box (design/usb/, 3 A): Look asks again, Copy a report writes onto it
+const usbCare = computed(() => usbRow(box.value?.usb, 'the Bench Box'))
+async function usbButton(key: 'look' | 'report') {
+  if (key === 'look') { usbUi.force = true; return }
+  busy.value = true
+  err.value = await boxPost('usb', { action: 'report' })
+  busy.value = false
+  refresh()
+}
+// its app, on a box installed with the install command (design/updates/, A + A)
+const APP_ASK = updateAsk('the box', true)
+const kobras = computed(() => bench.printers.some((x) => x.intent?.printer?.standin === 'bench'))
+const appRow = computed(() => (box.value?.app ? updateRow(box.value.app, 'The box', { kobras: kobras.value }) : null))
+async function updateApp() {
+  busy.value = true
+  err.value = await boxPost('update', { what: 'app' })
+  busy.value = false
+  ask.value = null
+  refresh()
+}
 async function updateNow() {
   busy.value = true
   err.value = await boxPost('update')
@@ -196,6 +234,11 @@ async function becomePrinter() {
 .card .acts { display: flex; gap: 10px; flex: none; }
 .card .acts .a-btn { height: 52px; padding: 0 24px; border-radius: 999px; font-size: 18px; white-space: nowrap; }
 .card .t { flex: 1; }
+.card.up.new { box-shadow: var(--a-card-shadow), inset 0 0 0 1px color-mix(in srgb, var(--a-accent) 55%, transparent); }
+.card.up.bad { box-shadow: var(--a-card-shadow), inset 0 0 0 1px color-mix(in srgb, var(--a-red) 50%, transparent); }
+.card.up small { display: block; font-size: 13px; color: var(--a-ink-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.up-bar { display: block; height: 6px; border-radius: 3px; background: var(--a-surface-2); overflow: hidden; margin-top: 8px; }
+.up-bar i { display: block; height: 100%; background: var(--a-accent); }
 .seg { display: flex; flex: none; padding: 4px; gap: 4px; border-radius: 999px; background: var(--a-surface-2); }
 .seg-opt { appearance: none; border: 0; margin: 0; font: inherit; font-weight: 600; font-size: 18px; height: 48px; min-width: 100px; padding: 0 22px;
            border-radius: 999px; background: transparent; color: var(--a-ink-2); cursor: pointer; transition: background 160ms ease, color 160ms ease; }

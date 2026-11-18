@@ -26,15 +26,18 @@ def quick(monkeypatch):
 
 
 class Rig:
-    def __init__(self, tmp_path, loaded=None, settings=None):
+    def __init__(self, tmp_path, loaded=None, settings=None, hotend_gap=None, sensor_object=True):
+        self.sensor_object = sensor_object
         self.ace = PretendAce(time_scale=20.0)
+        self.hotend_gap = hotend_gap
         self.tmp = tmp_path
         self.loaded = loaded
         self.settings = dict(SETTINGS, **(settings or {}))
 
     async def start(self):
         await self.ace.start()
-        self.printer = PretendPrinter([self.ace], SENSOR_AT, GRIP, NOZZLE, loaded=self.loaded, time_scale=20.0)
+        self.printer = PretendPrinter([self.ace], SENSOR_AT, GRIP, NOZZLE, loaded=self.loaded, time_scale=20.0,
+                                      hotend_gap=self.hotend_gap, sensor_object=self.sensor_object)
         await self.printer.start()
         with open(self.tmp / "units.json", "w") as f:
             json.dump({"selected": self.loaded, "settings": self.settings}, f)
@@ -107,6 +110,8 @@ async def test_loading_from_the_screen_feeds_to_the_sensor_then_the_extruder_tak
     assert methods[:2] == ["feed_filament", "stop_feed_filament"] and "start_feed_assist" in methods
     st = (await r.call("state"))["result"]
     assert st["selected"] == 2 and st["feed_assist"][2] and st["change"] is None
+    # no hotend switch: Moonraker's None for it is no switch, not one reading clear (Workshop, 15 November)
+    assert st["hotend_switch"] is False and pushes(p) == [NOZZLE]
 
 
 async def test_a_change_takes_the_old_filament_out_stopping_at_the_sensor_and_parks_it(slot1_in_head):
@@ -344,3 +349,164 @@ async def test_with_a_cutter_the_extruder_never_backs_off_and_the_unit_pulls_it_
     await r.call("change_tool", slot=3)
     assert not any(line.startswith("G1 E-") for line in r.printer.gcode_log)
     assert r.printer.x[1] < SENSOR_AT and r.printer.x[3] >= SENSOR_AT + GRIP + NOZZLE - 10
+
+
+# ---- a second switch after the gears, above the hotend (design/filament-units/, A) -------------------------------
+
+HOTEND_GAP = 30.0     # gears to the hotend switch
+
+
+@pytest.fixture
+async def two_switches(tmp_path):
+    r = Rig(tmp_path, hotend_gap=HOTEND_GAP)
+    await r.start()
+    yield r
+    await r.stop()
+
+
+@pytest.fixture
+async def two_switches_loaded(tmp_path):
+    r = Rig(tmp_path, loaded=1, hotend_gap=HOTEND_GAP)
+    await r.start()
+    yield r
+    await r.stop()
+
+
+def pushes(p):
+    return [float(line.split("E")[1].split()[0]) for line in p.gcode_log if line.startswith("G1 E") and "E-" not in line]
+
+
+async def test_a_load_carries_the_filament_to_the_hotend_switch_then_the_rest_of_the_way(two_switches):
+    r = two_switches
+    assert (await r.call("change_tool", slot=2)) == {"id": r.rid, "result": {}}
+    p = r.printer
+    assert p.hotend and p.x[2] >= SENSOR_AT + GRIP + NOZZLE - 10
+    small, last = pushes(p)[:-1], pushes(p)[-1]
+    assert small and all(mm == 2 for mm in small)
+    # with no hotend_to_nozzle set, the whole push stays sensor_to_nozzle, as before
+    assert sum(small) + last == pytest.approx(NOZZLE)
+    assert (await r.call("state"))["result"]["hotend_switch"] is True
+
+
+async def test_a_measured_hotend_to_nozzle_is_pushed_from_the_hotend_switch(tmp_path):
+    r = Rig(tmp_path, hotend_gap=HOTEND_GAP, settings={"hotend_to_nozzle": 75})
+    await r.start()
+    try:
+        await r.call("change_tool", slot=0)
+        assert pushes(r.printer)[-1] == 75
+    finally:
+        await r.stop()
+
+
+async def test_gears_that_dont_grip_stop_the_load_before_anything_is_pushed_into_the_nozzle(two_switches):
+    r = two_switches
+    r.printer.slipping = True
+    m = await r.call("change_tool", slot=2)
+    assert m["error"]["message"] == "The extruder didn't take the filament."
+    p = r.printer
+    assert not p.hotend and max(pushes(p)) == 2 and sum(pushes(p)) <= 60 + 2
+    assert [x["method"] for x in r.moves()][-1:] in (["stop_feed_assist"], ["stop_unwind_filament"], ["stop_feed_filament"])
+    assert "stop_feed_assist" in [x["method"] for x in r.moves()]
+    st = (await r.call("state"))["result"]
+    assert st["selected"] is None and not any(st["feed_assist"])
+    assert st["change"]["error"] == "The extruder didn't take the filament."
+    # it was taken back out and parked, so Try again starts from an empty head
+    assert not p.detected and p.x[2] < SENSOR_AT - 100
+    assert any(x["method"] == "unwind_filament" and x["params"] == {"index": 2, "length": 170, "speed": 50} for x in r.moves())
+
+
+async def test_a_change_whose_new_filament_isnt_taken_leaves_the_head_empty_and_try_again_loads_it(two_switches_loaded):
+    r = two_switches_loaded
+    p = r.printer
+    p.slipping = True
+    m = await r.call("change_tool", slot=3)
+    assert m["error"]["message"] == "The extruder didn't take the filament."
+    assert (await r.call("state"))["result"]["selected"] is None     # slot 1 is parked, not in the head
+    assert not p.detected and p.x[1] < SENSOR_AT and p.x[3] < SENSOR_AT
+    p.slipping = False
+    r.ace.requests.clear()
+    assert (await r.call("change_tool", slot=3)) == {"id": r.rid, "result": {}}
+    # Try again doesn't go back to pulling slot 1
+    assert not any(x["params"].get("index") == 1 for x in r.moves() if x["method"].startswith("unwind"))
+    assert p.hotend and (await r.call("state"))["result"]["selected"] == 3
+
+
+async def test_filament_stuck_in_the_hotend_stops_the_unit_pulling_and_says_so(two_switches_loaded):
+    r = two_switches_loaded
+    r.printer.stuck = True
+    m = await r.call("change_tool", slot=3)
+    assert m["error"]["message"] == "The filament is stuck in the hotend."
+    methods = [x["method"] for x in r.moves()]
+    assert "stop_unwind_filament" in methods
+    # it never went on to park it or feed the next one
+    assert not any(x["method"] == "unwind_filament" and x["params"]["length"] == 170 for x in r.moves())
+    assert "feed_filament" not in methods
+
+
+async def test_a_piece_already_under_the_hotend_switch_loads_as_before(tmp_path):
+    r = Rig(tmp_path, hotend_gap=HOTEND_GAP)
+    await r.start()
+    try:
+        r.printer.piece = True     # a cutter's piece left below the cut
+        r.printer._edge()
+        await until(lambda: r.svc.changer.hotend is True)
+        await r.call("change_tool", slot=2)
+        assert pushes(r.printer) == [NOZZLE]
+    finally:
+        await r.stop()
+
+
+async def test_a_change_with_two_switches_takes_the_old_one_out_and_loads_the_new(two_switches_loaded):
+    r = two_switches_loaded
+    assert (await r.call("change_tool", slot=3)) == {"id": r.rid, "result": {}}
+    p = r.printer
+    assert p.hotend and p.x[3] >= SENSOR_AT + GRIP + NOZZLE - 10 and p.x[1] < SENSOR_AT
+
+
+async def test_the_gears_read_as_turning_in_while_the_extruder_carries_it_and_still_after(two_switches):
+    r = two_switches
+    seen = set()
+
+    async def watch():
+        while True:
+            seen.add(r.svc.changer.gears)
+            await asyncio.sleep(0.01)
+    w = asyncio.ensure_future(watch())
+    try:
+        await r.call("change_tool", slot=2)
+    finally:
+        w.cancel()
+    assert "in" in seen
+    await until(lambda: r.svc.changer.gears is None, timeout=3)
+    assert (await r.call("state"))["result"]["switches"]["gears"] is None
+
+
+async def test_the_gears_read_as_turning_out_while_the_extruder_backs_it_out(two_switches_loaded):
+    r = two_switches_loaded
+    seen = set()
+
+    async def watch():
+        while True:
+            seen.add(r.svc.changer.gears)
+            await asyncio.sleep(0.01)
+    w = asyncio.ensure_future(watch())
+    try:
+        await r.call("change_tool", slot=-1)
+    finally:
+        w.cancel()
+    assert "out" in seen
+
+
+async def test_without_klippers_filament_sensor_the_button_still_reads_the_filament_in_the_head(tmp_path):
+    # Studio, 16 November: no filament_switch_sensor extruder_sensor, so Moonraker answered None; the service started
+    # with filament in the head, read it as clear, skipped taking it out, and fed the next slot into it
+    r = Rig(tmp_path, loaded=1, hotend_gap=HOTEND_GAP, sensor_object=False)
+    await r.start()
+    try:
+        await until(lambda: r.svc.changer.detected is True)
+        assert (await r.call("change_tool", slot=3)) == {"id": r.rid, "result": {}}
+        p = r.printer
+        assert p.x[1] < SENSOR_AT and p.detected and p.hotend
+        assert (await r.call("state"))["result"]["selected"] == 3
+    finally:
+        await r.stop()

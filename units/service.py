@@ -248,7 +248,8 @@ class Service:
         assist = self.saved["assist"]
         return {"units": units, "slots": slots, "selected": self.saved["selected"],
                 "feed_assist": [assist == s["slot"] for s in slots], "carry_on": self.saved["carry_on"],
-                "dryer_max": DRYER_MAX, "change": self.changer.state(),
+                "dryer_max": DRYER_MAX, "change": self.changer.state(), "hotend_switch": self.changer.hotend is not None,
+                "switches": {"extruder": self.changer.detected, "hotend": self.changer.hotend, "gears": self.changer.gears},
                 "printer": self.changer.mr is not None and self.changer.mr.ready.is_set()}
 
     # ---- what the printer code may ask --------------------------------------------------
@@ -300,6 +301,19 @@ class Service:
         self._save()
         self.changed()
         return {}
+
+    async def raw(self, now: bool = False) -> List[Dict[str, Any]]:
+        """Each unit's own status as it answered, for bench tests. now asks every unit afresh instead of the last poll."""
+        out = []
+        for i, u in enumerate(self.units):
+            st = u.status
+            if now and u.connected:
+                try:
+                    st = await u.status_now()
+                except UnitError:
+                    pass
+            out.append({"index": i, "key": u.key, "connected": u.connected, "status": st})
+        return out
 
     async def carry_on(self, on: bool) -> Dict[str, Any]:
         self.saved["carry_on"] = bool(on)
@@ -355,7 +369,7 @@ class Service:
         return {}
 
     METHODS = ("move", "stop", "dry", "stop_drying", "feed_assist", "carry_on", "set_spool", "mark_loaded", "change_tool",
-               "purge")
+               "purge", "raw")
 
     # ---- the socket ---------------------------------------------------------------------
 

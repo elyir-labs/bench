@@ -23,7 +23,11 @@ const router = useRouter()
 const configStore = useConfigStore()
 const intentStore = useIntentStore()
 const ready = ref(false)
-const noToken = ref(false)   // embedded, but the Printers app never handed over access
+// Embedded and no access handed over: said only once the printer has had time to connect and hasn't, since a
+// printer behind no door (or one the cookie lets in) works without it. A late answer takes the line away.
+const noAnswer = ref(false)
+const settled = ref(false)
+const noToken = computed(() => noAnswer.value && settled.value && !intentStore.connected)
 
 // /legacy/* renders the old Quasar layout through its own router-view.
 const LegacyShell = { render: () => h(RouterView) }
@@ -71,8 +75,8 @@ onMounted(async () => {
   }
   if (embedded) {
     await learnParents()                   // a Bench Box this printer said yes to may hand over the token too
-    const token = await receiveToken()   // inside the Printers app or a Bench Box: its token, then go where it says
-    noToken.value = token === null   // '' is an answer: reached without a door (the simulator, a Bench Box in dev)
+    const token = await receiveToken(8000, () => { noAnswer.value = false })   // inside the Printers app or a Bench Box: its token, then go where it says
+    noAnswer.value = token === null   // '' is an answer: reached without a door (the simulator, a Bench Box in dev)
     linkToShell(() => router.currentRoute.value.fullPath, (p) => router.push(p), takeModels)
     reportConnection(() => intentStore.connected)
   }
@@ -80,6 +84,7 @@ onMounted(async () => {
   if (route.path === '/pair' && (door.role === null || door.paired)) router.replace('/')   // nothing to pair here
   if (!needsPairing.value) start()
   ready.value = true
+  window.setTimeout(() => { settled.value = true }, 6000)
 })
 </script>
 

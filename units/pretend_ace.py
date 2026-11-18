@@ -128,7 +128,9 @@ class PretendAce:
         self.tail = None
         self.action = "shifting"
         if direction > 0:
+            # a feed on any slot ends feed assist on the unit (captures/2026-10-18-moves.jsonl: count 4326 -> 0)
             self.feed_assist_count = 0
+            self.assist = None
         return {"result": {}, "code": 0, "msg": "success"}
 
     def _stop(self, direction: int) -> Dict[str, Any]:

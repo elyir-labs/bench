@@ -37,6 +37,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "printer"))
 import elyir_bench_intent as engine  # noqa: E402
 import elyir_bench_care as care  # noqa: E402
+import tag_formats  # noqa: E402
+import tag_reader  # noqa: E402
 from scenarios import SCENARIOS, FILES, OBJECTS, COLOUR_FILES  # noqa: E402
 import library  # noqa: E402
 import setup_card  # noqa: E402
@@ -120,6 +122,8 @@ class SimPrinter:
         self.ace = ace   # False: a printer without a filament unit, one spool (--no-ace)
         self.tap = False   # PRINT_START's tap stage runs (--tap): the printer finds its own first layer
         self.tap_default = False
+        self.hotend_switch: Optional[str] = None   # --hotend-switch: the service's head has a switch after the gears
+        self.cutter = False   # --cutter: a CUT_TIP macro with its screw guessed, as Studio's is (design/spots/)
         # Klipper's [save_variables] file: outlives restarts and scenarios. Workshop has one, Desk (--no-ace) doesn't.
         self.saved_vars: Dict[str, Any] = {}
         self.spool_record: Any = None   # what Moonraker's database would hold at elyir-bench/spool
@@ -130,6 +134,8 @@ class SimPrinter:
         self.status = self.fresh()
         self.klippy_state = "ready"
         self.klippy_message = "Printer is ready"
+        self.tag_fake = tag_reader.FakeReader()
+        self.tag_fake.name = "ACR1552U (simulated)"
         self.tracker = self.new_tracker()
         self.fail_next_swap = False
         self.fail_check_slot: Optional[int] = None   # this slot's motor test fails once (the unit check, --units afc|happy_hare)
@@ -150,6 +156,10 @@ class SimPrinter:
         self._waiting_for: Optional[str] = None
         self._last_intent_key: Optional[str] = None
         self.scenario_name = ""
+        self.update: Optional[str] = None          # --update newer|failed
+        self.update_started: Optional[float] = None
+        self.usb: Optional[str] = None             # --usb new|all|os|empty|unsigned (design/usb/)
+        self.usb_state: Optional[Dict[str, Any]] = None
         self.log: List[str] = []
         # Finish setting up (docs/setup-card.md): closed until a setup scenario opens it
         self.setup = setup_card.SetupCard()
@@ -171,6 +181,8 @@ class SimPrinter:
             status["save_variables"] = {"variables": deepcopy(self.saved_vars)}
         if self.units is not None:
             status.pop("ace", None)
+        if self.cutter:
+            status["gcode_macro CUT_TIP"] = {"pin_loc_x": 20.0, "pin_loc_x_compressed": 10.0, "pin_loc_y": 331.0}
         if self.light in ("pin", "both"):
             status["output_pin caselight"] = {"value": 0.0}
         if self.light in ("strip", "both"):
@@ -306,7 +318,27 @@ class SimPrinter:
             t.has_unit = bool(st and st.get("units"))
         t.restore_spool(self.spool_record)
         t.restore_colour_plan(DATABASE.get("elyir-bench", {}).get("colour_plan"))   # like the component, at start
+        t.tags.restore(DATABASE.get("elyir-bench", {}).get("tags"))
+        if getattr(self, "tag_fake", None) is not None:
+            t.tags.on_reader(self.tag_fake.name, "ready")
         return t
+
+    # ---- spool tags (design/spool-tags/): a reader on the desk, tags put down from /sim ----------------
+
+    def tag_work(self) -> None:
+        job = self.tracker.tags.work()
+        if job:
+            ok, why, tag = self.tag_fake.write(job["uid"], job["ops"])
+            self.tracker.tags.on_written(ok, why, tag)
+        if self.tracker.tags.dirty:
+            self.tracker.tags.dirty = False
+            DATABASE.setdefault("elyir-bench", {})["tags"] = deepcopy(self.tracker.tags.saved())
+
+    def put_tag(self, kind: str) -> None:
+        tag = SIM_TAGS[kind]() if kind in SIM_TAGS else None
+        self.tag_fake.put(tag)
+        self.tracker.tags.on_tag(tag)
+        self.publish(force=True)
 
     def save_spool(self) -> None:
         """Like the component: keep the one spool's record whenever the tracker changes it."""
@@ -407,6 +439,117 @@ class SimPrinter:
         self.publish(force=True)
         return {"ok": True, "action": action, "ran": [action], "intent": self.intent()}
 
+    def update_view(self) -> Optional[Dict[str, Any]]:
+        """--update (design/updates/): a newer version waiting, or the last try failed; Update now runs a pretend
+        download (8 s) and start (4 s), then it's up to date."""
+        if not self.update:
+            return None
+        have, nxt = "2026.11.07-c255b63", "2026.11.08-c4a961b"
+        view = {"version": have, "latest": nxt, "newer": True, "state": "idle", "why": None, "done": None, "of": None,
+                "went_back": False, "checked": None}
+        if self.update == "failed":
+            view.update(state="failed", went_back=True)
+        if self.update_started is not None:
+            t = time.time() - self.update_started
+            if t < 8:
+                view.update(state="downloading", done=int(21e6 * t / 8), of=int(21e6))
+            elif t < 12:
+                view.update(state="installing")
+            else:
+                view.update(version=nxt, newer=False, state="done", went_back=False)
+        return view
+
+    def usb_insert(self) -> None:
+        """--usb (design/usb/): a stick that's in, as the installer reads it."""
+        app = {"file": "elyir-bench-2026.11.09-4b1e0a2.tar.gz", "version": "2026.11.09-4b1e0a2", "why": None, "size": 21_400_000}
+        u = {"id": "AB12-CD34", "label": "BENCH", "present": True, "readable": True, "why": None, "folder": True,
+             "app": app, "os": None, "keys": [], "wifi": None, "seen": False, "skipped": False, "take": None}
+        if self.usb == "all":
+            u["keys"] = [{"id": "5f1c0e9a2b7d", "kind": "ssh-ed25519", "name": "laptop", "fp": "SHA256:q9XcV1mE8rT2k"}]
+            u["wifi"] = {"name": "Home Wi-Fi", "can": True}
+        elif self.usb == "os":
+            u["app"] = {**app, "why": "with_os"}
+            u["os"] = {"file": "os/elyir-bench-os-2026.11.09-4b1e0a2-pi5.tar", "version": "2026.11.09-4b1e0a2", "board": "pi5",
+                       "why": None, "on": "pi5", "size": 923_000_000}
+        elif self.usb == "empty":
+            u.update(folder=False, app=None)
+        elif self.usb == "older":
+            u["app"] = {**app, "version": "2026.11.02-91c3d0e", "why": "older"}
+        self.usb_state = u
+        printing = self.tracker.status.get("print_stats", {}).get("state") in ("printing", "paused")
+        if printing and u["app"] and u["app"]["why"] is None:
+            self.usb_take({"app": True}, auto="print")
+
+    def usb_take(self, args: Dict[str, Any], auto: Optional[str] = None) -> None:
+        u = self.usb_state or {}
+        report = bool(args.get("report"))
+        app = bool(args.get("app")) and u.get("app") and u["app"]["why"] is None
+        os_ = bool(args.get("os")) and u.get("os") and u["os"]["why"] is None
+        u["take"] = {"state": "copying", "started": time.time(), "auto": auto, "report_only": report,
+                     "app": u["app"]["version"] if app else None, "os": u["os"]["version"] if os_ else None,
+                     "keys": len(args.get("keys") or []), "wifi": (u.get("wifi") or {}).get("name") if args.get("wifi") else None,
+                     "of": (u["os"]["size"] if os_ else u["app"]["size"] if app else None), "done": 0, "out": False,
+                     "why": None, "report": None, "result": None}
+        u["seen"] = True
+
+    def usb_view(self) -> Optional[Dict[str, Any]]:
+        u = self.usb_state
+        if not u or (not u.get("present") and not u.get("take")):
+            return None
+        t = u.get("take")
+        if t and t["state"] not in ("done", "failed", "skipped"):
+            s = time.time() - t["started"]
+            printing = self.tracker.status.get("print_stats", {}).get("state") in ("printing", "paused")
+            if t["report_only"]:
+                if s > 3:
+                    t.update(state="done", report="workshop-report-2026-11-09-2141.tar.gz", out=True)
+                else:
+                    t.update(state="report")
+            elif s < 5 and t["of"]:
+                t.update(state="copying", done=int(t["of"] * s / 5))
+            elif printing:
+                t.update(state="waiting", done=t["of"], out=True, why="It's printing.")
+            elif self.usb == "unsigned":
+                t.update(state="failed", out=True, why="It isn't signed by Elyir, so it wasn't installed.")
+            elif s < 9 or (t.get("why") and s < 13):
+                t.update(state="installing", done=t["of"], out=True, why=None)
+            else:
+                t.update(state="done", out=True, result="done" if (t["app"] or t["os"]) else None, why=None)
+                if t["app"] and u.get("app"):
+                    u["app"]["why"] = "same"
+                u["keys"] = [] if t["keys"] else u["keys"]
+                u["wifi"] = None if t["wifi"] else u["wifi"]
+        view = {k: v for k, v in u.items()}
+        view["take"] = {k: v for k, v in t.items() if k not in ("started", "report_only")} if t else None
+        return view
+
+    def usb_action(self, action: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        u = self.usb_state
+        if action == "usb_plug":                      # the rig's own: a stick goes in or comes out
+            if u and u.get("present"):
+                u["present"] = False
+            else:
+                self.usb_insert()
+        elif not u:
+            raise web.HTTPBadRequest(text="No stick is in.")
+        elif action == "usb_seen":
+            u["seen"] = True
+        elif action == "usb_skip":
+            t = u.get("take")
+            if t and t["state"] in ("done", "failed", "skipped"):
+                u["take"] = None
+            elif t and t["state"] == "waiting":
+                t["state"] = "skipped"
+                u["take"] = None
+            u["skipped"] = u["seen"] = True
+        elif action in ("usb_take", "usb_report"):
+            if not u.get("present"):
+                raise web.HTTPBadRequest(text="Put the stick back in first.")
+            self.usb_take({"report": True} if action == "usb_report" else args)
+            u["skipped"] = False
+        self.publish(force=True)
+        return {"ok": True, "action": action, "ran": [action], "intent": self.intent()}
+
     def intent(self) -> Dict[str, Any]:
         self.tracker.phones_notified = bool(DATABASE.get("elyir-bench", {}).get("phones"))
         self.tracker.next_plates = DATABASE.get("elyir-bench", {}).get("next_plates") or []
@@ -418,6 +561,8 @@ class SimPrinter:
         i["printer"]["scenario"] = self.scenario_name
         i["printer"]["screen_trial"] = self.setup.trial(time.time())
         i["setup"] = {"open": self.setup.open(self.phones())}
+        i["update"] = self.update_view()
+        i["usb"] = self.usb_view()
         if self.bring.no_config and self.klippy_state == "error" and i["state"] != "setup":
             # Klipper can't start without printer.cfg: the intent layer says setup, never Problem (docs/bring-it-over.md)
             i.update(state="setup", phase="no_config", headline="Now the printer itself.",
@@ -867,6 +1012,12 @@ class SimPrinter:
             elif kind == P.HANDS:
                 self.tracker.hands_input(payload)
                 self.drive()
+            elif kind == P.SPOT:
+                self.tracker.spots.input(payload)
+                self.drive()
+            elif kind == P.TAG:
+                self.tracker.tags.input(payload)
+                self.tag_work()
             elif kind == P.LIGHT:
                 self.tracker.light_input(payload)
                 if self.tracker.light_choice_dirty:
@@ -932,7 +1083,8 @@ class SimPrinter:
         aces[0].insert(2, color=(117, 120, 123), kind="PETG", sku="AHPEGY-101")
         aces[1].empty(3)
         # The service's Moonraker for tool changes: the extruder, its sensor and the filament path (units/pretend_printer.py)
-        printer = PretendPrinter(aces, time_scale=self.speed, macros=())
+        printer = PretendPrinter(aces, time_scale=self.speed, macros=(), hotend_gap=30.0 if self.hotend_switch else None)
+        printer.slipping = self.hotend_switch == "slip"
         await printer.start()
         work = tempfile.mkdtemp(prefix="sim-units-", dir="/tmp")   # short: macOS caps socket paths at 104
         atexit.register(shutil.rmtree, work, True)
@@ -1004,6 +1156,8 @@ class SimPrinter:
             asyncio.get_event_loop().call_later(3 / self.speed, lambda: self.patch({"toolhead": {"homed_axes": "xyz"}}))
         elif script == "M84":
             self.patch({"toolhead": {"homed_axes": ""}})
+        elif script.startswith("CUT_TIP") and self.cutter:   # a cut takes a moment, then says so as the macro does
+            asyncio.get_event_loop().call_later(4 / self.speed, lambda: self.gcode_response("// Tip cut complete"))
         elif script.startswith(("G1 ", "G0 ")):
             pos = list(self.status["motion_report"]["live_position"])
             for word in script.split()[1:]:
@@ -1400,6 +1554,13 @@ async def dispatch(sim: SimPrinter, method: str, params: Any) -> Any:
             return await sim.bring_action(params["action"], params.get("args") or {})
         if params.get("action") in SETUP_ACTIONS:
             return await sim.setup_action(params["action"], params.get("args") or {})
+        if str(params.get("action", "")).startswith("usb_"):
+            return sim.usb_action(params["action"], params.get("args") or {})
+        if params.get("action") == "update_now":
+            if sim.tracker.status.get("print_stats", {}).get("state") in ("printing", "paused"):
+                raise web.HTTPBadRequest(text="Not while it's printing. It updates after this print.")
+            sim.update_started = time.time()
+            return {"ok": True, "action": "update_now", "ran": ["update_now"], "intent": sim.intent()}
         if params.get("action") in ("care_done", "care_later"):
             return sim.care_action(params["action"], str((params.get("args") or {}).get("id", "")))
         if params.get("action") in ("use_klipperscreen", "use_elyir_bench"):
@@ -1409,6 +1570,9 @@ async def dispatch(sim: SimPrinter, method: str, params: Any) -> Any:
         return await sim.run_action(params.get("action", ""), params.get("args") or {})
     if method == "server.history.totals":
         return {"job_totals": sim.totals(), "auxiliary_totals": []}
+    if method == "printer.intent.filaments":
+        return tag_formats_library().search(params.get("q", ""), params.get("brand", ""),
+                                          float(params.get("diameter") or 1.75))
     if method == "printer.intent.layers":
         path = UPLOADED.get(params.get("filename", ""))
         if not path:
@@ -1564,6 +1728,48 @@ async def sim_insert(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "slot": g})
 
 
+def tag_formats_library() -> Any:
+    return engine.spool_tags.library
+
+
+def _sim_uid(prefix: bytes, n: int) -> bytes:
+    return prefix + os.urandom(n - len(prefix))
+
+
+def _prusament() -> Any:
+    t = tag_formats.Tag("slix2", _sim_uid(b"\xe0\x04\x01", 8), bytes(320))
+    spool = {"brand": "Prusament", "material": "PETG", "name": "Signal Red", "color": "C8102E", "weight": 1000,
+             "nozzle": [240, 260], "bed": [80, 90]}
+    return tag_reader.apply_to_memory(t, tag_formats.encode("openprinttag", spool, t))
+
+
+def _anycubic() -> Any:
+    t = tag_formats.Tag("ntag213", _sim_uid(b"\x04", 7), bytes(144))
+    spool = {"material": "PETG", "color": "75787B", "weight": 1000, "nozzle": [230, 250], "bed": [70, 90]}
+    mem = tag_reader.apply_to_memory(t, tag_formats.encode("anycubic", spool, t))
+    raw = bytearray(mem.data)
+    raw[(32 - 4) * 4:(39 - 4) * 4] = bytes(28)   # a factory tag: no Bench extension
+    return tag_formats.Tag("ntag213", mem.uid, bytes(raw))
+
+
+SIM_TAGS = {
+    "ntag213": lambda: tag_formats.Tag("ntag213", _sim_uid(b"\x04", 7), bytes(144)),
+    "ntag215": lambda: tag_formats.Tag("ntag215", _sim_uid(b"\x04", 7), bytes(504)),
+    "classic1k": lambda: tag_formats.Tag("classic1k", _sim_uid(b"", 4), bytes(48),
+                                         extra={"keyed": False, "access": bytes.fromhex("ff078069")}),
+    "slix2": lambda: tag_formats.Tag("slix2", _sim_uid(b"\xe0\x04\x01", 8), bytes.fromhex("e1402801") + bytes(316)),
+    "prusament": _prusament,
+    "anycubic": _anycubic,
+}
+
+
+async def sim_tag(request: web.Request) -> web.Response:
+    """A tag put on the reader: POST /sim/tag/ntag213 (or ntag215, classic1k, slix2, prusament, anycubic); /sim/tag/lift."""
+    sim: SimPrinter = request.app["sim"]
+    sim.put_tag(request.match_info["kind"])
+    return web.json_response({"ok": True})
+
+
 CONTROL_PAGE = """<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Elyir Bench simulator</title>
 <style>body{font:15px/1.4 -apple-system,system-ui,sans-serif;background:#0b0e13;color:#eee;margin:0;padding:20px;max-width:560px}
@@ -1572,7 +1778,9 @@ border-radius:10px;border:1px solid #2a3040;background:#161a23;color:#eee;font-s
 button.on{border-color:#4da3ff}pre{background:#161a23;padding:12px;border-radius:10px;font-size:12px;overflow:auto;max-height:40vh}</style>
 <h1>Elyir Bench simulator</h1><p>Tap a scenario. The app reacts as if the printer did it.</p>
 <div id=b></div><h1 style="margin-top:20px">Push a spool in</h1><p>As if a person put a spool on and pushed its end into the slot.</p>
-<div id=ins style="display:flex;gap:6px;flex-wrap:wrap"></div><h1 style="margin-top:20px">Intent right now</h1><pre id=i>…</pre>
+<div id=ins style="display:flex;gap:6px;flex-wrap:wrap"></div>
+<h1 style="margin-top:20px">Put a tag on the reader</h1><p>Spool tags: a blank one asks which spool it's for.</p>
+<div id=tags style="display:flex;gap:6px;flex-wrap:wrap"></div><h1 style="margin-top:20px">Intent right now</h1><pre id=i>…</pre>
 <script>
 async function load(){const r=await (await fetch('/sim/scenarios')).json();const b=document.getElementById('b');b.innerHTML='';
 for(const [k,v] of Object.entries(r.scenarios)){const x=document.createElement('button');x.className=k===r.running?'on':'';
@@ -1580,6 +1788,9 @@ x.innerHTML='<b>'+k+'</b><span>'+v+'</span>';x.onclick=async()=>{await fetch('/s
 async function intent(){const r=await (await fetch('/printer/intent')).json();document.getElementById('i').textContent=JSON.stringify(r.result,null,1)}
 const ins=document.getElementById('ins');for(let g=0;g<8;g++){const x=document.createElement('button');x.style.width='auto';
 x.textContent='Slot '+(g+1);x.onclick=()=>fetch('/sim/insert/'+g,{method:'POST'});ins.appendChild(x)}
+const tg=document.getElementById('tags');for(const [k,v] of [['ntag213','Blank NTAG213'],['ntag215','Blank NTAG215'],
+['classic1k','Blank MIFARE Classic'],['slix2','Blank SLIX2'],['prusament','Prusament (OpenPrintTag)'],['anycubic','Anycubic spool'],['lift','Lift it off']]){
+const x=document.createElement('button');x.style.width='auto';x.textContent=v;x.onclick=()=>fetch('/sim/tag/'+k,{method:'POST'});tg.appendChild(x)}
 load();intent();setInterval(intent,1000);
 </script>"""
 
@@ -1823,6 +2034,13 @@ def main() -> None:
     ap.add_argument("--no-files", action="store_true", help="nothing on the printer and nothing printed yet")
     ap.add_argument("--config", help="a folder served as the printer's config files, like Moonraker's config root "
                     "(a slicer elsewhere copies elyir-bench-slicer/ from it: docs/slicer.md)")
+    ap.add_argument("--update", choices=["newer", "failed"], help="Care's Updates row: a newer version, or the last try failed")
+    ap.add_argument("--usb", choices=["new", "all", "os", "empty", "older", "unsigned"],
+                    help="a USB stick in (design/usb/); the action usb_plug takes it out and puts it back")
+    ap.add_argument("--hotend-switch", choices=["ok", "slip"],
+                    help="with --units service: a second switch after the gears (design/filament-units/); slip: the gears "
+                         "never take the filament")
+    ap.add_argument("--cutter", action="store_true", help="a CUT_TIP macro whose screw isn't set yet (design/spots/)")
     ap.add_argument("--tap", action="store_true", help="PRINT_START's tap stage runs: the printer finds its own first layer")
     ap.add_argument("--units", choices=["klipperace", "service", *unit_skins.SKINS], default="klipperace",
                     help="service: two pretend ACE Pros behind the real filament-unit service (units/), instead of a "
@@ -1838,8 +2056,16 @@ def main() -> None:
     app["sim"] = SimPrinter(a.name, a.speed, ace=not a.no_ace, light=a.light,
                             skin=a.units if a.units in unit_skins.SKINS and not a.no_ace else None)
     app["sim"].port = a.port
+    app["sim"].update = a.update
+    if a.usb:
+        app["sim"].usb = a.usb
+        app["sim"].usb_insert()
     if a.tap:
         app["sim"].tap = app["sim"].tap_default = True
+        app["sim"].reset()
+    app["sim"].hotend_switch = a.hotend_switch
+    if a.cutter:
+        app["sim"].cutter = True
         app["sim"].reset()
     if a.no_files:
         app["sim"].history = []
@@ -1859,6 +2085,7 @@ def main() -> None:
     app.router.add_get("/sim/scenarios", sim_control)
     app.router.add_post("/sim/scenario/{name}", sim_control)
     app.router.add_post("/sim/insert/{slot}", sim_insert)
+    app.router.add_post("/sim/tag/{kind}", sim_tag)
     app.router.add_get("/server/files/gcodes/{path:.*}", gcode_file)
     app.router.add_get("/server/files/config/{path:.*}", config_file)
     app.router.add_post("/server/files/upload", upload)

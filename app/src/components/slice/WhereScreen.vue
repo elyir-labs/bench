@@ -2,7 +2,7 @@
   <!-- Where supports go (design/supports-where/, A "tap the places", picked 2 November 2026): the part seen from
        below, each place that points down in its color (blue gets supports, faded leans but Orca skips it, striped
        gray "not here"), and the same places as a list with switches. A tap on a place, or its switch, changes it.
-       Nothing is sliced until Done. -->
+       Round 2 (C): the choice is this part's own, and None takes supports off it alone. Nothing is sliced until Done. -->
   <Teleport to="body">
     <div v-if="open" class="where" role="dialog" aria-modal="true" :aria-label="`Where supports go on ${name}`">
       <div class="top">
@@ -20,23 +20,23 @@
           <span class="hint">Seen from below · tap a place · drag to turn</span>
         </div>
         <div class="side">
-          <div class="seg" role="radiogroup" aria-label="Where supports go">
-            <button type="button" role="radio" :aria-checked="where === 'needed'" :class="{ on: where === 'needed' }" @click="where = 'needed'">Where it's needed</button>
-            <button type="button" role="radio" :aria-checked="where === 'only'" :class="{ on: where === 'only' }" @click="where = 'only'">Only where I say</button>
+          <div class="seg" role="radiogroup" :aria-label="`Where supports go on ${name}`">
+            <button v-for="[w, label] in WHERES" :key="w" type="button" role="radio" :aria-checked="where === w" :class="{ on: where === w }"
+                    @click="where = w">{{ label }}</button>
           </div>
-          <p class="say">{{ where === 'needed' ? 'Orca adds what it needs. Switch a place to change its mind.' : 'Only the places switched on get supports.' }}</p>
-          <div v-if="found.length" class="legend" aria-hidden="true">
+          <p class="say">{{ SAY[where] }}</p>
+          <div v-if="found.length && where !== 'none'" class="legend" aria-hidden="true">
             <span><i class="on"></i>Supports</span><span><i class="lean"></i>Leans, none</span><span><i class="not"></i>Not here</span>
           </div>
-          <div v-if="found.length" class="places">
+          <div v-if="found.length" class="places" :class="{ faded: where === 'none' }" :inert="where === 'none'">
             <div v-for="(p, k) in found" :key="k" class="place">
               <i class="mk" :class="markOf(p)"></i>
               <span class="t"><b>{{ placeName(p) }}</b><span>{{ placeSize(p) }} · <em :class="{ you: isOn(p, marks) !== p.auto }">{{ placeWho(p, isOn(p, marks)) }}</em></span></span>
-              <button type="button" role="switch" class="sw" :class="{ on: isOn(p, marks) }" :aria-checked="isOn(p, marks)"
+              <button type="button" role="switch" class="sw" :class="{ on: where !== 'none' && isOn(p, marks) }" :aria-checked="where !== 'none' && isOn(p, marks)"
                       :aria-label="`${placeName(p)}, ${placeSize(p)}: supports`" @click="flip(p)"></button>
             </div>
           </div>
-          <p v-else class="none">Nothing on {{ name }} points down far enough to need supports.</p>
+          <p v-else-if="where !== 'none'" class="none">Nothing on {{ name }} points down far enough to need supports.</p>
         </div>
       </div>
     </div>
@@ -47,16 +47,23 @@
 import { computed, markRaw, ref, shallowRef, watch } from 'vue'
 import ModelPicture from './ModelPicture.vue'
 import { drawRuns } from '@/slice/paint'
-import { isOn, placeName, places, placeSize, placeWho, turned, type Place, type Where } from '@/slice/places'
+import { isOn, placeName, places, placeSize, placeWho, turned, type PartWhere, type Place } from '@/slice/places'
 
 // angle: how far from flat a face may lean and still get supports on this printer (Orca's support_threshold_angle)
 const props = defineProps<{ open: boolean; name: string; tris: Float32Array | null; scale: number; color: string
-  marks: Uint8Array | null; where: Where; angle?: number }>()
-defineEmits<{ close: []; done: [marks: Uint8Array, where: Where] }>()
+  marks: Uint8Array | null; where: PartWhere; angle?: number }>()
+defineEmits<{ close: []; done: [marks: Uint8Array, where: PartWhere] }>()
+
+const WHERES: [PartWhere, string][] = [['needed', "Where it's needed"], ['only', 'Where I say'], ['none', 'None']]
 
 const BLUE = '#1f6fe0', PALE = '#9dbcf2', GRAY = '#a4a8b0'
 const marks = shallowRef<Uint8Array>(new Uint8Array(0))
-const where = ref<Where>('needed')
+const where = ref<PartWhere>('needed')
+const SAY = computed<Record<PartWhere, string>>(() => ({
+  needed: 'Orca adds what it needs. Switch a place to change its mind.',
+  only: 'Only the places switched on get supports.',
+  none: `No supports on ${props.name}. The other parts keep theirs.`,
+}))
 const said = ref<{ x: number; y: number; text: string } | null>(null)
 let saidTimer = 0
 
@@ -69,7 +76,7 @@ watch(() => props.open, (o) => {
   where.value = props.where
 }, { immediate: true })
 
-const markOf = (p: Place) => (isOn(p, marks.value) ? 'on' : p.auto ? 'not' : 'lean')
+const markOf = (p: Place) => (where.value === 'none' ? 'not' : isOn(p, marks.value) ? 'on' : p.auto ? 'not' : 'lean')
 // 0 the part's own color, then on, leaning, not here
 const runs = computed(() => {
   const shown = new Uint8Array(n())
@@ -86,6 +93,7 @@ function flip(p: Place, at?: { x: number; y: number }) {
   saidTimer = window.setTimeout(() => { said.value = null }, 1400)
 }
 function tap(t: number, x: number, y: number) {
+  if (where.value === 'none') return
   const p = t < 0 ? undefined : found.value.find(q => q.tris.includes(t))
   if (p) flip(p, { x, y })
 }
@@ -108,8 +116,8 @@ function tap(t: number, x: number, y: number) {
 .said { position: absolute; transform: translate(-50%, -150%); background: #1f2430; color: #fff; font-size: 13.5px; font-weight: 600; padding: 7px 11px;
   border-radius: 10px; white-space: nowrap; pointer-events: none; }
 .side { background: var(--a-bg); border-radius: 24px 24px 0 0; box-shadow: 0 -10px 30px rgba(16, 24, 40, 0.12); padding: 14px 18px calc(18px + var(--safe-b, 0px));
-  display: grid; gap: 10px; max-height: 52vh; overflow: auto; }
-.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--a-surface-2); border-radius: 12px; padding: 3px; gap: 3px; }
+  display: grid; grid-auto-rows: max-content; gap: 10px; max-height: 52vh; overflow: auto; overscroll-behavior: contain; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--a-surface-2); border-radius: 12px; padding: 3px; gap: 3px; }
 .seg button { appearance: none; border: 0; background: none; font: inherit; cursor: pointer; font-size: 14px; font-weight: 600; padding: 8px 4px; border-radius: 9px; color: var(--a-ink-2); }
 .seg button.on { background: var(--a-surface); color: var(--a-ink); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.14); }
 .say { margin: 0; font-size: 13.5px; color: var(--a-ink-3); line-height: 1.35; }
@@ -119,6 +127,7 @@ function tap(t: number, x: number, y: number) {
 .lean { background: color-mix(in srgb, #1f6fe0 40%, transparent); border: 1.5px dashed #1f6fe0; }
 .not { background: repeating-linear-gradient(135deg, #a4a8b0 0 3px, #c9ccd2 3px 6px); }
 .places { background: var(--a-surface); border-radius: 16px; box-shadow: var(--a-card-shadow); overflow: hidden; }
+.places.faded { opacity: 0.45; }
 .place { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-top: 1px solid var(--a-line); }
 .place:first-child { border-top: 0; }
 .place .mk { width: 28px; height: 28px; border-radius: 9px; margin: 0; flex: none; }

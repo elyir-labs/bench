@@ -3,6 +3,7 @@
 import { shallowRef } from 'vue'
 import { forgetPrinter, recordOf, savePrinter, type LivePrinter, type PrinterRecord } from './printers'
 import { canUndo, caseOf, toastWords } from './remove'
+import { account, call, refreshAccount } from './account'
 
 export interface Removed {
   record: PrinterRecord
@@ -24,8 +25,21 @@ async function offThePrinter(p: LivePrinter): Promise<boolean> {
   }
 }
 
+/** In the account signed in here: Remove takes it out of the account, or it would come straight back. */
+export function inAccount(p: Pick<LivePrinter, 'account' | 'house'>): boolean {
+  return !!p.account && account.state === 'in' && account.me?.house?.id === p.house
+}
+
 export async function removePrinter(p: LivePrinter, alsoOff: boolean): Promise<void> {
   const c = caseOf(p)
+  if (inAccount(p)) {
+    await call('DELETE', `/v1/devices/${encodeURIComponent(p.account!)}`)
+    if (c === 'reachable') await offThePrinter(p)
+    await forgetPrinter(p.id)
+    removed.value = { record: recordOf(p), words: toastWords(p.name, false, true), undo: false }
+    void refreshAccount()
+    return
+  }
   const stillKnown = c === 'reachable' && alsoOff && !(await offThePrinter(p))
   const record = recordOf(p)
   await forgetPrinter(p.id)

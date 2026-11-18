@@ -7,6 +7,8 @@
 import { neighbours } from './paint.ts'
 
 export type Where = 'needed' | 'only'
+/** A part's own choice on the Where screen: none = no supports on this part (round 2, C). */
+export type PartWhere = Where | 'none'
 export const HERE = 1, NOT_HERE = 2
 
 export interface Place {

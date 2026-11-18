@@ -4,10 +4,10 @@ import os
 HERE = os.path.dirname(__file__)
 
 
-def render(pin="EBBCan:PB8", tools=8, head_sensor=""):
+def render(pin="EBBCan:PB8", tools=8, head_sensor="", hotend_button=""):
     with open(os.path.join(HERE, "..", "klipper", "elyir_units.cfg")) as f:
         text = f.read()
-    return text.format(sensor_pin=pin, sensor_bare=pin.lstrip("^~!"), head_sensor=head_sensor,
+    return text.format(sensor_pin=pin, sensor_bare=pin.lstrip("^~!"), head_sensor=head_sensor, hotend_button=hotend_button,
                        tool_macros="".join(f"\n[gcode_macro T{i}]\ngcode: ELYIR_TOOL T={i}\n" for i in range(tools)))
 
 
