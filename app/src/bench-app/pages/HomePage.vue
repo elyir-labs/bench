@@ -19,7 +19,7 @@
           <span class="dnm"><b>{{ t.name }}</b><span class="st" :class="'tone-' + t.tone">{{ t.word }}<template v-if="t.rank === 3 && t.frac"> · {{ Math.round(t.frac * 100) }}%</template></span></span>
         </div>
         <p class="dln">{{ tileLine(t) }}</p>
-        <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'ghost' : 'amber'" @click.stop="open(t)">{{ act(t).button }}</button>
+        <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'ghost' : 'amber'" @click.stop="doAct(t)">{{ act(t).button }}</button>
         <span v-else-if="act(t).note" class="athome">{{ act(t).note }}</span>
         <span v-else-if="t.rank === 3" class="dbar"><span :style="{ width: Math.round(t.frac * 100) + '%' }"></span></span>
       </article>
@@ -29,7 +29,7 @@
         <div class="head"><b class="name">{{ t.name }}</b><span class="chip" :class="'tone-' + t.tone"><i></i>{{ t.word }}</span></div>
         <div class="pic"><Ring :tile="t" :printer="byId(t.id)" /></div>
         <div class="words"><b>{{ t.says }}</b><span>{{ t.what }}</span></div>
-        <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'accent' : 'amber'" @click.stop="open(t)">{{ act(t).button }}</button>
+        <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'accent' : 'amber'" @click.stop="doAct(t)">{{ act(t).button }}</button>
         <span v-else-if="act(t).note" class="athome">{{ act(t).note }}</span>
       </article>
     </div>
@@ -39,7 +39,7 @@
         <article v-for="t in g.tiles" :key="t.id" class="row" :class="'tone-' + t.tone" @click="open(t)">
           <Ring :tile="t" :printer="byId(t.id)" small />
           <span class="rw"><b>{{ t.name }} <em v-if="t.what">· {{ t.what.split(' · ')[0] }}</em></b><span>{{ t.says }}</span></span>
-          <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'accent' : 'amber'" @click.stop="open(t)">{{ act(t).button }}</button>
+          <button v-if="act(t).button" class="a-btn" :class="t.tone === 'green' ? 'accent' : 'amber'" @click.stop="doAct(t)">{{ act(t).button }}</button>
           <span v-else-if="act(t).note" class="athome">{{ act(t).note }}</span>
           <span v-else-if="t.frac" class="pct a-num">{{ Math.round(t.frac * 100) }}%</span>
         </article>
@@ -90,12 +90,15 @@ const groups = computed(() => [
 ].filter((g) => g.tiles.length))
 const byId = (id: string) => bench.printers.find((p) => p.id === id)!
 
-// the action lives on the printer's own screen: open it there; Print a model opens the box's shelf, for that printer
+// a tile opens the printer's own screen; its button does the action, and Print a model opens the box's shelf for that printer
 const starting = ref<QueueItem | null>(null)
 function open(t: Tile) {
-  if (t.queued && here.away) { router.push(`/p/${t.id}`); return }
-  if (t.queued) { starting.value = bench.queue.find((q) => q.id === t.queued) ?? null; return }   // the queue's bed question
-  router.push(t.action === 'Print a model' ? { path: '/print', query: { on: t.id } } : `/p/${t.id}`)
+  if (t.queued && !here.away) { starting.value = bench.queue.find((q) => q.id === t.queued) ?? null; return }   // the queue's bed question
+  router.push(`/p/${t.id}`)
+}
+function doAct(t: Tile) {
+  if (t.actionId === 'print_model') router.push({ path: '/print', query: { on: t.id } })
+  else open(t)
 }
 </script>
 
