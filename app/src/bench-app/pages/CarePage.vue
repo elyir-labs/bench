@@ -2,7 +2,9 @@
   <!-- Care, on the box (design/bench-box/, D): every printer's maintenance in one list, what's due first, then
        the nearest. Each printer counts its own; doing it and marking it done is on that printer's Care. -->
   <section class="bpage">
-    <BenchTop title="Care" />
+    <BenchTop title="Care">
+      <button v-if="box" type="button" class="jump" @click="toBox">{{ BOX_HEAD }}<i v-if="boxNew" class="dot" aria-label="An update is out"></i></button>
+    </BenchTop>
     <h1 class="a-display say">{{ line }}</h1>
     <ul class="rows">
       <li v-for="r in rows" :key="r.printerId + r.id" class="row" :class="{ due: r.due && !r.snoozed }" @click="router.push(`/p/${r.printerId}/care`)">
@@ -26,7 +28,7 @@
 
     <!-- the box itself (design/power/, A; design/role/'s way back): From away, Turn off with Restart, and Make it a printer -->
     <template v-if="box">
-      <h2 class="group">{{ BOX_HEAD }}</h2>
+      <h2 ref="boxHead" class="group">{{ BOX_HEAD }}</h2>
       <p v-if="going" class="going">{{ going }}</p>
       <div v-else-if="box.role" class="card becoming">
         <span class="t"><b>{{ box.role.state === 'failed' ? "It didn't become a printer." : 'Becoming a printer' }}</b>
@@ -52,9 +54,12 @@
               <span>{{ box.os.update.state === 'failed' ? box.os.update.why : box.os.update.line || 'Looking for the new version.' }}</span></span>
             <span v-if="box.os.update.state === 'failed'" class="acts"><button class="a-btn ghost" @click="ask = 'update'">Try again</button></span>
           </div>
-          <div v-else-if="box.os && osInfo" class="card">
-            <span class="t"><b>{{ osInfo.title }}</b><span>{{ osInfo.line }}</span></span>
-            <span v-if="osInfo.newer || !box.os.latest" class="acts"><button class="a-btn ghost" @click="ask = 'update'">Update now</button></span>
+          <div v-else-if="box.os && osInfo" class="card up" :class="{ new: osInfo.newer }">
+            <span class="t"><b>{{ osInfo.title }}</b><span>{{ osInfo.line }}</span><small><template v-for="(v, i) in osInfo.versions.split(' · ')" :key="v">{{ i ? ' · ' : '' }}<span class="nw">{{ v }}</span></template></small></span>
+            <span class="acts">
+              <button v-if="osInfo.newer" class="a-btn accent" @click="ask = 'update'">Update now</button>
+              <button v-else class="a-btn ghost" :disabled="checking" @click="checkNow">{{ checking ? 'Checking…' : 'Check now' }}</button>
+            </span>
           </div>
           <div v-if="!box.os && appRow" class="card" :class="['up', appRow.tone]">
             <span class="t"><b>{{ appRow.title }}</b><span>{{ appRow.line }}</span>
@@ -158,7 +163,18 @@ async function power() {
   ask.value = null
   if (!err.value) going.value = powerGoing(kind, NAME)
 }
-const osInfo = computed(() => (box.value?.os ? osRow(box.value.os) : null))
+const checking = ref(false)
+const checked = ref(false)
+const osInfo = computed(() => (box.value?.os ? osRow(box.value.os, box.value.app?.version, checked.value) : null))
+async function checkNow() {
+  checking.value = true
+  err.value = await boxPost('check')
+  await refresh()
+  checking.value = false
+  checked.value = !err.value
+}
+const boxHead = ref<HTMLElement | null>(null)
+const toBox = () => boxHead.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 const sshInfo = computed(() => (box.value?.ssh ? sshRow(box.value.ssh.user, box.value.ssh.keys) : null))
 const keyText = ref('')
 const keyErr = ref<string | null>(null)
@@ -176,6 +192,7 @@ async function usbButton(key: 'look' | 'report') {
 const APP_ASK = updateAsk('the box', true)
 const kobras = computed(() => bench.printers.some((x) => x.intent?.printer?.standin === 'bench'))
 const appRow = computed(() => (box.value?.app ? updateRow(box.value.app, 'The box', { kobras: kobras.value }) : null))
+const boxNew = computed(() => !here.away && (!!osInfo.value?.newer || (!box.value?.os && appRow.value?.tone === 'new')))
 async function updateApp() {
   busy.value = true
   err.value = await boxPost('update', { what: 'app' })
@@ -229,7 +246,11 @@ async function becomePrinter() {
 .t { display: grid; gap: 2px; min-width: 0; }
 .t b { font-size: 21px; } .t span { color: var(--a-ink-3); font-size: 17px; }
 .row.due .t span { color: var(--a-amber-text); font-weight: 650; }
-.group { margin: 18px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--a-ink-3); }
+.jump { appearance: none; border: 0; background: none; padding: 0; font: inherit; cursor: pointer; color: var(--a-accent-text); font-weight: 650;
+        font-size: 20px; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+.nw { white-space: nowrap; }
+.jump .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--a-amber); }
+.group { scroll-margin-top: 16px; margin: 18px 0 0; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--a-ink-3); }
 .card { display: flex; align-items: center; gap: 24px; padding: 18px 22px; background: var(--a-surface); border-radius: 18px; box-shadow: var(--a-card-shadow); }
 .card .acts { display: flex; gap: 10px; flex: none; }
 .card .acts .a-btn { height: 52px; padding: 0 24px; border-radius: 999px; font-size: 18px; white-space: nowrap; }
@@ -270,6 +291,7 @@ async function becomePrinter() {
   .row { grid-template-columns: minmax(0, 1fr) 140px 90px; gap: 16px; padding: 10px 16px; border-radius: 14px; }
   .t b { font-size: 17px; } .t span { font-size: 14px; } .who { font-size: 15px; }
   .group { margin-top: 8px; }
+  .jump { font-size: 17px; }
   .card { gap: 16px; padding: 12px 16px; border-radius: 14px; }
   .card .acts .a-btn { height: 44px; padding: 0 18px; font-size: 16px; }
   .seg-opt { height: 40px; min-width: 76px; padding: 0 16px; font-size: 16px; }
@@ -277,6 +299,7 @@ async function becomePrinter() {
 @media (max-width: 599px) {
   .bpage { padding: 14px 16px 24px; gap: 10px; }
   .say { font-size: 25px; }
+  .jump { font-size: 16px; }
   .row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 14px; border-radius: 14px; }
   .bar { grid-column: 1 / -1; grid-row: 2; height: 6px; }
   .t b { font-size: 16px; } .t span { font-size: 13px; } .who { font-size: 14px; }

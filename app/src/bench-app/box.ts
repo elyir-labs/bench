@@ -37,13 +37,15 @@ export const UPDATE_ASK = {
   keep: 'Not now', go: 'Update now',
 }
 
-/** The update row: what it runs, and whether there's newer (it also looks by itself at night). */
-export function osRow(o: BoxOs): { title: string; line: string; newer: boolean } {
+/** The update row: whether there's newer, and both versions it runs (an app deployed over SSH can be ahead of the card).
+ *  checked: Check now was just tapped, so the line says how that went. */
+export function osRow(o: BoxOs, app?: string | null, checked = false): { title: string; line: string; versions: string; newer: boolean } {
   const newer = !!o.latest && o.latest !== o.version
-  const line = newer ? `${o.latest} is out. This box runs ${o.version}.`
-    : o.latest ? `Up to date: ${o.version}. It updates by itself at night.`
-    : `It runs ${o.version}, and looks for a new one by itself at night.`
-  return { title: 'Updates', line, newer }
+  const line = newer ? `${o.latest} is out.`
+    : o.latest ? (checked ? 'Up to date. Checked just now.' : 'Up to date. It also looks by itself at night.')
+    : checked ? "It couldn't look just now. It also looks by itself at night."
+    : 'It looks for a new one by itself at night.'
+  return { title: 'Updates', line, versions: app ? `App ${app} · system ${o.version}` : `System ${o.version}`, newer }
 }
 
 export const SSH_ADD = {
@@ -84,7 +86,7 @@ export async function boxInfo(): Promise<BoxInfo | null> {
   }
 }
 
-export async function boxPost(path: 'power' | 'role' | 'update' | 'ssh' | 'usb', body: Record<string, unknown> = {}): Promise<string | null> {
+export async function boxPost(path: 'power' | 'role' | 'update' | 'check' | 'ssh' | 'usb', body: Record<string, unknown> = {}): Promise<string | null> {
   try {
     const r = await fetch(`/bench/box/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     return r.ok ? null : (await r.text()) || "The box didn't take it."

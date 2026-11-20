@@ -12,7 +12,7 @@ camera, thumbnails, push, and Moonraker's websocket with every call checked agai
 from __future__ import annotations
 
 import argparse
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 import asyncio
 import sys
 import base64
@@ -466,20 +466,94 @@ class Push:
         return 1
 
 
+PUSHOVER_API = "https://api.pushover.net/1"
+PUSHOVER_PRIORITY = {"problem": 2, "needs_you": 1}
+PUSHOVER_RETRY, PUSHOVER_EXPIRE = 60, 1800
+
+
+class Pushover:
+    """A second way through for what can't wait. A web app's notifications can't break through Focus or the silent
+    switch on an iPhone; Pushover's app can (its Critical Alerts). A problem is sent as an emergency, which repeats
+    until someone acknowledges it in the app or the printer stops being stopped; needs_you as high.
+
+    Turned on by pushover.json {"token", "user"} in the door's state, read fresh for every alert so it can be set
+    or removed without restarting the door."""
+
+    def __init__(self, state: Path, shell: str, printer: str | None, api: str = PUSHOVER_API):
+        self.path, self.shell, self.printer, self.api = state / "pushover.json", shell, printer, api.rstrip("/")
+        self.ringing: set[str] = set()
+
+    def config(self) -> dict | None:
+        try:
+            c = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            return None
+        return c if c.get("token") and c.get("user") else None
+
+    async def _post(self, path: str, form: dict) -> int:
+        try:
+            async with ClientSession(timeout=ClientTimeout(total=15)) as s, s.post(f"{self.api}{path}", data=form) as r:
+                if r.status != 200:
+                    log.warning("pushover %s answered %s: %s", path, r.status, (await r.text())[:200])
+                return r.status
+        except Exception as e:
+            log.warning("pushover %s: %s", path, e or e.__class__.__name__)
+            return 0
+
+    async def send(self, ev: dict) -> bool:
+        kind = str(ev.get("kind") or "")
+        c = self.config()
+        if kind not in PUSHOVER_PRIORITY or not c:
+            return False
+        title = str(ev.get("title") or "Your printer")[:250]
+        priority = PUSHOVER_PRIORITY[kind]
+        form = {"token": c["token"], "user": c["user"], "title": title,
+                "message": str(ev.get("body") or title)[:1024], "priority": str(priority),
+                "timestamp": str(int(time.time()))}
+        path = str(ev.get("url") or "/")
+        if self.printer:
+            form["url"] = f"{self.shell}/p/{self.printer}#{path if path.startswith('/') else '/'}"
+            form["url_title"] = f"Open {ev.get('printer') or 'the printer'}"
+        tag = str(ev.get("tag") or "")
+        if priority == 2:
+            form.update(retry=str(PUSHOVER_RETRY), expire=str(PUSHOVER_EXPIRE))
+            if tag:
+                form["tags"] = tag
+        if c.get("device"):
+            form["device"] = str(c["device"])
+        if await self._post("/messages.json", form) != 200:
+            return False
+        if priority == 2 and tag:
+            self.ringing.add(tag)
+        return True
+
+    async def watch(self, intent: dict) -> None:
+        """Stop an emergency repeating once the printer is no longer stopped (someone dealt with it at the printer)."""
+        if not self.ringing or (intent or {}).get("state") == "problem":
+            return
+        c = self.config()
+        tags, self.ringing = self.ringing, set()
+        if not c:
+            return
+        for tag in tags:
+            await self._post(f"/receipts/cancel_by_tag/{quote(tag, safe='')}.json", {"token": c["token"]})
+
+
 # ── following the printer ────────────────────────────────────────────────────
 
 class Follower:
     """Moonraker's intent events, live and caught up after a reconnect. `boot` is the only resync
     signal: when it changes, the door starts from what is there now and replays nothing."""
 
-    def __init__(self, moonraker: str, state: Path, push: Push, session_factory=ClientSession):
+    def __init__(self, moonraker: str, state: Path, push: Push, session_factory=ClientSession,
+                 pushover: Pushover | None = None):
         self.ws_url = moonraker.replace("http", "ws", 1).rstrip("/") + "/websocket"
         self.cursor_path = state / "cursor.json"
         try:
             self.cursor = json.loads(self.cursor_path.read_text())
         except (OSError, ValueError):
             self.cursor = {"boot": None, "id": 0}
-        self.push, self.session_factory = push, session_factory
+        self.push, self.session_factory, self.pushover = push, session_factory, pushover
         self.ws = None
         self._waiting: dict[int, asyncio.Future] = {}
         self._ids = iter(range(1, 1 << 62))
@@ -514,6 +588,8 @@ class Follower:
             log.info("event %s %s: sent to %d phone(s)", ev.get("kind"), ev.get("tag"), n)
         except Exception:
             log.exception("push failed for %s", ev.get("kind"))
+        if self.pushover and await self.pushover.send(ev):
+            log.info("event %s %s: sent to Pushover", ev.get("kind"), ev.get("tag"))
 
     async def announce(self, event: str, data: dict) -> None:
         """Broadcast to every Moonraker client as notify_agent_event {agent: "elyir-bench-door", event, data}."""
@@ -568,6 +644,9 @@ class Follower:
             elif data.get("method") == "notify_elyir_bench_event":
                 for ev in data.get("params") or []:
                     asyncio.create_task(self.handle(ev))
+            elif data.get("method") == "notify_intent_update" and self.pushover and self.pushover.ringing:
+                for intent in data.get("params") or []:
+                    asyncio.create_task(self.pushover.watch(intent))
             elif data.get("method") == "notify_klippy_ready":
                 pass
 
@@ -614,7 +693,7 @@ class Door:
     def __init__(self, state: Path, moonraker: str, app_url: str, camera_url: str, address: str | None,
                  now=time.time, sender=None, home_address: str | None = None, printer_id: str | None = None,
                  printer_name: str | None = None, shell_origins=SHELL_ORIGINS, printers_app: str | None = None,
-                 not_mine_url: str | None = None):
+                 not_mine_url: str | None = None, pushover_api: str = PUSHOVER_API):
         state.mkdir(parents=True, exist_ok=True)
         self.state, self.moonraker, self.app_url, self.camera_url = state, moonraker.rstrip("/"), app_url.rstrip("/"), camera_url.rstrip("/")
         self.address, self._home_address, self.now = address, home_address, now
@@ -631,7 +710,8 @@ class Door:
         self.codes = Codes(now)
         self.asks = Asks(self.phones, now)
         self.push = Push(state, self.phones, vapid_subject(address), now, sender, printer=self.printer_id)
-        self.follower = Follower(moonraker, state, self.push)
+        self.pushover = Pushover(state, self.shell, self.printer_id, pushover_api)
+        self.follower = Follower(moonraker, state, self.push, pushover=self.pushover)
         self.not_mine_url = not_mine_url      # a Kobra's Bench Box, which takes it off the bench
         self.session: ClientSession | None = None
 
@@ -1280,6 +1360,21 @@ async def serve(args) -> None:
             await r.cleanup()
 
 
+async def pushover_test(args) -> bool:
+    printer = args.printer_id or (args.address or "printer").split(".")[0]
+    po = Pushover(Path(args.state), (args.printers_app or SHELL).rstrip("/"), printer)
+    if not po.config():
+        print(f"no Pushover set up: write {po.path} with token and user", file=sys.stderr)
+        return False
+    name = args.printer_name or printer
+    body = {"problem": "A test: this one repeats every minute until you acknowledge it.",
+            "needs_you": "A test: this is how a pause for you arrives."}[args.pushover_test]
+    ok = await po.send({"kind": args.pushover_test, "title": f"{name} (test)", "body": body, "printer": name,
+                        "tag": f"{printer}-test", "url": "/"})
+    print("sent" if ok else "Pushover refused it, see above")
+    return ok
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--state", default=str(Path.home() / "elyir-bench" / "state" / "door"))
@@ -1296,8 +1391,11 @@ def main() -> None:
     ap.add_argument("--away-port", type=int, default=8089)
     ap.add_argument("--local-port", type=int, default=8091)
     ap.add_argument("--home-port", type=int, default=8090)
+    ap.add_argument("--pushover-test", choices=sorted(PUSHOVER_PRIORITY), help="send one sample alert to Pushover and exit")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    if args.pushover_test:
+        sys.exit(0 if asyncio.run(pushover_test(args)) else 1)
     asyncio.run(serve(args))
 
 

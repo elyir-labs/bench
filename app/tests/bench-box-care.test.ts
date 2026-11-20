@@ -20,12 +20,18 @@ test("making it a printer asks once, then follows the installer's steps", () => 
   assert.deepEqual(roleSteps(null).map(s => s.status), ['now', 'todo', 'todo'])
 })
 
-test('the update row says what it runs and offers Update now only when there is newer', () => {
-  assert.deepEqual(osRow({ version: '2026.10.21-a', latest: '2026.10.22-b', update: null }),
-    { title: 'Updates', line: '2026.10.22-b is out. This box runs 2026.10.21-a.', newer: true })
-  assert.equal(osRow({ version: '2026.10.22-b', latest: '2026.10.22-b', update: null }).newer, false)
-  assert.equal(osRow({ version: '2026.10.22-b', latest: null, update: null }).line,
-    'It runs 2026.10.22-b, and looks for a new one by itself at night.')
+test('the update row says what is out, both versions it runs, and how a Check now went', () => {
+  assert.deepEqual(osRow({ version: '2026.10.21-a', latest: '2026.10.22-b', update: null }, '2026.10.21-a'),
+    { title: 'Updates', line: '2026.10.22-b is out.', versions: 'App 2026.10.21-a · system 2026.10.21-a', newer: true })
+  const same = { version: '2026.10.22-b', latest: '2026.10.22-b', update: null }
+  assert.equal(osRow(same).newer, false)
+  assert.equal(osRow(same).line, 'Up to date. It also looks by itself at night.')
+  assert.equal(osRow(same, null, true).line, 'Up to date. Checked just now.')
+  assert.equal(osRow(same).versions, 'System 2026.10.22-b')
+  assert.equal(osRow(same, '2026.10.23-c').versions, 'App 2026.10.23-c · system 2026.10.22-b')
+  const offline = { version: '2026.10.22-b', latest: null, update: null }
+  assert.equal(osRow(offline).line, 'It looks for a new one by itself at night.')
+  assert.equal(osRow(offline, null, true).line, "It couldn't look just now. It also looks by itself at night.")
 })
 
 test('the SSH row says who the keys sign in as, and that there is no password without one', () => {

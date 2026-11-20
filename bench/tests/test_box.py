@@ -100,6 +100,25 @@ def test_on_a_card_it_says_its_os_and_updates_once_at_a_time(tmp_path):
     run(go())
 
 
+def test_check_now_reads_the_feed_at_once_not_ten_minutes_later(tmp_path):
+    async def go():
+        ver = tmp_path / "os-version"; ver.write_text("2026.11.18-a\n")
+        feed = tmp_path / "latest-pi5.json"; feed.write_text(json.dumps({"version": "2026.11.18-a"}))
+        app = web.Application()
+        box = Box(tmp_path, tmp_path / "elyir_bench.py", os_version=ver, feed=f"file://{tmp_path}/latest-{{board}}.json")
+        box._board = lambda: "pi5"
+        box.add_routes(app)
+        async with TestClient(TestServer(app)) as c:
+            assert (await (await c.get("/bench/box")).json())["os"]["latest"] == "2026.11.18-a"
+            feed.write_text(json.dumps({"version": "2026.11.20-b"}))
+            assert (await (await c.get("/bench/box")).json())["os"]["latest"] == "2026.11.18-a"     # kept ten minutes
+            r = await (await c.post("/bench/box/check")).json()
+            assert r["ok"] and r["os"]["latest"] == "2026.11.20-b"
+            ver.unlink()
+            assert (await c.post("/bench/box/check")).status == 409
+    run(go())
+
+
 def test_a_usb_stick_in_the_box_is_shown_and_what_is_ticked_is_handed_on(tmp_path):
     """design/usb/, 3 A: the box takes a stick for itself, as a printer's component does."""
     async def go():

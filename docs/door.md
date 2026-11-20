@@ -147,6 +147,23 @@ The door writes the number of phones that will hear `finished` to Moonraker's da
 `elyir-bench` / `phones`, on every change and on every reconnect; the Finished screen only promises
 to tell your phone when that number is above zero.
 
+### Pushover, for what can't wait
+
+A web app's notifications on an iPhone can't break through Focus, Scheduled Summary or the silent switch.
+Pushover's iPhone app can (its Critical Alerts, turned on in that app's settings), so the door can also send
+`problem` and `needs_you` there. Every other kind stays on Web Push only.
+
+- `problem` goes as emergency (priority 2), tagged with the event's tag. It repeats every 60 s for up to
+  30 minutes until someone acknowledges it in Pushover. When Moonraker's `notify_intent_update` shows the
+  printer is no longer in `problem`, the door cancels the repeats with `cancel_by_tag`.
+- `needs_you` goes as high (priority 1): it always sounds and skips Pushover's own quiet hours.
+- Both link to the printer in the Printers app (`<printers app>/p/<printer id>#<url>`).
+
+It is on when `~/elyir-bench/state/door/pushover.json` (0600) holds `{"token": "<application token>", "user":
+"<user key>"}`, with an optional `"device"` to send to one device only. The door reads the file for every
+alert, so writing or removing it needs no restart. To check it from the printer, run the door's `ExecStart`
+line with `--pushover-test problem` or `--pushover-test needs_you` added, as the service's user.
+
 ## Home first
 
 A phone at home talks to the printer directly; the relay is only for when it is away. Each printer

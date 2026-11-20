@@ -6,6 +6,7 @@ it a printer again.
                              screen (the panel then shows a fresh card's setup); its lines are followed from a file
   POST /bench/box/update     `elyir-bench-os update`, now rather than overnight (a card's OS only: GET says os: null
                              elsewhere); the box restarts into the new OS, and goes back by itself if it doesn't start
+  POST /bench/box/check      reads the OS feed now, not up to ten minutes later; answers {ok, os}
   POST /bench/box/update     {what: app}: `elyir-bench update` now (design/updates/): a box installed with the install
                              command, whose OS isn't ours; GET says app: {version, latest, newer, state, why, ...}
   POST /bench/box/ssh        {key}: a public key that may sign in as this user (a card's user has no password)
@@ -121,6 +122,7 @@ class Box:
         app.router.add_post("/bench/box/power", self.power)
         app.router.add_post("/bench/box/role", self.role)
         app.router.add_post("/bench/box/update", self.update)
+        app.router.add_post("/bench/box/check", self.check)
         app.router.add_post("/bench/box/ssh", self.add_key)
         app.router.add_delete("/bench/box/ssh/{id}", self.remove_key)
         app.router.add_get("/bench/box/usb", self.get_usb)
@@ -160,22 +162,30 @@ class Box:
         with urllib.request.urlopen(req, timeout=8) as r:
             return json.loads(r.read()).get("version")
 
-    async def _os(self) -> Optional[Dict[str, Any]]:
+    def _board(self) -> Optional[str]:
+        m = re.search(r"Raspberry Pi (\d+)", Path("/proc/device-tree/model").read_text(errors="replace"))
+        return f"pi{m.group(1)}" if m else None
+
+    async def _os(self, fresh: bool = False) -> Optional[Dict[str, Any]]:
         try:
             have = self.os_version.read_text().strip()
         except OSError:
             return None                         # installed onto its own OS: that's updated as any Debian is
         when, latest = self.latest
-        if self.feed and time.time() - when > 600:
+        if self.feed and (fresh or time.time() - when > 600):
             try:
-                model = Path("/proc/device-tree/model").read_text(errors="replace")
-                m = re.search(r"Raspberry Pi (\d+)", model)
-                if m:
-                    latest = await asyncio.get_running_loop().run_in_executor(None, self._read_latest, f"pi{m.group(1)}")
+                board = self._board()
+                if board:
+                    latest = await asyncio.get_running_loop().run_in_executor(None, self._read_latest, board)
             except Exception as e:              # offline: say nothing new, look again later
                 log.info("box: can't read the OS feed (%s)", e.__class__.__name__)
             self.latest = (time.time(), latest)
         return {"version": have, "latest": latest, "update": self._update()}
+
+    async def check(self, request: web.Request) -> web.Response:
+        if not self.os_version.exists():
+            raise web.HTTPConflict(text="This box's OS wasn't flashed from an Elyir Bench card: update it as any Debian.")
+        return web.json_response({"ok": True, "os": await self._os(fresh=True)})
 
     def _update(self) -> Optional[Dict[str, Any]]:
         if self.updater is None:

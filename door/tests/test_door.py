@@ -967,3 +967,84 @@ async def test_not_mine_is_for_a_carried_phone_in_its_first_week_and_goes_to_the
 def test_the_topic_is_32_characters_apple_takes_and_the_same_for_the_same_tag():
     t = D.push_topic("joined-p-c4q6c7hn")
     assert len(t) == 32 and t.isalnum() and t == D.push_topic("joined-p-c4q6c7hn") != D.push_topic("workshop-finished")
+
+
+# ── Pushover: a second way through for what can't wait ──────────────────────
+
+def pushover_fake():
+    got: list[tuple[str, dict]] = []
+    app = web.Application()
+    async def any_post(r):
+        got.append((r.path, dict(await r.post())))
+        return web.json_response({"status": 1, "request": "x"})
+    app.router.add_post("/1/{tail:.*}", any_post)
+    return app, got
+
+
+def workshop_ev(kind, i, urgency="high"):
+    return {"boot": "b1", "id": i, "kind": kind, "urgency": urgency, "title": f"Workshop {kind}", "body": "b",
+            "tag": "workshop-attention", "url": "/", "printer": "Workshop", "job": None}
+
+
+async def pushover_rig(rig, aiohttp_server, config=True):
+    app, got = pushover_fake()
+    srv = await aiohttp_server(app)
+    rig.door.pushover.api = str(srv.make_url("/1"))
+    if config:
+        (rig.door.state / "pushover.json").write_text(json.dumps({"token": "app-token", "user": "user-key"}))
+    return got
+
+
+async def test_without_pushover_set_up_nothing_is_sent(rig, aiohttp_server):
+    got = await pushover_rig(rig, aiohttp_server, config=False)
+    assert not await rig.door.pushover.send(workshop_ev("problem", 1))
+    assert got == []
+
+
+async def test_only_problem_and_needs_you_go_to_pushover(rig, aiohttp_server):
+    got = await pushover_rig(rig, aiohttp_server)
+    for i, kind in enumerate(("finished", "ready_to_lift", "care_due", "lost")):
+        assert not await rig.door.pushover.send(workshop_ev(kind, i))
+    assert got == []
+
+    assert await rig.door.pushover.send(workshop_ev("needs_you", 10))
+    path, form = got[-1]
+    assert path == "/1/messages.json" and form["priority"] == "1" and "retry" not in form
+    assert form["token"] == "app-token" and form["user"] == "user-key" and form["title"] == "Workshop needs_you"
+    assert form["url"] == "https://printers.elyir.app/p/workshop#/" and form["url_title"] == "Open Workshop"
+    assert not rig.door.pushover.ringing
+
+    assert await rig.door.pushover.send(workshop_ev("problem", 11))
+    path, form = got[-1]
+    assert form["priority"] == "2" and form["retry"] == "60" and form["expire"] == "1800"
+    assert form["tags"] == "workshop-attention" and rig.door.pushover.ringing == {"workshop-attention"}
+
+
+async def test_a_problem_stops_ringing_once_the_printer_is_dealt_with(rig, aiohttp_server):
+    got = await pushover_rig(rig, aiohttp_server)
+    task = asyncio.create_task(rig.door.follower.run())
+    await wait_for(lambda: rig.door.follower.cursor["boot"] == "b1")
+
+    await rig.moon.notify("notify_elyir_bench_event", workshop_ev("problem", 500))
+    await wait_for(lambda: len(got) == 1)
+    await rig.moon.notify("notify_intent_update", {"state": "problem"})   # still stopped: keeps ringing
+    await asyncio.sleep(0.2)
+    assert len(got) == 1
+
+    await rig.moon.notify("notify_intent_update", {"state": "ready"})
+    await wait_for(lambda: len(got) == 2)
+    assert got[1] == ("/1/receipts/cancel_by_tag/workshop-attention.json", {"token": "app-token"})
+    assert not rig.door.pushover.ringing
+    task.cancel()
+
+
+async def test_a_refused_alert_is_not_left_ringing(rig, aiohttp_server):
+    app = web.Application()
+    async def refuse(r):
+        return web.json_response({"status": 0, "errors": ["user identifier is invalid"]}, status=400)
+    app.router.add_post("/1/{tail:.*}", refuse)
+    srv = await aiohttp_server(app)
+    rig.door.pushover.api = str(srv.make_url("/1"))
+    (rig.door.state / "pushover.json").write_text(json.dumps({"token": "t", "user": "u"}))
+    assert not await rig.door.pushover.send(workshop_ev("problem", 1))
+    assert not rig.door.pushover.ringing
